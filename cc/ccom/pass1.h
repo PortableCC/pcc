@@ -455,7 +455,6 @@ struct flt {
 };	
 typedef struct flt FLT;	
 #define	fltallo()		stmtalloc(sizeof(FLT))
-#define	FCAST(x)		((FLT *)(x))
 
 #define FLOAT_ISZERO(p)		soft_isz(p->sf)
 #define FLOAT_NEG(p)		p->sf = soft_neg(p->sf)

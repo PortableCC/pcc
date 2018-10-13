@@ -273,6 +273,13 @@ inval(CONSZ off, int fsz, NODE *p)
 				printf("%s", getexname(sp));
 		}
 		printf("\n");
+	} else if (t == FLOAT || t == DOUBLE || t == LDOUBLE) {
+		uint32_t *ufp;
+		int i;
+
+		ufp = soft_toush(p->n_dcon->sf, t);
+		for (i = 0; i < sztable[t]; i += SZINT)
+			printf(PRTPREF "%s %u\n", astypnames[INT], ufp[i/SZINT]);
 	} else
 		cerror("inval: unhandled type %d", (int)t);
 }

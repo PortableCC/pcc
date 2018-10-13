@@ -858,7 +858,7 @@ myp2tree(P1ND *p)
 
 	locctr(DATA, sp);
 	defloc(sp);
-	ninval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
 
 	p->n_op = NAME;
 	slval(p, 0);
@@ -959,6 +959,7 @@ ninval(CONSZ off, int fsz, P1ND *p)
 		slval(p, i);
 		inval(off+32, 32, p);
 		break;
+#if 0
 #ifdef NATIVE_FLOATING_POINT
 	case LDOUBLE:
 		u.i[2] = 0;
@@ -981,6 +982,7 @@ ninval(CONSZ off, int fsz, P1ND *p)
 		u.f = (float)((FLT *)p->n_dcon)->fp;
 		printf(PRTPREF "\t.long\t%d\n", u.i[0]);
 		break;
+#endif
 #endif
 	default:
 		return 0;
