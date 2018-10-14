@@ -544,6 +544,9 @@ FPI fpi_binary32 = { 24,  1-127-24+1,
 #define IEEEFP_32_ZERO(sf,s)	(sf.fp[0] = (s << 31))
 #define IEEEFP_32_NAN(sf,sign)	(sf.fp[0] = 0x7fc00000 | (sign << 31))
 #define IEEEFP_32_INF(sf,sign)	(sf.fp[0] = 0x7f800000 | (sign << 31))
+#define	IEEEFP_32_ISINF(x)	((x.fp[0] & 0x7fffffff) == 0x7f800000)
+#define	IEEEFP_32_ISZERO(x)	((x.fp[0] & 0x7fffffff) == 0)
+#define	IEEEFP_32_ISNAN(x)	((x.fp[0] & 0x7fffffff) == 0x7fc00000)
 #define IEEEFP_32_BIAS	127
 #define	IEEEFP_32_TOOLARGE(exp, mant)	ieeefp_32_toolarge(exp, mant)
 #define	IEEEFP_32_TOOSMALL(exp, mant)	ieeefp_32_toosmall(exp, mant)
@@ -585,6 +588,11 @@ FPI fpi_binary64 = { 53,   1-1023-53+1,
 	(sf.fp[0] = 0, sf.fp[1] = 0x7ff80000 | (sign << 31))
 #define IEEEFP_64_INF(sf,sign)	\
 	(sf.fp[0] = 0, sf.fp[1] = 0x7ff00000 | (sign << 31))
+#define	IEEEFP_64_ISINF(x) (((x.fp[1] & 0x7fffffff) == 0x7ff00000) && \
+	    x.fp[0] == 0)
+#define	IEEEFP_64_ISZERO(x) (((x.fp[1] & 0x7fffffff) == 0) && x.fp[0] == 0)
+#define	IEEEFP_64_ISNAN(x) (((x.fp[1] & 0x7fffffff) == 0x7ff80000) && \
+	    x.fp[0] == 0)
 #define IEEEFP_64_BIAS	1023
 #define	IEEEFP_64_TOOLARGE(exp, mant)	ieeefp_64_toolarge(exp, mant)
 #define	IEEEFP_64_TOOSMALL(exp, mant)	ieeefp_64_toosmall(exp, mant)
@@ -626,8 +634,7 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 	(sf.fp[0] = 0, sf.fp[1] = 0xc0000000, sf.fp[2] = 0x7fff | (sign << 15))
 #define IEEEFP_X80_INF(sf,sign)	\
 	(sf.fp[0] = 0, sf.fp[1] = 0x80000000, sf.fp[2] = 0x7fff | (sign << 15))
-static SF ieeex80_zero = { { { 0, 0, 0 } } };
-#define IEEEFP_X80_ZERO	ieeex80_zero
+#define IEEEFP_X80_ZERO(sf,s)	(sf.fp[0] = sf.fp[1] = 0, sf.fp[2] = (s << 15))
 #define	IEEEFP_X80_ISZ(sf) \
 	((sf.fp[0] | sf.fp[1] | (sf.fp[2] & 0x7fff)) == 0)
 #define	IEEEFP_X80_NEG(sf)	sf.fp[2] ^= 0x8000
@@ -638,9 +645,25 @@ static SF ieeex80_zero = { { { 0, 0, 0 } } };
 #define	IEEEFP_X80_ISNAN(x) (((x.fp[2] & 0x7fff) == 0x7fff) && \
 	((x.fp[1] != 0x80000000) || x.fp[0] == 0))
 #define IEEEFP_X80_BIAS	16383
+#define IEEEFP_X80_MAKE(rv, sign, exp, mant)	\
+	(rv.fp[0] = mant >> 1, rv.fp[1] = (mant >> 33) | (1 << 31), \
+	    rv.fp[2] = (exp & 0x7fff) | (sign << 15))
 #else
 #error need long double definition
 #endif
+
+#ifdef USE_IEEEFP_X80
+#define	SZLD 10 /* less than SZLDOUBLE, avoid cmp junk */
+#else
+#define SZLD sizeof(long double)
+#endif
+
+#define	SOFT_INFINITE	1
+#define	SOFT_NAN	2
+#define	SOFT_ZERO	3
+#define	SOFT_NORMAL	4
+#define	SOFT_SUBNORMAL	5
+int soft_classify(SF sf, TWORD type);
 
 #define FPI_FLOAT	C(FLT_PREFIX,_FPI)
 #define FPI_DOUBLE	C(DBL_PREFIX,_FPI)
@@ -655,6 +678,7 @@ static SF ieeex80_zero = { { { 0, 0, 0 } } };
 #define	LDOUBLE_ISNAN	C(LDBL_PREFIX,_ISNAN)
 #define	LDOUBLE_ISZERO	C(LDBL_PREFIX,_ISZERO)
 #define	LDOUBLE_BIAS	C(LDBL_PREFIX,_BIAS)
+#define	LDOUBLE_MAKE	C(LDBL_PREFIX,_MAKE)
 
 #define	DOUBLE_NAN	C(DBL_PREFIX,_NAN)
 #define	DOUBLE_INF	C(DBL_PREFIX,_INF)
@@ -663,6 +687,7 @@ static SF ieeex80_zero = { { { 0, 0, 0 } } };
 #define	DOUBLE_ISZ	C(DBL_PREFIX,_ISZ)
 #define	DOUBLE_ISINF	C(DBL_PREFIX,_ISINF)
 #define	DOUBLE_ISNAN	C(DBL_PREFIX,_ISNAN)
+#define	DOUBLE_ISZERO	C(DBL_PREFIX,_ISZERO)
 #define	DOUBLE_BIAS	C(DBL_PREFIX,_BIAS)
 #define	DOUBLE_TOOLARGE	C(DBL_PREFIX,_TOOLARGE)
 #define	DOUBLE_TOOSMALL	C(DBL_PREFIX,_TOOSMALL)
@@ -675,6 +700,7 @@ static SF ieeex80_zero = { { { 0, 0, 0 } } };
 #define	FLOAT_ISZ	C(FLT_PREFIX,_ISZ)
 #define	FLOAT_ISINF	C(FLT_PREFIX,_ISINF)
 #define	FLOAT_ISNAN	C(FLT_PREFIX,_ISNAN)
+#define	FLOAT_ISZERO	C(FLT_PREFIX,_ISZERO)
 #define	FLOAT_BIAS	C(FLT_PREFIX,_BIAS)
 #define	FLOAT_TOOLARGE	C(FLT_PREFIX,_TOOLARGE)
 #define	FLOAT_TOOSMALL	C(FLT_PREFIX,_TOOSMALL)
@@ -713,6 +739,14 @@ ldouble_mant(SF sf)
 
 #define	ldouble_exp(x)	(x.fp[2] & 0x7FFF)
 #define	ldouble_sign(x)	((x.fp[2] >> 15) & 1)
+
+#define	double_mant(x)	(((uint64_t)x.fp[1] << 44) | ((uint64_t)x.fp[0] << 12))
+#define	double_exp(x)	((x.fp[1] >> 20) & 0x7fff)
+#define	double_sign(x)	((x.fp[1] >> 31) & 1)
+
+#define	float_mant(x)	((uint64_t)(x.fp[0] & 0x7fffff) << 41)
+#define	float_exp(x)	((x.fp[0] >> 23) & 0xff)
+#define	float_sign(x)	((x.fp[0] >> 31) & 1)
 
 /*
  * Convert a extended float (x80) number to float (32-bit). 
@@ -795,6 +829,71 @@ floatx80_to_float64(SF a)
 		} else {
 			DOUBLE_MAKE(rv, sign, exp, mant);
 		}
+	}
+	return rv;
+}
+
+/*
+ * Opposite to above; move a 64-bit float into an 80-bit value.
+ */
+static SF
+float64_to_floatx80(SF a)
+{
+	SF rv;
+	int exp, sign;
+	uint64_t mant;
+
+	sign = double_sign(a);
+	switch (soft_classify(a, DOUBLE)) {
+	case SOFT_ZERO:
+		LDOUBLE_ZERO(rv, sign);
+		break;
+	case SOFT_INFINITE:
+		LDOUBLE_INF(rv, sign);
+		break;
+	case SOFT_NAN:
+		LDOUBLE_NAN(rv, sign);
+		break;
+	default:
+		mant = double_mant(a);
+		exp = double_exp(a);
+		exp = exp - DOUBLE_BIAS + LDOUBLE_BIAS;
+		LDOUBLE_MAKE(rv, sign, exp, mant);
+		break;
+	}
+	return rv;
+}
+
+/*
+ * Opposite to above; move a 32-bit float into an 80-bit value.
+ */
+static SF
+float32_to_floatx80(SF a)
+{
+	SF rv;
+	int exp, sign;
+	uint64_t mant;
+
+	sign = float_sign(a);
+//printf("float32_to_floatx80: classify %d\n", soft_classify(a, FLOAT));
+	switch (soft_classify(a, FLOAT)) {
+	case SOFT_ZERO:
+		LDOUBLE_ZERO(rv, sign);
+		break;
+	case SOFT_INFINITE:
+		LDOUBLE_INF(rv, sign);
+		break;
+	case SOFT_NAN:
+		LDOUBLE_NAN(rv, sign);
+		break;
+	default:
+		mant = float_mant(a);
+		exp = float_exp(a);
+//printf("exp %x\n", exp);
+		exp = exp - FLOAT_BIAS + LDOUBLE_BIAS;
+//printf("exp %x sign %d mant %llx\n", exp, sign, mant);
+		LDOUBLE_MAKE(rv, sign, exp, mant);
+		break;
 	}
 	return rv;
 }
@@ -1254,17 +1353,34 @@ soft_int2fp(CONSZ ll, TWORD f, TWORD t)
 	return SFROUND(rv, t);
 }
 
-#if 0
 /*
- * Explicit cast into some floating-point format, and assigments.
- * Drop precision (rounding correctly) and clamp exponent in range.
+ * Explicit cast into some floating-point format.
  */
 SF
 soft_fp2fp(SF sf, TWORD t)
 {
-	return SFROUND(sf, t);
-}
+	SF rv;
+
+	if (t == DOUBLE) {
+		rv = floatx80_to_float64(sf);
+		rv = float64_to_floatx80(rv);
+	} else if (t == FLOAT) {
+		rv = floatx80_to_float32(sf);
+//printf("soft_fp2fp: %f\n", (double)*(float *)&rv.debugfp);
+		rv = float32_to_floatx80(rv);
+//printf("soft_fp2fpX: %Lf\n", rv.debugfp);
+	} else
+		rv = sf;
+//printf("soft_fp2fp: t %d\n", t);
+#ifdef DEBUGFP
+	{ long double l = (t == DOUBLE ? (double)sf.debugfp :
+	    (t == FLOAT ? (float)sf.debugfp : sf.debugfp));
+	if (memcmp(&l, &rv.debugfp, SZLD))
+		fpwarn("soft_fp2fp", rv.debugfp, l);
+	}
 #endif
+	return rv;
+}
 
 /*
  * Convert a fp number to a CONSZ. Always chop toward zero.
@@ -1953,45 +2069,51 @@ soft_isnan(SF sf)
 	return (sf.kind & SF_kmask) >= SF_NaN;
 }
 
-#if 0
 /*
- * Return IEEE754 class of fp number, as SF_xxx enum member.
- * First clamp the number into its original (semantic) type, cf. 7.12.3.
- * Can be used to implement isinf, isfinite, isnormal.
+ * Do classification as in C99 7.12.3, for internal use.
+ * No subnormal yet.
  */
 int
-soft_fpclassify(SF sf, TWORD t)
+soft_classify(SF sf, TWORD t)
 {
-	int exp;
+	int rv;
 
-	if (FPI_LDOUBLE_ISZ(sf))
-		return SC_ZERO;
-	if (FPI_LDOUBLE_NAN(sf))
-		return SC_NAN;
-	if (FPI_LDOUBLE_INF(sf))
-		return SC_INFINITE;
-	exp = (sf.fp[4] & 0x7fff) - fpis[2]->exp_bias;
 	switch (t) {
-	case LDOUBLE:
-		if (FPI_LDOUBLE_SUB(sf))
-			return SC_SUBNORMAL;
-		break;
-	case DOUBLE:
-		if (exp < || exp > )
-			return SC_INFINITE;
-		if (exp < )
-			return SC_SUBNORMAL;
-		break;
 	case FLOAT:
-		if (exp < || exp > )
-			return SC_INFINITE;
-		if (exp < )
-			return SC_SUBNORMAL;
+		if (FLOAT_ISINF(sf))
+			rv = SOFT_INFINITE;
+		else if (FLOAT_ISNAN(sf))
+			rv = SOFT_NAN;
+		else if (FLOAT_ISZERO(sf))
+			rv = SOFT_ZERO;
+		else
+			rv = SOFT_NORMAL;
+		break;
+
+	case DOUBLE:	
+		if (DOUBLE_ISINF(sf))
+			rv = SOFT_INFINITE;
+		else if (DOUBLE_ISNAN(sf))
+			rv = SOFT_NAN;
+		else if (DOUBLE_ISZERO(sf))
+			rv = SOFT_ZERO;
+		else
+			rv = SOFT_NORMAL;
+		break;
+
+	case LDOUBLE:
+		if (LDOUBLE_ISINF(sf))
+			rv = SOFT_INFINITE;
+		else if (LDOUBLE_ISNAN(sf))
+			rv = SOFT_NAN;
+		else if (LDOUBLE_ISZERO(sf))
+			rv = SOFT_ZERO;
+		else
+			rv = SOFT_NORMAL;
 		break;
 	}
-	return SC_NORMAL
+	return rv;
 }
-#endif
 
 /*
  * Return true if either operand is NaN.
@@ -2262,7 +2384,7 @@ soft_zero()
 {
 	SF sf;
 
-	memcpy(&sf, &LDOUBLE_ZERO, sizeof LDOUBLE_ZERO);
+	LDOUBLE_ZERO(sf, 0);
 	return sf;
 }
 
@@ -2275,7 +2397,7 @@ soft_toush(SF osf, TWORD t)
 {
 	static SF sf;
 
-//printf("soft_toush: osf %La t %d\n", osf.debugfp, t);
+//printf("soft_toush: osf %Lf %La t %d\n", osf.debugfp, osf.debugfp, t);
 //printf("soft_toushLD: %x %x %x\n", osf.fp[2], osf.fp[1], osf.fp[0]);
 //float d = osf.debugfp; printf("soft_toush-D: d %x %x\n", *(((int *)&d)+1), *(int *)&d);
 
@@ -2293,11 +2415,6 @@ soft_toush(SF osf, TWORD t)
 	}
 #ifdef DEBUGFP
 	{ float ldf; double ldd; long double ldt;
-#ifdef USE_IEEEFP_X80
-#define	SZLD 10 /* less than SZLDOUBLE, avoid cmp junk */
-#else
-#define SZLD sizeof(long double)
-#endif
 	ldt = (t == FLOAT ? (float)osf.debugfp :
 	    t == DOUBLE ? (double)osf.debugfp : (long double)osf.debugfp);
 	ldf = ldt;

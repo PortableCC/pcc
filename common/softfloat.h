@@ -93,9 +93,6 @@ typedef SF *SFP;
 
 #define	TARGET_FLT_RADIX	C(FLT_FP,_RADIX)
 
-/* classification macros, for internal use (soft_fpclassify) */
-enum { SC_ZERO, SC_NORMAL, SC_SUBNORMAL, SC_INFINITE, SC_NAN };
-
 /*
  * Description of a floating point format, based what is in gdtoa package.
  * The first members are the same as in gdtoa,  the rest are pcc specific.
