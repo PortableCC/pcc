@@ -2282,37 +2282,35 @@ soft_cmp(SF v1, SF v2, int v)
 	return rv;
 }
 
-#endif
+#endif /* FDFLOAT */
 
-/*
- * encode (sign,exp,mantissa) as long double.
- */
 static void
-vals2fp(uint32_t *fp, int k, int exp, uint32_t *mant)
+vals2fp(SF *sf, int k, int exp, uint32_t *mant)
 {
-	fp[2] = fp[1] = fp[0] = 0;
-#ifdef USE_IEEEFP_X80
+	int sign = (k & SF_Neg) != 0;
+	uint64_t m;
+
 	switch (k & SF_kmask) {
 	case SF_Zero:
+		LDOUBLE_ZERO((*sf), sign);
 		break; /* already 0 */
 
 	case SF_Normal:
-		fp[2] = exp + FPI_LDOUBLE.exp_bias;
-		fp[1] = mant[1];
-		fp[0] = mant[0];
+		m = (((uint64_t)mant[1] << 32) | mant[0]) << 1;
+		exp += FPI_LDOUBLE.exp_bias;
+		LDOUBLE_MAKE((*sf), sign, exp, m);
+#ifdef DEBUGFP
+		if (mant[0] != sf->fp[0] || mant[1] != sf->fp[1])
+			fpwarn("vals2fp", sf->debugfp, sf->debugfp);
+#endif
 		break;
 	default:
 		fprintf(stderr, "vals2fp: unhandled %x\n", k);
 		break;
 	}
-	if (k & SF_Neg)
-		fp[2] |= 0x8000;
 
 	if (k & (SFEXCP_ALLmask & ~(SFEXCP_Inexlo|SFEXCP_Inexhi)))
 		fprintf(stderr, "vals2fp: unhandled2 %x\n", k);
-#else
-	cerror("fixme floating point");
-#endif
 }
 
 /*
@@ -2335,8 +2333,7 @@ strtosf(char *str, TWORD tw)
 		werror("Overflow in floating-point constant");
 	if (k & SFEXCP_Inexact && (str[1] == 'x' || str[1] == 'X'))
 		werror("Hexadecimal floating-point constant not exactly");
-//fprintf(stderr, "vals: k %x expt %d bits %x %x\n", k, expt, bits[0], bits[1]);
-	vals2fp(sf.fp, k, expt, bits);
+	vals2fp(&sf, k, expt, bits);
 
 #ifdef DEBUGFP
 	{
@@ -2371,7 +2368,7 @@ soft_nan(char *c)
 {
 	SF sf;
 
-	LDOUBLE_NAN(sf,0);
+	LDOUBLE_NAN(sf, 0);
 
 	return sf;
 }
