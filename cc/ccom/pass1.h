@@ -459,6 +459,19 @@ typedef struct flt FLT;
 #define FLOAT_ISZERO(p)		soft_isz(p->sf)
 #define FLOAT_NEG(p)		p->sf = soft_neg(p->sf)
 #define FLOAT_FP2FP(f,t)	f->sf = soft_fp2fp(f->sf, t)
+#define FLOAT_EQ(d1,d2)		soft_cmp(d1->sf, d2->sf, EQ)
+#define FLOAT_NE(d1,d2)		soft_cmp(d1->sf, d2->sf, NE)
+#if 0
+#define FLOAT_GE(d1,d2)		soft_cmp(d1->sf, d2->sf, GE)
+#define FLOAT_GT(d1,d2)		soft_cmp(d1->sf, d2->sf, GT)
+#define FLOAT_LE(d1,d2)		soft_cmp(d1->sf, d2->sf, LE)
+#define FLOAT_LT(d1,d2)		soft_cmp(d1->sf, d2->sf, LT)
+#else
+#define FLOAT_GE(d1,d2)		(d1->fp >= d2->fp)
+#define FLOAT_GT(d1,d2)		(d1->fp > d2->fp)
+#define FLOAT_LE(d1,d2)		(d1->fp <= d2->fp)
+#define FLOAT_LT(d1,d2)		(d1->fp < d2->fp)
+#endif
 
 #ifdef NATIVE_FLOATING_POINT
 #define FLOAT_PLUS(p1,p2)	((p1)->n_dcon->fp += (p2)->n_dcon->fp)
@@ -469,12 +482,6 @@ typedef struct flt FLT;
 	(d->fp = (long double)(U_CONSZ)(p)) : (d->fp = (long double)(CONSZ)(p)))
 #define FLOAT_FP2INT(i,d,t)     (ISUNSIGNED(t) ? \
 	(i = (U_CONSZ)(d->fp)) : (i = d->fp))
-#define FLOAT_EQ(d1,d2)		(d1->fp == d2->fp)
-#define FLOAT_NE(d1,d2)		(d1->fp != d2->fp)
-#define FLOAT_GE(d1,d2)		(d1->fp >= d2->fp)
-#define FLOAT_GT(d1,d2)		(d1->fp > d2->fp)
-#define FLOAT_LE(d1,d2)		(d1->fp <= d2->fp)
-#define FLOAT_LT(d1,d2)		(d1->fp < d2->fp)
 
 #else
 #define FLOAT_PLUS(p1,p2)	p1->n_dcon->sf = \
@@ -487,12 +494,6 @@ typedef struct flt FLT;
 	soft_div(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
 #define FLOAT_INT2FP(f,p,t)	f->sf = soft_int2fp(p, t, ctype(LDOUBLE))
 #define FLOAT_FP2INT(i,d,t)	i = soft_fp2int(d->sf, t) /* XXX fp format */
-#define FLOAT_EQ(d1,d2)		soft_cmp(d1->sf, d2->sf, EQ)
-#define FLOAT_NE(d1,d2)		soft_cmp(d1->sf, d2->sf, NE)
-#define FLOAT_GE(d1,d2)		soft_cmp(d1->sf, d2->sf, GE)
-#define FLOAT_GT(d1,d2)		soft_cmp(d1->sf, d2->sf, GT)
-#define FLOAT_LE(d1,d2)		soft_cmp(d1->sf, d2->sf, LE)
-#define FLOAT_LT(d1,d2)		soft_cmp(d1->sf, d2->sf, LT)
 
 #endif
 

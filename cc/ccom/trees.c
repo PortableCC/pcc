@@ -2145,6 +2145,9 @@ andorbr(P1ND *p, int true, int false)
 	case GT:
 calc:		if (true < 0) {
 			p->n_op = p1negrel[p->n_op - EQ];
+			p->n_ap = attr_add(p->n_ap,
+			    attr_new(ATTR_FP_SWAPPED, 3));
+			p->n_ap->aa[0].iarg = 1;
 			true = false;
 			false = -1;
 		}

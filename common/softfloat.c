@@ -2127,25 +2127,23 @@ soft_cmp_unord(SF x1, SF x2)
 static int
 soft_cmp_eq(SF x1, SF x2)
 {
-	int exp1, exp2;
+	int s1, s2, e1, e2;
+	uint64_t m1, m2;
 
-	if (soft_cmp_unord(x1, x2))
-		return 0; /* IEEE says "quiet" */
-	if (SFISZ(x1))
-		/* special case: +0 == -0 (discard sign) */
-		return SFISZ(x2);
-	if ((x1.kind & SF_Neg) != (x2.kind & SF_Neg))
+	s1 = ldouble_sign(x1);
+	s2 = ldouble_sign(x2);
+	e1 = ldouble_exp(x1);
+	e2 = ldouble_exp(x2);
+	m1 = ldouble_mant(x1);
+	m2 = ldouble_mant(x2);
+
+	if (e1 == 0 && e2 == 0 && m1 == 0 && m2 == 0)
+		return 1; /* special case: +0 == -0 (discard sign) */
+	if (s1 != s2)
 		return 0;
-	if (SFISINF(x1))
-		return SFISINF(x2);
-	/* Both operands are finite, nonzero, same sign. */
-	exp1 = x1.exponent, exp2 = x2.exponent;
-	assert(x1.significand && x2.significand);
-	while (x1.significand < NORMALMANT)
-		x1.significand <<= 1, exp1--;
-	while (x2.significand < NORMALMANT)
-		x2.significand <<= 1, exp2--;
-	return exp1 == exp2 && x1.significand == x2.significand;
+	if (e1 == e2 && m1 == m2)
+		return 1;
+	return 0;
 }
 
 /*
@@ -2153,12 +2151,6 @@ soft_cmp_eq(SF x1, SF x2)
  * four mutually exclusive relations are possible:
  * less than, equal, greater than, or unordered.
  */
-
-static int
-soft_cmp_ne(SF x1, SF x2)
-{
-	return soft_cmp_unord(x1, x2) ? 0 : ! soft_cmp_eq(x1, x2);
-}
 
 static int
 soft_cmp_lt(SF x1, SF x2)
@@ -2259,6 +2251,9 @@ soft_cmp(SF v1, SF v2, int v)
 {
 	int rv = 0;
 
+	if (LDOUBLE_ISNAN(v1) || LDOUBLE_ISNAN(v2))
+		return 0; /* never equal */
+
 	switch (v) {
 	case GT:
 		rv = soft_cmp_gt(v1, v2);
@@ -2276,7 +2271,7 @@ soft_cmp(SF v1, SF v2, int v)
 		rv = soft_cmp_eq(v1, v2);
 		break;
 	case NE:
-		rv = soft_cmp_ne(v1, v2);
+		rv = !soft_cmp_eq(v1, v2);
 		break;
 	}
 	return rv;
