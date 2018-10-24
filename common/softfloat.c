@@ -1339,18 +1339,40 @@ sfround(SF sf, ULLong extra, TWORD t)
  * Rounds correctly to the target type.
  */
 SF
-soft_int2fp(CONSZ ll, TWORD f, TWORD t)
+soft_int2fp(CONSZ l, TWORD f, TWORD t)
 {
 	SF rv;
+	int64_t ll = l;
+	uint64_t mant;
+	int sign = 0, exp;
 
-	rv = zerosf(0);
-	if (ll == 0)
-		return rv;  /* fp is zero */
-	rv.kind = SF_Normal;
-	if (!ISUNSIGNED(f) && ll < 0)
-		rv.kind |= SF_Neg, ll = -ll;
-	rv.significand = ll; /* rv.exponent already 0 */
-	return SFROUND(rv, t);
+	if (!ISUNSIGNED(f) && ll < 0) {
+		ll = -ll;
+		sign = 1;
+	}
+
+	if (ll == 0) {
+		LDOUBLE_ZERO(rv, 0);
+	} else {
+		exp = LDOUBLE_BIAS + 64;
+		while (ll > 0)
+			ll <<= 1, exp--;
+		ll <<= 1, exp--;
+		mant = l;
+		LDOUBLE_MAKE(rv, sign, exp, mant);
+		if (t == FLOAT || t == DOUBLE)
+			rv = soft_fp2fp(rv, t);
+	}
+#ifdef DEBUGFP
+	{ long double dl;
+		dl = ISUNSIGNED(f) ? (long double)(U_CONSZ)(l) :
+		    (long double)(CONSZ)(l);
+		dl = t == FLOAT ? (float)dl : t == DOUBLE ? (double)dl : dl;
+		if (dl != rv.debugfp)
+			fpwarn("soft_int2fp", rv.debugfp, dl);
+	}
+#endif
+	return rv;
 }
 
 /*
