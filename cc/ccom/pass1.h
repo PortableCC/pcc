@@ -456,6 +456,12 @@ struct flt {
 typedef struct flt FLT;	
 #define	fltallo()		stmtalloc(sizeof(FLT))
 
+/*
+ * Only allowed to do float evaluation if either doing
+ * static (compile-time) initialization or FP_CONTRACT is YES.
+ * Currently we do not handle FP_CONTRACT.
+ */
+#define	CAN_EVAL_FLOAT()	(statinit /* || FP_CONTRACT */ )
 #define FLOAT_ISZERO(p)		soft_isz(p->sf)
 #define FLOAT_NEG(p)		p->sf = soft_neg(p->sf)
 #define FLOAT_FP2FP(f,t)	f->sf = soft_fp2fp(f->sf, t)
@@ -466,15 +472,13 @@ typedef struct flt FLT;
 #define FLOAT_LE(d1,d2)		soft_cmp(d1->sf, d2->sf, LE)
 #define FLOAT_LT(d1,d2)		soft_cmp(d1->sf, d2->sf, LT)
 #define FLOAT_INT2FP(f,p,t)	f->sf = soft_int2fp(p, t, ctype(LDOUBLE))
+#define FLOAT_FP2INT(i,d,t)	i = soft_fp2int(d->sf, t)
 
 #ifdef NATIVE_FLOATING_POINT
 #define FLOAT_PLUS(p1,p2)	((p1)->n_dcon->fp += (p2)->n_dcon->fp)
 #define FLOAT_MINUS(p1,p2)	((p1)->n_dcon->fp -= (p2)->n_dcon->fp)
 #define FLOAT_MUL(p1,p2)	((p1)->n_dcon->fp *= (p2)->n_dcon->fp)
 #define FLOAT_DIV(p1,p2)	((p1)->n_dcon->fp /= (p2)->n_dcon->fp)
-#define FLOAT_FP2INT(i,d,t)     (ISUNSIGNED(t) ? \
-	(i = (U_CONSZ)(d->fp)) : (i = d->fp))
-
 #else
 #define FLOAT_PLUS(p1,p2)	p1->n_dcon->sf = \
 	soft_plus(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
@@ -484,7 +488,6 @@ typedef struct flt FLT;
 	soft_mul(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
 #define FLOAT_DIV(p1,p2)	p1->n_dcon->sf = \
 	soft_div(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
-#define FLOAT_FP2INT(i,d,t)	i = soft_fp2int(d->sf, t) /* XXX fp format */
 
 #endif
 

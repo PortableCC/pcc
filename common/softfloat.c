@@ -596,9 +596,10 @@ FPI fpi_binary64 = { 53,   1-1023-53+1,
 #define IEEEFP_64_BIAS	1023
 #define	IEEEFP_64_TOOLARGE(exp, mant)	ieeefp_64_toolarge(exp, mant)
 #define	IEEEFP_64_TOOSMALL(exp, mant)	ieeefp_64_toosmall(exp, mant)
-#define IEEEFP_64_MAKE(rv, sign, exp, mant)	\
-	(rv.fp[0] = sfrshift(mant, 12), rv.fp[1] = (sign << 31) | \
-	    ((exp & 0x7ff) << 20) | ((mant >> 44) & 0xfffff));
+#define IEEEFP_64_MAKE(rv, sign, exp, mant)		\
+	{ uint64_t xmant = sfrshift(mant, 12);		\
+	(rv.fp[0] = xmant, rv.fp[1] = ((sign << 31) | 	\
+	    ((exp & 0x7ff) << 20)) + (xmant >> 32)); }
 static int
 ieeefp_64_toolarge(int exp, uint64_t mant)
 {
@@ -829,7 +830,15 @@ floatx80_to_float64(SF a)
 		} else {
 			DOUBLE_MAKE(rv, sign, exp, mant);
 		}
+//printf("X: %x %x %x\n", rv.fp[0], rv.fp[1], rv.fp[2]);
 	}
+#ifdef DEBUGFP
+	{ 	double d = a.debugfp;
+		if (memcmp(&rv, &d, sizeof(double)))
+			fpwarn("floatx80_to_float64",
+			    (long double)*(double*)&rv.debugfp, (long double)d);
+	}
+#endif
 	return rv;
 }
 
@@ -1358,7 +1367,8 @@ soft_int2fp(CONSZ l, TWORD f, TWORD t)
 		while (ll > 0)
 			ll <<= 1, exp--;
 		ll <<= 1, exp--;
-		mant = l;
+		mant = ll;
+
 		LDOUBLE_MAKE(rv, sign, exp, mant);
 		if (t == FLOAT || t == DOUBLE)
 			rv = soft_fp2fp(rv, t);
@@ -1406,53 +1416,41 @@ soft_fp2fp(SF sf, TWORD t)
 
 /*
  * Convert a fp number to a CONSZ. Always chop toward zero.
- * XXX Should warns somehow if out-of-range: in sf_exceptions
  */
 CONSZ
 soft_fp2int(SF sf, TWORD t)
 {
-	ULLong mant;
-	int exp = sf.exponent;
+	uint64_t mant;
+	int exp;
 
-	switch(sf.kind & SF_kmask) {
-	  case SF_Zero:
-	  case SF_Denormal:
+	if (soft_classify(sf, LDOUBLE) != SOFT_NORMAL)
 		return 0;
-
-	  case SF_Normal:
-		if (exp < - WORKBITS - 1)
-			return 0;
-		if (exp < WORKBITS)
-			break;
-		/* FALLTHROUGH */
-	  case SF_Infinite:
-/* XXX revise */
-		/* Officially entering undefined behaviour! */
-		uerror("Conversion of huge FP constant into integer");
-		/* FALLTHROUGH */
-
-	  case SF_NoNumber:
-	  default:
-		/* Can it happen? Debug_Warns? ICE? */
-		/* FALLTHROUGH */
-	  case SF_NaN:
-	  case SF_NaNbits:
-		uerror("Undefined FP conversion into an integer, replaced with 0");
-		return 0;
-	}
-	mant = sf.significand;
+	
+	exp = ldouble_exp(sf) - LDOUBLE_BIAS - 64 + 1;
+	mant = ldouble_mant(sf);
+	mant = (mant >> 1) | (1LL << 63);
+	while (exp > 0)
+		mant <<= 1, exp--;
 	while (exp < 0)
 		mant >>= 1, exp++;
-/* XXX if (exp > WORKBITS) useless (really SZ of CONSZ) */
-	while (exp > 0)
-/* XXX check overflow */
-		mant <<= 1, exp--;
-	if (sf.kind & SF_Neg)
-		mant = -(long long)mant;
-/* XXX sf_exceptions */
-/* XXX check overflow for target type */
+
+	if (ldouble_sign(sf))
+		mant = -(int64_t)mant;
+#ifdef DEBUGFP
+	{ uint64_t u = (uint64_t)sf.debugfp;
+	  int64_t s = (int64_t)sf.debugfp;
+		if (ISUNSIGNED(t)) {
+			if (u != mant)
+				fpwarn("soft_fp2int:u", 0.0, sf.debugfp);
+		} else {
+			if (s != (int64_t)mant)
+				fpwarn("soft_fp2int:s", 0.0, sf.debugfp);
+		}
+	}
+#endif
 	return mant;
 }
+
 
 /*
  * Operations.
@@ -2244,8 +2242,10 @@ vals2fp(SF *sf, int k, int exp, uint32_t *mant)
 
 	case SF_Normal:
 		m = (((uint64_t)mant[1] << 32) | mant[0]) << 1;
+//printf("vals2fp m %llx\n", m);
 		exp += FPI_LDOUBLE.exp_bias;
 		LDOUBLE_MAKE((*sf), sign, exp, m);
+//printf("vals2fp: %llx %llx\n", *(long long *)&sf->debugfp, m);
 #ifdef DEBUGFP
 		if (mant[0] != sf->fp[0] || mant[1] != sf->fp[1])
 			fpwarn("vals2fp", sf->debugfp, sf->debugfp);
@@ -2281,6 +2281,7 @@ strtosf(char *str, TWORD tw)
 	if (k & SFEXCP_Inexact && (str[1] == 'x' || str[1] == 'X'))
 		werror("Hexadecimal floating-point constant not exactly");
 	vals2fp(&sf, k, expt, bits);
+//printf("strtosf: %llx\n", *(long long *)&sf.debugfp);
 
 #ifdef DEBUGFP
 	{
