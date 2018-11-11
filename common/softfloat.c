@@ -593,7 +593,6 @@ FPI fpi_binary64 = { 53,   1-1023-53+1,
 	    x.fp[0] == 0)
 #define IEEEFP_64_BIAS	1023
 #define	IEEEFP_64_TOOLARGE(exp, mant)	ieeefp_64_toolarge(exp, mant)
-#define	IEEEFP_64_TOOSMALL(exp, mant)	ieeefp_64_toosmall(exp, mant)
 #define IEEEFP_64_MAKE(rv, sign, exp, mant)		\
 	{ uint64_t xmant = sfrshift(mant, 12);		\
 	(rv.fp[0] = xmant, rv.fp[1] = ((sign << 31) | 	\
@@ -605,17 +604,6 @@ ieeefp_64_toolarge(int exp, uint64_t mant)
 		return 1;
 	if ((exp == IEEEFP_64_MAX_EXP + IEEEFP_64_BIAS - 1) &&
 	    (sfrshift(mant, 12) > 0xfffffffffffff))
-		return 1;
-	return 0;
-}
-static int
-ieeefp_64_toosmall(int exp, uint64_t mant)
-{
-	if ( exp >= 0 )
-		return 0;
-	mant = sfrshift(mant, -exp);
-	mant |= (mant & 0x7ff ? 0x800 : 0);
-	if (mant & 0xfffffffffffff000)
 		return 1;
 	return 0;
 }
@@ -639,6 +627,7 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 #define	IEEEFP_X80_NEG(sf)	sf.fp[2] ^= 0x8000
 #define	IEEEFP_X80_ISINF(x) (((x.fp[2] & 0x7fff) == 0x7fff) && \
 	(x.fp[1] == 0x80000000) && x.fp[0] == 0)
+#define	IEEEFP_X80_ISINFNAN(x) ((x.fp[2] & 0x7fff) == 0x7fff)
 #define	IEEEFP_X80_ISZERO(x) (((x.fp[2] & 0x7fff) == 0) && \
 	(x.fp[1] | x.fp[0]) == 0)
 #define	IEEEFP_X80_ISNAN(x) (((x.fp[2] & 0x7fff) == 0x7fff) && \
@@ -676,6 +665,7 @@ int soft_classify(SF sf, TWORD type);
 #define	LDOUBLE_ISZ	C(LDBL_PREFIX,_ISZ)
 #define	LDOUBLE_ISINF	C(LDBL_PREFIX,_ISINF)
 #define	LDOUBLE_ISNAN	C(LDBL_PREFIX,_ISNAN)
+#define	LDOUBLE_ISINFNAN	C(LDBL_PREFIX,_ISINFNAN)
 #define	LDOUBLE_ISZERO	C(LDBL_PREFIX,_ISZERO)
 #define	LDOUBLE_BIAS	C(LDBL_PREFIX,_BIAS)
 #define	LDOUBLE_MAKE	C(LDBL_PREFIX,_MAKE)
@@ -767,15 +757,10 @@ ldouble_mant(SF sf)
 #define	float_exp(x)	((x.fp[0] >> 23) & 0xff)
 #define	float_sign(x)	((x.fp[0] >> 31) & 1)
 
-/*
- * convert a long double to MINT.
- * Known here to only be valid numbers.
- */
 static void
-ldbl2mint(MINT *a, SF sf)
+mant2mint(MINT *a, SF sf)
 {
 	uint64_t rv = (LX(sf,0) | LX(sf,1));
-	int exp = ldouble_exp(sf);
 
 	minit(a);
 	a->val[0] = rv;
@@ -783,6 +768,18 @@ ldbl2mint(MINT *a, SF sf)
 	a->val[2] = rv >> 32;
 	a->val[3] = rv >> 48;
 	a->len = 4;
+}
+
+/*
+ * convert a long double to MINT.
+ * Known here to only be valid numbers.
+ */
+static void
+ldbl2mint(MINT *a, SF sf)
+{
+	int exp = ldouble_exp(sf);
+
+	mant2mint(a, sf);
 	mshl(a, exp + 16); /* 16 == guard bits, 64 bit mant is in len */
 	a->sign = ldouble_sign(sf);
 }
@@ -864,27 +861,39 @@ grsround(MINT *a)
 	}
 }
 
+/*
+ * fillin SF with the mantissa.  Expect to already be rounded.
+ * return number of times a is left-shifted.
+ */
+static int
+mint2mant(MINT *a, uint64_t *r)
+{
+	int e = 0;
+	uint64_t mant;
+	int len = a->len-1;
+
+	while ((a->val[len] & 0x8000) == 0)
+		mshl(a, 1), e++;
+	mant = (uint64_t)a->val[len] << 48;
+	if (len > 0) mant |= (uint64_t)a->val[len-1] << 32;
+	if (len > 1) mant |= (uint64_t)a->val[len-2] << 16;
+	if (len > 2) mant |= (uint64_t)a->val[len-3];
+	*r = mant;
+	return e;
+}
+
 static SF
 mint2ldbl(MINT *a)
 {
 	uint64_t mant;
 	SF rv;
-	int exp = 0;
-	int len;
+	int exp;
 
 	chomp(a);
 	grsround(a);
-	len = a->len-1;
-	while ((a->val[len] & 0x8000) == 0)
-		mshl(a, 1), exp--;
-	mant = (uint64_t)a->val[len] << 48;
-	if (len > 0) mant |= (uint64_t)a->val[len-1] << 32;
-	if (len > 1) mant |= (uint64_t)a->val[len-2] << 16;
-	if (len > 2) mant |= (uint64_t)a->val[len-3];
-	if (len > 3) { /* do some rounding */
-		
-	}
-	exp += len * 16;
+	exp = -mint2mant(a, &mant);
+
+	exp += (a->len-1) * 16;
 	exp -= 64; /* bits in mantissa */
 	mant <<= 1;
 	LDOUBLE_MAKE(rv, a->sign, exp, mant);
@@ -964,18 +973,27 @@ floatx80_to_float64(SF a)
 	} else {
 //printf("4\n");
 		exp = exp - LDOUBLE_BIAS + DOUBLE_BIAS;
-//printf("4: exp %d\n", exp);
+//printf("4: exp %d mant %llx sign %d\n", exp, mant, sign);
 		if (DOUBLE_TOOLARGE(exp, mant)) {
 			DOUBLE_INF(rv, sign);
-		} else if (DOUBLE_TOOSMALL(exp, mant)) {
-			DOUBLE_ZERO(rv, sign);
 		} else {
+			if (exp < 0) {
+//printf("done1: sign %d exp %d mant %llx\n", sign, exp, mant);
+				mant = (mant >> 1) | (1ULL << 63) | (mant & 1);
+//printf("done2: sign %d exp %d mant %llx\n", sign, exp, mant);
+				if (exp < 0)
+					mant = sfrshift(mant, -exp);
+//printf("done3: sign %d exp %d mant %llx\n", sign, exp, mant);
+				exp = 0;
+			}
+//printf("done: sign %d exp %d mant %llx\n", sign, exp, mant);
 			DOUBLE_MAKE(rv, sign, exp, mant);
 		}
 //printf("X: %x %x %x\n", rv.fp[0], rv.fp[1], rv.fp[2]);
 	}
 #ifdef DEBUGFP
 	{ 	double d = a.debugfp;
+//printf("d: %llx\n", *(long long *)&d);
 		if (memcmp(&rv, &d, sizeof(double)))
 			fpwarn("floatx80_to_float64",
 			    (long double)*(double*)&rv.debugfp, (long double)d);
@@ -1581,70 +1599,47 @@ soft_minus(SF x1, SF x2, TWORD t)
 SF
 soft_mul(SF x1, SF x2, TWORD t)
 {
-#if 0
-	ULong x1hi, x2hi;
-	ULLong mid1, mid, extra;
-#else
-	DULLong z;
-#endif
+	MINT a, b, c;
+	uint64_t mant;
+	int exp1, exp2, sign, sh;
+	int s1 = ldouble_sign(x1);
+	int s2 = ldouble_sign(x2);
+	SF rv;
 
-	x1.kind |= x2.kind & SFEXCP_ALLmask;
-	x2.kind |= x1.kind & SFEXCP_ALLmask;
-	x1.kind ^= x2.kind & SF_Neg;
-	SFCOPYSIGN(x2, x1);
-	if (SFISNAN(x1))
-		return x1;
-	else if (SFISNAN(x2))
-		return x2;
-	if ((SFISINF(x1) && SFISZ(x2)) || (SFISZ(x1) && SFISINF(x2)))
-		return nansf(x1.kind | SFEXCP_Invalid);
-	if (SFISINF(x1) || SFISZ(x1))
-		return x1;
-	if (SFISINF(x2) || SFISZ(x2))
-		return x2;
-	assert(x1.significand && x2.significand);
-	SFNORMALIZE(x1);
-	SFNORMALIZE(x2);
-	x1.exponent += x2.exponent + WORKBITS;
-#if 0
-	x1hi = x1.significand >> 32;
-	x1.significand &= ONES(32);
-	x2hi = x2.significand >> 32;
-	x2.significand &= ONES(32);
-	extra = x1.significand * x2.significand;
-	mid1 = x1hi * x2.significand;
-	mid = mid1 + x1.significand * x2hi;
-	x1.significand = (ULLong) x1hi * x2hi;
-	x1.significand += ((ULLong)(mid < mid1) << 32) | (mid >> 32);
-	mid <<= 32;
-	extra += mid;
-#ifdef LONGLONG_WIDER_THAN_WORKBITS
-	if (extra < mid || (extra>>WORKBITS)) {
-		x1.significand++;
-		extra &= ONES(WORKBITS);
-	}
-#else
-	x1.significand += (extra < mid);
-#endif
-	if (x1.significand < NORMALMANT) {
-		x1.exponent--;
-		x1.significand <<= 1;
-		if (extra >= NORMALMANT) {
-			x1.significand++;
-			extra -= NORMALMANT;
+	if (LDOUBLE_ISINFNAN(x1) || LDOUBLE_ISINFNAN(x2)) {
+		if (LDOUBLE_ISNAN(x1) || LDOUBLE_ISNAN(x2)) {
+			LDOUBLE_NAN(rv, 0);
+		} else if (LDOUBLE_ISINF(x1) && LDOUBLE_ISINF(x2)) {
+			LDOUBLE_INF(rv, s1 == s2);
+		} else if (LDOUBLE_ISINF(x1) && LDOUBLE_ISZERO(x2)) {
+			LDOUBLE_NAN(rv, 0);
+		} else if (LDOUBLE_ISINF(x2) && LDOUBLE_ISZERO(x1)) {
+			LDOUBLE_NAN(rv, 0);
+		} else /* if (LDOUBLE_ISINF(x1) || LDOUBLE_ISINF(x2)) */ {
+			LDOUBLE_INF(rv, s1 == s2);
 		}
-		extra <<= 1;
+		return rv;
 	}
-	return sfround(x1, extra, t);
-#else
-	z = muld(x1.significand, x2.significand);
-	if (z.hi < NORMALMANT) {
-		x1.exponent--;
-		z = lshiftd(z.hi, z.lo, 1);
-	}
-	x1.significand = z.hi;
-	return sfround(x1, z.lo, t);
+	mant2mint(&a, x1);
+	mant2mint(&b, x2);
+//mdump("x1: ", &a);
+//mdump("x2: ", &b);
+	mult(&a, &b, &c);
+//mdump("res: ", &c);
+	grsround(&c);
+	sh = 1 - mint2mant(&c, &mant);
+
+	exp1 = ldouble_exp(x1) - LDOUBLE_BIAS;
+	exp2 = ldouble_exp(x2) - LDOUBLE_BIAS;
+//printf("exp1 %d exp2 %d\n", exp1, exp2);
+
+	sign = s1 != s2;
+	LDOUBLE_MAKE(rv, sign, (exp1 + exp2 + sh + LDOUBLE_BIAS), (mant << 1));
+#ifdef DEBUGFP
+	if (x1.debugfp * x2.debugfp != rv.debugfp)
+		fpwarn("soft_mul", rv.debugfp, x1.debugfp * x2.debugfp);
 #endif
+        return rv;
 }
 
 SF
@@ -2373,7 +2368,7 @@ mshl(MINT *a, int nbits)
 {
 	int i, j;
 
-	/* XXXXXXX must improve significantly */
+	/* XXXXXXX must improve speed significantly */
 	for (j = 0; j < nbits; j++) {
 		if (a->val[a->len-1] & 0x8000) {
 			if (a->len >= MAXMINT)
@@ -2443,5 +2438,32 @@ msub(MINT *a, MINT *b, MINT *c)
 {
 	b->sign = !b->sign;
 	madd(a, b, c);
+}
+
+void
+mult(MINT *a, MINT *b, MINT *c)
+{
+	MINT *sw;
+	uint32_t sum;
+	int i, j;
+
+	c->len = a->len + b->len;
+	for (i = 0; i < c->len; i++)
+		c->val[i] = 0;
+
+	if (b->len > a->len)
+		sw = a, a = b, b = sw;
+
+	for(i = 0; i < b->len; i++) {
+		sum = 0;
+		for(j = 0; j < a->len; j++) {
+			sum = c->val[j+i] +
+			    (uint32_t)a->val[j] * b->val[i] + sum;
+			c->val[j+i] = sum;
+			sum >>= 16;
+		}
+		c->val[j+i] = sum;
+	}
+	c->sign = (a->sign == b->sign) == 0;
 }
 
