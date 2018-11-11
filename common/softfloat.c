@@ -514,8 +514,6 @@ static uint64_t sfrshift(uint64_t mant, int bits);
 static DULLong lshiftd(ULLong, ULLong, int);
 static SF sfround(SF, ULLong, TWORD);
 #define SFROUND(sf,t)	(sfround(sf, 0, t))
-static SF sfadd(SF, SF, TWORD);
-static SF sfsub(SF, SF, TWORD);
 
 #ifndef NO_COMPLEX
 static SF finitemma(SF, SF, int, SF, SF, ULLong *);
@@ -1051,90 +1049,6 @@ float32_to_floatx80(SF a)
 	return rv;
 }
 
-#if 0
-/*
- * Conversion between Hauser code and internal. XXX - merge.
- */
-static SF
-jrh32tofp(float32 f)
-{
-	SF rv;
-	rv.fp[0] = f;
-	rv.fp[1] = f >> 16;
-	rv.fp[2] = 0;
-	rv.fp[3] = 0;
-	rv.fp[4] = 0;
-	rv.fp[4] = 0;
-	return rv;
-}
-
-static SF
-jrh64tofp(float64 f)
-{
-	SF rv;
-	rv.fp[0] = f;
-	rv.fp[1] = f >> 16;
-	rv.fp[2] = f >> 32;
-	rv.fp[3] = f >> 48;
-	rv.fp[4] = 0;
-	rv.fp[5] = 0;
-	return rv;
-}
-
-static SF
-jrhx80tofp(floatx80 f)
-{
-	SF rv;
-	rv.fp[0] = f.low;
-	rv.fp[1] = f.low >> 16;
-	rv.fp[2] = f.low >> 32;
-	rv.fp[3] = f.low >> 48;
-	rv.fp[4] = f.high;
-	rv.fp[5] = 0;
-	return rv;
-}
-
-static float32
-fptojrh32(SF sf)
-{
-	float32 f;
-
-	f = sf.fp[0];
-	f |= (sf.fp[1] << 16);
-	return f;
-}
-
-static float64
-fptojrh64(SF sf)
-{
-	float64 f;
-
-	f = sf.fp[0];
-	f |= (sf.fp[1] << 16);
-	f |= ((float64)sf.fp[2] << 32);
-	f |= ((float64)sf.fp[3] << 48);
-	return f;
-}
-
-static floatx80
-fptojrhx80(SF sf)
-{
-	floatx80 f;
-
-	f.low = sf.fp[0];
-//printf("fptojrhx80: %llx\n", f.low);
-	f.low |= ((uint64_t)sf.fp[1] << 16);
-//printf("fptojrhx80: %llx\n", f.low);
-	f.low |= ((uint64_t)sf.fp[2] << 32);
-//printf("fptojrhx80: %llx\n", f.low);
-	f.low |= ((uint64_t)sf.fp[3] << 48);
-//printf("fptojrhx80: %llx\n", f.low);
-	f.high = sf.fp[4];
-
-	return f;
-}
-#endif
-
 /*
  * Constant rounding control mode (cf. TS 18661 clause 11).
  * Default is to have no effect. Set through #pragma STDC FENV_ROUND
@@ -1626,122 +1540,6 @@ soft_copysign(SF sf, SF src)
 	return sf;
 }
 
-/*
- * Add two numbers of same sign.
- * The devil is in the details, like those negative zeroes...
- */
-static SF
-sfadd(SF x1, SF x2, TWORD t)
-{
-	SF rv;
-	DULLong z;
-	int diff;
-
-	if (SFISINF(x1))
-		return x1;
-	if (SFISINF(x2))
-		return x2;
-	if (SFISZ(x2)) /* catches all signed zeroes, delivering x1 */
-		return x1;
-	if (SFISZ(x1))
-		return x2;
-	assert(x1.significand && x2.significand);
-	SFNORMALIZE(x1);
-	SFNORMALIZE(x2);
-	if (x1.exponent - WORKBITS > x2.exponent) {
-		x1.kind |= SFEXCP_Inexlo;
-		return x1;
-	}
-	if (x2.exponent - WORKBITS > x1.exponent) {
-		x2.kind |= SFEXCP_Inexlo;
-		return x2;
-	}
-	diff = x1.exponent - x2.exponent;
-	if (diff < 0) {
-		rv = x2;
-		z = rshiftdro(x1.significand, 0, -diff );
-	}
-	else {
-		rv = x1;
-		z = rshiftdro(x2.significand, 0, diff );
-	}
-	rv.significand += z.hi;
-	if (rv.significand < NORMALMANT) {
-		/* target mantissa overflows */
-		z = rshiftdro(rv.significand, z.lo, 1);
-		rv.significand = z.hi | NORMALMANT;
-		++rv.exponent;
-	}
-	return sfround(rv, z.lo, t);
-}
-
-/*
- * Substract two positive numbers.
- * Special hack when the type number t being negative, to indicate
- * that rounding rules should be reversed (because the operands were.)
- */
-static SF
-sfsub(SF x1, SF x2, TWORD t)
-{
-	SF rv;
-	DULLong z;
-	int diff;
-
-	if (SFISINF(x1) && SFISINF(x2))
-		return nansf(x1.kind | SFEXCP_Invalid);
-	if (SFISINF(x1))
-		return x1;
-	if (SFISINF(x2))
-		return SFNEG(x2);
-	if (SFISZ(x2)) /* catches 0 - 0, delivering +0 */
-		return x1;
-	if (SFISZ(x1))
-		return SFNEG(x2);
-	assert(x1.significand && x2.significand);
-	SFNORMALIZE(x1);
-	SFNORMALIZE(x2);
-	if (x1.exponent - WORKBITS > x2.exponent) {
-		x1.kind |= (int)t < 0 ? SFEXCP_Inexlo : SFEXCP_Inexhi;
-		return x1;
-	}
-	if (x2.exponent - WORKBITS > x1.exponent) {
-		x2.kind |= (int)t < 0 ? SFEXCP_Inexlo : SFEXCP_Inexhi;
-		return SFNEG(x2);
-	}
-	diff = x1.exponent - x2.exponent;
-	if (diff == 0 && x1.significand == x2.significand) {
-		if ((int)t < 0)
-			t = -(int)t;
-/* XXX sf_constrounding */
-		if ((fpis[t-FLOAT]->rounding & 3) == FPI_Round_down)
-			return zerosf(SF_Neg | (x1.kind & ~SF_Neg));
-		return zerosf(x1.kind & ~SF_Neg); /* x1==x2==-0 done elsewhere */
-	}
-	if (diff < 0 || (diff == 0 && x1.significand < x2.significand)) {
-		rv = SFNEG(x2);
-		z = rshiftdro(x1.significand, 0, -diff );
-	}
-	else {
-		rv = x1;
-		z = rshiftdro(x2.significand, 0, diff );
-	}
-	if ((rv.kind & SF_kmask) == SF_Denormal)
-		rv.kind -= SF_Denormal - SF_Normal;
-	rv.significand -= z.hi;
-	if ((int)t < 0) {
-		int rd;
-
-		t = -(int)t;
-		rd = fpis[t-FLOAT]->rounding;
-/* XXX sf_constrounding */
-		if ((rd & 3) == FPI_Round_up || (rd & 3) == FPI_Round_down) {
-			rv = sfround(SFNEG(rv), z.lo, t);
-			return SFNEG(rv);
-		}
-	}
-	return sfround(rv, z.lo, t);
-}
-
 SF
 soft_plus(SF x1, SF x2, TWORD t)
 {
@@ -1760,11 +1558,8 @@ soft_plus(SF x1, SF x2, TWORD t)
 		return x2;
 
 	ldbl2mint(&a, x1);
-//mdump("plus a", &a);
 	ldbl2mint(&b, x2);
-//mdump("plus b", &b);
 	madd(&a, &b, &c);
-//mdump("plus c", &c);
 	rv = mint2ldbl(&c);
 #ifdef DEBUGFP
 	if (x1.debugfp + x2.debugfp != rv.debugfp)
@@ -1776,20 +1571,8 @@ soft_plus(SF x1, SF x2, TWORD t)
 SF
 soft_minus(SF x1, SF x2, TWORD t)
 {
-	x1.kind |= x2.kind & SFEXCP_ALLmask;
-	x2.kind |= x1.kind & SFEXCP_ALLmask;
-	if (SFISNAN(x1))
-		return x1;
-	else if (SFISNAN(x2))
-		return x2;
-	if ((x1.kind & SF_Neg) != (x2.kind & SF_Neg))
-		return sfadd(x1, SFNEG(x2), t);
-	else if (SFISZ(x1) && SFISZ(x2))
-		return x1; /* special case -0 - -0, should return -0 */
-	else if (x1.kind & SF_Neg)
-		return sfsub(SFNEG(x2), SFNEG(x1), - (int)t);
-	else
-		return sfsub(x1, x2, t);
+	LDOUBLE_NEG(x2);
+	return soft_plus(x1, x2, t);
 }
 
 /*
