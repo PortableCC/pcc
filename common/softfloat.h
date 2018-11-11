@@ -179,6 +179,6 @@ SF soft_nan(char *);
 SF soft_zero(void);
 uint32_t *soft_toush(SF, TWORD);
 #ifdef DEBUGFP
-void fpwarn(char *s, long double soft, long double hard);
+void fpwarn(const char *s, long double soft, long double hard);
 #endif
 #endif

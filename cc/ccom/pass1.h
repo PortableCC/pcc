@@ -473,15 +473,14 @@ typedef struct flt FLT;
 #define FLOAT_LT(d1,d2)		soft_cmp(d1->sf, d2->sf, LT)
 #define FLOAT_INT2FP(f,p,t)	f->sf = soft_int2fp(p, t, ctype(LDOUBLE))
 #define FLOAT_FP2INT(i,d,t)	i = soft_fp2int(d->sf, t)
+#define FLOAT_PLUS(p1,p2)	p1->n_dcon->sf = \
+	soft_plus(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
 
 #ifdef NATIVE_FLOATING_POINT
-#define FLOAT_PLUS(p1,p2)	((p1)->n_dcon->fp += (p2)->n_dcon->fp)
 #define FLOAT_MINUS(p1,p2)	((p1)->n_dcon->fp -= (p2)->n_dcon->fp)
 #define FLOAT_MUL(p1,p2)	((p1)->n_dcon->fp *= (p2)->n_dcon->fp)
 #define FLOAT_DIV(p1,p2)	((p1)->n_dcon->fp /= (p2)->n_dcon->fp)
 #else
-#define FLOAT_PLUS(p1,p2)	p1->n_dcon->sf = \
-	soft_plus(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
 #define FLOAT_MINUS(p1,p2)	p1->n_dcon->sf = \
 	soft_minus(p1->n_dcon->sf, p2->n_dcon->sf, p1->n_type)
 #define FLOAT_MUL(p1,p2)	p1->n_dcon->sf = \

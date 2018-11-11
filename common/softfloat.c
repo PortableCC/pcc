@@ -646,6 +646,7 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 #define	IEEEFP_X80_ISNAN(x) (((x.fp[2] & 0x7fff) == 0x7fff) && \
 	((x.fp[1] != 0x80000000) || x.fp[0] == 0))
 #define IEEEFP_X80_BIAS	16383
+#define	IEEEFP_X80_MAXMINT	32768+64+16 /* exponent + subnormal + guard */
 #define IEEEFP_X80_MAKE(rv, sign, exp, mant)	\
 	(rv.fp[0] = mant >> 1, rv.fp[1] = (mant >> 33) | (1 << 31), \
 	    rv.fp[2] = (exp & 0x7fff) | (sign << 15))
@@ -680,6 +681,8 @@ int soft_classify(SF sf, TWORD type);
 #define	LDOUBLE_ISZERO	C(LDBL_PREFIX,_ISZERO)
 #define	LDOUBLE_BIAS	C(LDBL_PREFIX,_BIAS)
 #define	LDOUBLE_MAKE	C(LDBL_PREFIX,_MAKE)
+#define	LDOUBLE_MAXMINT	C(LDBL_PREFIX,_MAXMINT)
+#define	LDOUBLE_SIGN	C(LDBL_PREFIX,_SIGN)
 
 #define	DOUBLE_NAN	C(DBL_PREFIX,_NAN)
 #define	DOUBLE_INF	C(DBL_PREFIX,_INF)
@@ -713,6 +716,23 @@ FPI * fpis[3] = {
 	&FPI_DOUBLE,
 	&FPI_LDOUBLE
 };
+
+#define	MAXMINT	(LDOUBLE_MAXMINT/16) /* nbits per uint16 */
+/* MP package */
+typedef struct mint {
+	unsigned int len:15, sign:1; /* sign 1 if minus */
+	uint16_t val[MAXMINT];
+} MINT;
+
+void madd(MINT *a, MINT *b, MINT *c);
+void msub(MINT *a, MINT *b, MINT *c);
+void mult(MINT *a, MINT *b, MINT *c);
+void mdiv(MINT *a, MINT *b, MINT *c, MINT *r);
+void minit(MINT *m);
+void mshl(MINT *m, int nbits);
+static void chomp(MINT *a);
+void mdump(char *c, MINT *a);
+
 
 /*
  * IEEE specials:
@@ -748,6 +768,130 @@ ldouble_mant(SF sf)
 #define	float_mant(x)	((uint64_t)(x.fp[0] & 0x7fffff) << 41)
 #define	float_exp(x)	((x.fp[0] >> 23) & 0xff)
 #define	float_sign(x)	((x.fp[0] >> 31) & 1)
+
+/*
+ * convert a long double to MINT.
+ * Known here to only be valid numbers.
+ */
+static void
+ldbl2mint(MINT *a, SF sf)
+{
+	uint64_t rv = (LX(sf,0) | LX(sf,1));
+	int exp = ldouble_exp(sf);
+
+	minit(a);
+	a->val[0] = rv;
+	a->val[1] = rv >> 16;
+	a->val[2] = rv >> 32;
+	a->val[3] = rv >> 48;
+	a->len = 4;
+	mshl(a, exp + 16); /* 16 == guard bits, 64 bit mant is in len */
+	a->sign = ldouble_sign(sf);
+}
+
+static int
+topbit(MINT *a)
+{
+	uint16_t val;
+	int res;
+
+	chomp(a);
+	res = (a->len-1) * 16;
+	val = a->val[a->len-1];
+	val >>= 1;
+	while (val)
+		val >>= 1, res++;
+	return res;
+}
+
+static int
+getbit(MINT *a, int h)
+{
+	if (h < 0 || h/16 >= a->len)
+		return 0;
+	return (a->val[h/16] & (1 << (h%16))) != 0;
+}
+
+static void
+mcopy(MINT *a, MINT *b)
+{
+	int i;
+
+	a->len = b->len;
+	a->sign = b->sign;
+	for (i = 0; i < a->len; i++)
+		a->val[i] = b->val[i];
+}
+
+/*
+ * Round the MINT number.
+ */
+static void
+grsround(MINT *a)
+{
+	int h = topbit(a);
+	int doadd, i;
+
+	h -= 63; /* points to lsb */
+	/* if guard AND either lsb, round or sticky set, add to lsb */
+	doadd = 0;
+	if (getbit(a, h-1)) { /* guard bit set */
+		if (getbit(a, h) || getbit(a, h-2) || getbit(a, h-3)) {
+			doadd = 1;
+		} else {
+			/* find out whether sticky should be set */
+			for (i = (h/16)-1; i >= 0; i--) {
+				if (a->val[i]) {
+					doadd = 1;
+					break;
+				}
+			}
+			if (doadd == 0) {
+				for (i = 0; i < (h%16)-2; i++) {
+					if (getbit(a, i)) {
+						doadd = 1;
+						break;
+					}
+				}
+			}
+		}
+	}
+	if (doadd && h >= 0) {
+		MINT d, e;
+		minit(&d);
+		mcopy(&e, a);
+		d.len = (h/16)+1;
+		d.val[(h/16)] = 1 << (h % 16);
+		madd(&d, &e, a);
+	}
+}
+
+static SF
+mint2ldbl(MINT *a)
+{
+	uint64_t mant;
+	SF rv;
+	int exp = 0;
+	int len;
+
+	chomp(a);
+	grsround(a);
+	len = a->len-1;
+	while ((a->val[len] & 0x8000) == 0)
+		mshl(a, 1), exp--;
+	mant = (uint64_t)a->val[len] << 48;
+	if (len > 0) mant |= (uint64_t)a->val[len-1] << 32;
+	if (len > 1) mant |= (uint64_t)a->val[len-2] << 16;
+	if (len > 2) mant |= (uint64_t)a->val[len-3];
+	if (len > 3) { /* do some rounding */
+		
+	}
+	exp += len * 16;
+	exp -= 64; /* bits in mantissa */
+	mant <<= 1;
+	LDOUBLE_MAKE(rv, a->sign, exp, mant);
+	return rv;
+}
 
 /*
  * Convert a extended float (x80) number to float (32-bit). 
@@ -1601,19 +1745,32 @@ sfsub(SF x1, SF x2, TWORD t)
 SF
 soft_plus(SF x1, SF x2, TWORD t)
 {
-	x1.kind |= x2.kind & SFEXCP_ALLmask;
-	x2.kind |= x1.kind & SFEXCP_ALLmask;
-	if (SFISNAN(x1))
+	MINT a, b, c;
+	SF rv;
+
+	if (LDOUBLE_ISINF(x1) && LDOUBLE_ISINF(x2)) {
+		if (ldouble_sign(x1) == ldouble_sign(x2))
+			return x1;
+		LDOUBLE_NAN(x1,0);
 		return x1;
-	else if (SFISNAN(x2))
-		return x2;
-	switch ((x1.kind & SF_Neg) - (x2.kind & SF_Neg)) {
-	  case SF_Neg - 0:
-		return sfsub(x2, SFNEG(x1), - (int)t);
-	  case 0 - SF_Neg:
-		return sfsub(x1, SFNEG(x2), t);
 	}
-	return sfadd(x1, x2, t);
+	if (LDOUBLE_ISNAN(x1) || LDOUBLE_ISINF(x1))
+		return x1;
+	if (LDOUBLE_ISNAN(x2) || LDOUBLE_ISNAN(x2))
+		return x2;
+
+	ldbl2mint(&a, x1);
+//mdump("plus a", &a);
+	ldbl2mint(&b, x2);
+//mdump("plus b", &b);
+	madd(&a, &b, &c);
+//mdump("plus c", &c);
+	rv = mint2ldbl(&c);
+#ifdef DEBUGFP
+	if (x1.debugfp + x2.debugfp != rv.debugfp)
+		fpwarn("soft_plus", rv.debugfp, x1.debugfp + x2.debugfp);
+#endif
+	return rv;
 }
 
 SF
@@ -2377,7 +2534,7 @@ soft_toush(SF osf, TWORD t)
 
 #ifdef DEBUGFP
 void
-fpwarn(char *s, long double soft, long double hard)
+fpwarn(const char *s, long double soft, long double hard)
 {
 	extern int nerrors;
 
@@ -2393,3 +2550,115 @@ fpwarn(char *s, long double soft, long double hard)
 	nerrors++;
 }
 #endif
+
+/*
+ * Veeeeery simple arbitrary precision code.
+ * Interface similar to old libmp package.
+ */
+void
+minit(MINT *m)
+{
+	m->sign = 0;
+	m->len = 0;
+	memset(m->val, 0, MAXMINT);
+}
+
+static void
+chomp(MINT *a)
+{
+	while (a->len > 0 && a->val[a->len-1] == 0)
+		a->len--;
+}
+
+static void
+neg2com(MINT *a)
+{
+	uint32_t sum;
+	int i;
+
+	sum = 1;
+	for (i = 0; i < a->len; i++) {
+		a->val[i] = ~a->val[i];
+		sum = a->val[i] + sum;
+		a->val[i] = sum;
+		sum >>= 16;
+	}
+}
+
+void
+mshl(MINT *a, int nbits)
+{
+	int i, j;
+
+	/* XXXXXXX must improve significantly */
+	for (j = 0; j < nbits; j++) {
+		if (a->val[a->len-1] & 0x8000) {
+			if (a->len >= MAXMINT)
+				fpwarn("mshl: shifting out", 0, 0);
+			a->val[a->len++] = 0;
+		}
+		for (i = a->len-1; i > 0; i--)
+			a->val[i] = (a->val[i] << 1) | (a->val[i-1] >> 15);
+		a->val[i] = (a->val[i] << 1);
+	}
+}
+
+void
+mdump(char *c, MINT *a)
+{
+	int i;
+
+	printf("%s: ", c);
+	printf("len %d sign %d: ", a->len, (unsigned)a->sign);
+	for (i = 0; i < a->len; i++)
+		printf("%05d: %04x\n", i, a->val[i]);
+}
+
+
+/*
+ * add (and sub) uses 2-complement (for simplicity).
+ */
+void
+madd(MINT *a, MINT *b, MINT *c)
+{
+	int32_t sum;
+	int mx, i;
+
+	chomp(a);
+	chomp(b);
+	/* ensure both numbers are the same size + 1 (for two-complement) */
+	mx = (b->len > a->len ? b->len : a->len) + 1;
+	for (i = a->len; i < mx; i++)
+		a->val[i] = 0;
+	for (i = b->len; i < mx; i++)
+		b->val[i] = 0;
+	a->len = b->len = mx;
+
+	if (a->sign)
+		neg2com(a);
+	if (b->sign)
+		neg2com(b);
+
+	sum = 0;
+	for (i = 0; i < a->len; i++) {
+		sum = a->val[i] + b->val[i] + sum;
+		c->val[i] = sum;
+		sum >>= 16;
+	}
+	c->len = a->len;
+
+	if (c->val[c->len-1] & 0x8000) {
+		neg2com(c);
+		c->sign = 1;
+	} else
+		c->sign = 0;
+	chomp(c);
+}
+
+void
+msub(MINT *a, MINT *b, MINT *c)
+{
+	b->sign = !b->sign;
+	madd(a, b, c);
+}
+
