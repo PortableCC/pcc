@@ -29,6 +29,13 @@
 
 # include "pass1.h"
 
+#ifdef LANG_CXX
+#define	P1ND	NODE
+#define	p1alloc talloc
+#define	p1tfree tfree
+#define	p1listf listf
+#endif
+
 /*
  * Print out assembler segment name.
  */
@@ -61,8 +68,7 @@ defloc(struct symtab *sp)
 {
 	char *name;
 
-	if ((name = sp->soname) == NULL)
-		name = exname(sp->sname);
+	name = getexname(sp);
 	if (sp->sclass == EXTDEF) {
 		printf("	.globl %s\n", name);
 	}
@@ -82,22 +88,22 @@ void
 efcode(void)
 {
 	extern int gotnr;
-	NODE *p, *q;
+	P1ND *p, *q;
 
 	gotnr = 0;	/* new number for next fun */
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
 		return;
 	/* Create struct assignment */
 	q = tempnode(structrettemp, PTR+STRTY, 0, cftnsp->sap);
-	q = buildtree(UMUL, q, NIL);
-	p = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
-	p = buildtree(UMUL, p, NIL);
+	q = buildtree(UMUL, q, NULL);
+	p = block(REG, NULL, NULL, PTR+STRTY, 0, cftnsp->sap);
+	p = buildtree(UMUL, p, NULL);
 	p = buildtree(ASSIGN, q, p);
 	ecomp(p);
 
 	/* put hidden arg in ax on return */
 	q = tempnode(structrettemp, INT, 0, 0);
-	p = block(REG, NIL, NIL, INT, 0, 0);
+	p = block(REG, NULL, NULL, INT, 0, 0);
 	regno(p) = AX;
 	ecomp(buildtree(ASSIGN, p, q));
 }
@@ -126,7 +132,7 @@ bfcode(struct symtab **sp, int cnt)
 #endif
 	struct symtab *sp2;
 	extern int gotnr;
-	NODE *n, *p;
+	P1ND *n, *p;
 	int i, regparmarg;
 	int argbase, nrarg, sz;
 
@@ -134,8 +140,10 @@ bfcode(struct symtab **sp, int cnt)
 	nrarg = regparmarg = 0;
 
 #ifdef GCC_COMPAT
+#if 0
         if (attr_find(cftnsp->sap, GCC_ATYP_STDCALL) != NULL)
                 cftnsp->sflags |= SSTDCALL;
+#endif
         if ((ap = attr_find(cftnsp->sap, GCC_ATYP_REGPARM)))
                 regparmarg = ap->iarg(0);
 #endif
@@ -148,7 +156,7 @@ bfcode(struct symtab **sp, int cnt)
 				regno(n) = regpregs[nrarg++];
 			} else {
 				n = block(OREG, 0, 0, INT, 0, 0);
-				n->n_lval = argbase/SZCHAR;
+				slval(n, argbase/SZCHAR);
 				argbase += SZINT;
 				regno(n) = FPREG;
 			}
@@ -202,7 +210,7 @@ bfcode(struct symtab **sp, int cnt)
 			oalloc(sp2, &autooff);
                         for (j = 0; j < sz/SZCHAR; j += 4) {
                                 p = block(OREG, 0, 0, INT, 0, 0);
-                                p->n_lval = sp2->soffset/SZCHAR + j;
+                                slval(p, sp2->soffset/SZCHAR + j);
                                 regno(p) = FPREG;
                                 n = block(REG, 0, 0, INT, 0, 0);
                                 regno(n) = regpregs[reg++];
@@ -224,7 +232,7 @@ bfcode(struct symtab **sp, int cnt)
 			} else {
                                 n = block(OREG, 0, 0, sp2->stype,
 				    sp2->sdf, sp2->sap);
-                                n->n_lval = sp2->soffset/SZCHAR;
+                                slval(n, sp2->soffset/SZCHAR);
                                 regno(n) = FPREG;
 			}
 			p = tempnode(0, sp2->stype, sp2->sdf, sp2->sap);
@@ -236,7 +244,7 @@ bfcode(struct symtab **sp, int cnt)
 	}
 
         argstacksize = 0;
-        if (cftnsp->sflags & SSTDCALL) {
+        if (attr_find(cftnsp->sap, GCC_ATYP_STDCALL)) {
 		argstacksize = (argbase - ARGINIT)/SZCHAR;
         }
 
@@ -262,10 +270,10 @@ bjobcode(void)
  */
 static int regcvt, rparg;
 static void
-addreg(NODE *p)
+addreg(P1ND *p)
 {
 	TWORD t;
-	NODE *q;
+	P1ND *q;
 	int sz, r;
 
 	sz = tsize(p->n_type, p->n_df, p->n_ap)/SZCHAR;
@@ -296,7 +304,7 @@ addreg(NODE *p)
 		q = p->n_left;
 		t = sz == 2 ? LONGLONG : INT;
 		q = cast(q, INCREF(t), 0);
-		q = buildtree(UMUL, q, NIL);
+		q = buildtree(UMUL, q, NULL);
 		p->n_op = ASSIGN;
 		p->n_type = t;
 		p->n_right = q;
@@ -312,14 +320,14 @@ addreg(NODE *p)
  * This is done early in buildtree() and only done once.
  * Returns p.
  */
-NODE *
-funcode(NODE *p)
+P1ND *
+funcode(P1ND *p)
 {
 	extern int gotnr;
 #ifdef GCC_COMPAT
 	struct attr *ap;
 #endif
-	NODE *r, *l;
+	P1ND *r, *l;
 	TWORD t = DECREF(DECREF(p->n_left->n_type));
 	int stcall;
 
@@ -334,13 +342,13 @@ funcode(NODE *p)
 	for (r = p->n_right; r->n_op == CM; r = r->n_left) {
 		if (r->n_right->n_op != STARG) {
 			r->n_right = intprom(r->n_right);
-			r->n_right = block(FUNARG, r->n_right, NIL,
+			r->n_right = block(FUNARG, r->n_right, NULL,
 			    r->n_right->n_type, r->n_right->n_df,
 			    r->n_right->n_ap);
 		}
 	}
 	if (r->n_op != STARG) {
-		l = talloc();
+		l = p1alloc();
 		*l = *r;
 		r->n_op = FUNARG;
 		r->n_left = l;
@@ -350,7 +358,7 @@ funcode(NODE *p)
 	if (stcall) {
 		/* Prepend a placeholder for struct address. */
 		/* Use BP, can never show up under normal circumstances */
-		l = talloc();
+		l = p1alloc();
 		*l = *r;
 		r->n_op = CM;
 		r->n_right = l;
@@ -370,7 +378,7 @@ funcode(NODE *p)
 
 	regcvt = 0;
 	if (rparg)
-		listf(p->n_right, addreg);
+		p1listf(p->n_right, addreg);
 
 	return p;
 }
@@ -390,27 +398,27 @@ mygenswitch(int num, TWORD type, struct swents **p, int n)
 	return 0;
 }
 
-NODE *	
-builtin_return_address(const struct bitable *bt, NODE *a)
+P1ND *	
+builtin_return_address(const struct bitable *bt, P1ND *a)
 {	
 	int nframes;
-	NODE *f; 
+	P1ND *f; 
 	
 	if (a->n_op != ICON)
 		goto bad;
 
-	nframes = (int)a->n_lval;
+	nframes = glval(a);
   
-	tfree(a);	
+	p1tfree(a);	
 			
-	f = block(REG, NIL, NIL, PTR+VOID, 0, 0);
+	f = block(REG, NULL, NULL, PTR+VOID, 0, 0);
 	regno(f) = FPREG;
  
 	while (nframes--)
-		f = block(UMUL, f, NIL, PTR+VOID, 0, 0);
+		f = block(UMUL, f, NULL, PTR+VOID, 0, 0);
 				    
 	f = block(PLUS, f, bcon(2), INCREF(PTR+VOID), 0, 0);
-	f = buildtree(UMUL, f, NIL);	
+	f = buildtree(UMUL, f, NULL);	
    
 	return f;
 bad:						
@@ -418,24 +426,24 @@ bad:
 	return bcon(0);
 }
 
-NODE *
-builtin_frame_address(const struct bitable *bt, NODE *a)
+P1ND *
+builtin_frame_address(const struct bitable *bt, P1ND *a)
 {
 	int nframes;
-	NODE *f;
+	P1ND *f;
 
 	if (a->n_op != ICON)
 		goto bad;
 
-	nframes = (int)a->n_lval;
+	nframes = glval(a);
 
-	tfree(a);
+	p1tfree(a);
 
-	f = block(REG, NIL, NIL, PTR+VOID, 0, 0);
+	f = block(REG, NULL, NULL, PTR+VOID, 0, 0);
 	regno(f) = FPREG;
 
 	while (nframes--)
-		f = block(UMUL, f, NIL, PTR+VOID, 0, 0);
+		f = block(UMUL, f, NULL, PTR+VOID, 0, 0);
 
 	return f;
 bad:
@@ -446,8 +454,8 @@ bad:
 /*
  * Return "canonical frame address".
  */
-NODE *
-builtin_cfa(const struct bitable *bt, NODE *a)
+P1ND *
+builtin_cfa(const struct bitable *bt, P1ND *a)
 {
 	uerror("missing builtin_cfa");
 	return bcon(0);

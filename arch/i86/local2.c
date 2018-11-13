@@ -388,21 +388,21 @@ llshft(NODE *p)
 		/* FIXME: we need different versions of this for signed right
 		   shifting. Just test code - register setup needs checking
 		   for ordering etc yet */
-		if (r->n_lval == 16) {
+		if (getrval(r) == 16) {
 			if (p->n_op == RS)
 				printf("\tmov ax, dx\n\txor dx,dx\n");
 			else
 				printf("\tmov dx, ax\n\txor ax,ax\n");
 			return;
 		}
-		if (r->n_lval == 8) {
+		if (getrval(r) == 8) {
 			if (p->n_op == RS)
 				printf("\tmov al, ah\n\tmov ah, dl\n\tmov dl, dh\n\txor dh,dh\n");
 			else
 				printf("\tmov ah, al\n\tmov dl, ah\n\tmov dh, dl\n\txor al, al\n");
 			return;
 		} 
-		if (r->n_lval == 24) {
+		if (getrval(r) == 24) {
 			if (p->n_op == RS)
 				printf("\txor dx,dx\n\tmov al, dh\n\txor ax,ax\n");
 			else
@@ -725,7 +725,7 @@ adrcon(CONSZ val)
 void
 conput(FILE *fp, NODE *p)
 {
-	int val = (int)p->n_lval;
+	int val = getlval(p);
 
 	switch (p->n_op) {
 	case ICON:
@@ -765,12 +765,12 @@ upput(NODE *p, int size)
 
 	case NAME:
 	case OREG:
-		p->n_lval += size;
+		setlval(p, getlval(p) + size);
 		adrput(stdout, p);
-		p->n_lval -= size;
+		setlval(p, getlval(p) - size);
 		break;
 	case ICON:
-		printf("#"CONFMT, p->n_lval >> 16);
+		printf("#"CONFMT, getlval(p) >> 16);
 		break;
 	default:
 		comperr("upput bad op %d size %d", p->n_op, size);
@@ -800,18 +800,18 @@ static void do_adrput(FILE *io, NODE *p, int ut)
 		}
 		if (p->n_name[0] != '\0') {
 			fputs(p->n_name, io);
-			if (p->n_lval != 0)
-				fprintf(io, "+" CONFMT, p->n_lval);
+			if (getlval(p) != 0)
+				fprintf(io, "+" CONFMT, getlval(p));
 		} else
-			fprintf(io, "#"CONFMT, p->n_lval);
+			fprintf(io, "#"CONFMT, getlval(p));
 		return;
 
 	case OREG:
 		r = p->n_rval;
 		if (p->n_name[0])
-			printf("%s%s", p->n_name, p->n_lval ? "+" : "");
-		if (p->n_lval)
-			fprintf(io, "%d", (int)p->n_lval);
+			printf("%s%s", p->n_name, getlval(p) ? "+" : "");
+		if (getlval(p))
+			fprintf(io, "%d", (int)getlval(p));
 		printf("[");
 		if (R2TEST(r)) {
 			fprintf(io, "%s,%s,4", rnames[R2UPK1(r)],
@@ -1304,27 +1304,27 @@ special(NODE *p, int shape)
 		break;
 	case SPCON:
 		if (o != ICON || p->n_name[0] ||
-		    p->n_lval < 0 || p->n_lval > 0x7fffffff)
+		    getlval(p) < 0 || getlval(p) > 0x7fffffff)
 			break;
 		return SRDIR;
 	case SMIXOR:
 		return tshape(p, SZERO);
 	case SMILWXOR:
 		if (o != ICON || p->n_name[0] ||
-		    p->n_lval == 0 || p->n_lval & 0xffffffff)
+		    getlval(p) == 0 || getlval(p) & 0xffffffff)
 			break;
 		return SRDIR;
 	case SMIHWXOR:
 		if (o != ICON || p->n_name[0] ||
-		     p->n_lval == 0 || (p->n_lval >> 32) != 0)
+		     getlval(p) == 0 || (getlval(p) >> 32) != 0)
 			break;
 		return SRDIR;
 	case STWO:
-		if (o == ICON && p->n_name[0] == 0 && p->n_lval == 2)
+		if (o == ICON && p->n_name[0] == 0 && getlval(p) == 2)
 			return SRDIR;
 		break;
 	case SMTWO:
-		if (o == ICON && p->n_name[0] == 0 && p->n_lval == -2)
+		if (o == ICON && p->n_name[0] == 0 && getlval(p) == -2)
 			return SRDIR;
 		break;
 	}
@@ -1409,7 +1409,7 @@ myxasm(struct interpass *ip, NODE *p)
 			}
 			uerror("xasm arg not constant");
 		}
-		v = p->n_left->n_lval;
+		v = getlval(p->n_left);
 		if ((c == 'K' && v < -128) ||
 		    (c == 'L' && v != 0xff && v != 0xffff) ||
 		    (c != 'K' && v < 0) ||
