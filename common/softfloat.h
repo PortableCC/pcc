@@ -44,9 +44,6 @@ typedef struct softfloat {
 		long double debugfp;
 #endif
 	};
-	unsigned long long significand;
-	short exponent;
-	short kind;
 } SF;
 typedef SF *SFP;
 
