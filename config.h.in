@@ -180,6 +180,9 @@
 /* Compile for use of libvmf */
 #undef LIBVMF
 
+/* are we cross-compiling? */
+#undef CROSS_COMPILING
+
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
 #if defined AC_APPLE_UNIVERSAL_BUILD

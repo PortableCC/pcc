@@ -549,6 +549,7 @@ else
 	fi
 	preprocessor="${BINPREFIX}cpp"
 	compiler="${BINPREFIX}ccom"
+	AC_DEFINE(CROSS_COMPILING, 1, [Cross-compiling.])
 fi
 AC_SUBST(BINPREFIX)
 
