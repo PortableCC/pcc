@@ -617,10 +617,10 @@ ieeefp_64_toolarge(int exp, uint64_t mant)
 FPI fpi_binaryx80 = { 64,   1-16383-64+1,
                         32766-16383-64+1, 1, 0,
         1, 1, 1, 0,   80,     16383+64-1 };
-#define IEEEFP_X80_NAN(sf,sign)	\
-	(sf.fp[0] = 0, sf.fp[1] = 0xc0000000, sf.fp[2] = 0x7fff | (sign << 15))
-#define IEEEFP_X80_INF(sf,sign)	\
-	(sf.fp[0] = 0, sf.fp[1] = 0x80000000, sf.fp[2] = 0x7fff | (sign << 15))
+#define IEEEFP_X80_NAN(sf,s)	\
+	(sf.fp[0] = 0, sf.fp[1] = 0xc0000000, sf.fp[2] = 0x7fff | ((s) << 15))
+#define IEEEFP_X80_INF(sf,s)	\
+	(sf.fp[0] = 0, sf.fp[1] = 0x80000000, sf.fp[2] = 0x7fff | ((s) << 15))
 #define IEEEFP_X80_ZERO(sf,s)	(sf.fp[0] = sf.fp[1] = 0, sf.fp[2] = (s << 15))
 #define	IEEEFP_X80_ISZ(sf) \
 	((sf.fp[0] | sf.fp[1] | (sf.fp[2] & 0x7fff)) == 0)
@@ -829,8 +829,10 @@ grsround(MINT *a)
 
 	h -= 63; /* points to lsb */
 	/* if guard AND either lsb, round or sticky set, add to lsb */
+//printf("grs: h %d a %x\n", h, a->val[1]);
 	doadd = 0;
 	if (getbit(a, h-1)) { /* guard bit set */
+//printf("grs: getbit!\n");
 		if (getbit(a, h) || getbit(a, h-2) || getbit(a, h-3)) {
 			doadd = 1;
 		} else {
@@ -859,6 +861,7 @@ grsround(MINT *a)
 		d.val[(h/16)] = 1 << (h % 16);
 		madd(&d, &e, a);
 	}
+//printf("grs2: h %d a %x\n", h, a->val[1]);
 }
 
 /*
@@ -1645,65 +1648,74 @@ soft_mul(SF x1, SF x2, TWORD t)
 SF
 soft_div(SF x1, SF x2, TWORD t)
 {
-	ULLong q, r, oppx2;
-	int exp;
+	MINT a, b, c, d, e, f;
+	uint64_t mant;
+	int exp1, exp2, sign, sh;
+	int s1 = ldouble_sign(x1);
+	int s2 = ldouble_sign(x2);
+	SF rv;
 
-	x1.kind |= x2.kind & SFEXCP_ALLmask;
-	x2.kind |= x1.kind & SFEXCP_ALLmask;
-	x1.kind ^= x2.kind & SF_Neg;
-	SFCOPYSIGN(x2, x1);
-	if (SFISNAN(x1))
-		return x1;
-	else if (SFISNAN(x2))
-		return x2;
-	if ((SFISINF(x1) && SFISINF(x2)) || (SFISZ(x1) && SFISZ(x2)))
-		return nansf(x1.kind | SFEXCP_Invalid);
-	if (SFISINF(x1) || SFISZ(x1))
-		return x1;
-	else if (SFISINF(x2))
-		return zerosf(x1.kind);
-	else if (SFISZ(x2))
-		return infsf(x2.kind | SFEXCP_DivByZero);
-	assert(x1.significand && x2.significand);
-	SFNORMALIZE(x1);
-	SFNORMALIZE(x2);
-	exp = x1.exponent - x2.exponent - WORKBITS;
-	if (exp < -32767)
-		/* huge underflow, flush to 0 to avoid issues */
-		return zerosf(x1.kind | SFEXCP_Inexlo | SFEXCP_Underflow);
-	q = 0;
-	if (x1.significand >= x2.significand) {
-		++exp;
-		++q;
-		x1.significand -= x2.significand;
-	}
-	r = x1.significand;
-	oppx2 = (ONES(WORKBITS-1) - x2.significand) + 1;
-	do {
-		q <<= 1;
-		if (r & NORMALMANT) {
-			r &= ~NORMALMANT;
-			r <<= 1;
-			r += oppx2;
-			++q;
+	if (LDOUBLE_ISINFNAN(x1) || LDOUBLE_ISINFNAN(x2)) {
+		if (LDOUBLE_ISNAN(x1) || LDOUBLE_ISNAN(x2)) {
+			LDOUBLE_NAN(rv, 1);
+		} else if (LDOUBLE_ISINF(x1) && LDOUBLE_ISINF(x2)) {
+			LDOUBLE_NAN(rv, 0);
+		} else if (LDOUBLE_ISINF(x1) && LDOUBLE_ISZERO(x2)) {
+			LDOUBLE_NAN(rv, 0);
+		} else if (LDOUBLE_ISINF(x2)) {
+			LDOUBLE_ZERO(rv, 0);
+		} else if (LDOUBLE_ISZERO(x2)) {
+			LDOUBLE_INF(rv, 0);
+		} else /* if (LDOUBLE_ISINF(x1)) */ {
+			LDOUBLE_INF(rv, s1);
 		}
-		else {
-			r <<= 1;
-			if (r >= x2.significand) {
-				r -= x2.significand;		
-				++q;
-			}
+	} else if (LDOUBLE_ISZERO(x2)) {
+		if (LDOUBLE_ISZERO(x1)) {
+			LDOUBLE_NAN(rv, s1 == s2);
+		} else {
+			LDOUBLE_INF(rv, s1 != s2);
 		}
-	} while((q & NORMALMANT) == 0);
-	x1.significand = q;
-	x1.exponent = exp;
-	if (r) {
-		/* be sure to set correctly highest bit of extra */
-		r += oppx2 / 2;
-		r |= 1; /* rounds to odd */
-/* XXX can remainder be power-of-2? doesn't seem it may happen... */
+	} else {
+
+		/* get quot and remainder of divided mantissa */
+		mant2mint(&a, x1);
+		mshl(&a, 64);
+		mant2mint(&b, x2);
+		mdiv(&a, &b, &c, &d);
+		sh = topbit(&c) - 64; /* MANT_BITS */
+
+		/* divide remainder as well, for use in rounding */
+		mshl(&d, 64);
+		mant2mint(&b, x2);
+		mdiv(&d, &b, &e, &f);
+
+		/* create 128-bit number of the two quotients */
+		mshl(&c, 64);
+		madd(&c, &e, &f);
+
+		/* do correct rounding */
+		grsround(&f);
+		mint2mant(&f, &mant);
+
+		exp1 = ldouble_exp(x1) - LDOUBLE_BIAS;
+		exp2 = ldouble_exp(x2) - LDOUBLE_BIAS;
+
+		sign = s1 != s2;
+		LDOUBLE_MAKE(rv, sign,
+		    (exp1 - exp2 + sh + LDOUBLE_BIAS), (mant << 1));
 	}
-	return sfround(x1, r, t);
+#ifdef DEBUGFP
+	{ long double ldd = x1.debugfp / x2.debugfp;
+	if (memcmp(&ldd, &rv.debugfp, SZLD))
+		fpwarn("soft_div", rv.debugfp, ldd);
+	}
+#endif
+//long double ldou = x1.debugfp / x2.debugfp;
+//printf("x1: %llx %x\n", *(long long *)&x1.debugfp, ((int *)&x1.debugfp)[2]);
+//printf("x2: %llx %x\n", *(long long *)&x2.debugfp, ((int *)&x2.debugfp)[2]);
+//printf("rv: %llx %x\n", *(long long *)&rv.debugfp, ((int *)&rv.debugfp)[2]);
+//printf("rv: %llx %x\n", *(long long *)&ldou, ((int *)&ldou)[2]);
+	return rv;
 }
 
 #ifndef NO_COMPLEX
@@ -2387,7 +2399,7 @@ mdump(char *c, MINT *a)
 	int i;
 
 	printf("%s: ", c);
-	printf("len %d sign %d: ", a->len, (unsigned)a->sign);
+	printf("len %d sign %d:\n", a->len, (unsigned)a->sign);
 	for (i = 0; i < a->len; i++)
 		printf("%05d: %04x\n", i, a->val[i]);
 }
@@ -2465,5 +2477,53 @@ mult(MINT *a, MINT *b, MINT *c)
 		c->val[j+i] = sum;
 	}
 	c->sign = (a->sign == b->sign) == 0;
+}
+
+
+static int
+geq(MINT *l, MINT *r)
+{
+	int i;
+
+	if (l->len > r->len)
+		return 1;
+	if (l->len < r->len)
+		return 0;
+	for (i = l->len-1; i >= 0; i--) {
+		if (r->val[i] > l->val[i])
+			return 0;
+		if (r->val[i] < l->val[i])
+			return 1;
+	}
+	return 1;
+}
+
+void
+mdiv(MINT *n, MINT *d, MINT *q, MINT *r)
+{
+	MINT a, b;
+	int i;
+
+	minit(q);
+	minit(r);
+	chomp(n);
+	chomp(d);
+	for (i = 0; i < n->len; i++)
+		q->val[i] = 0;
+	q->len = n->len;
+
+	for (i = n->len * 16 - 1; i >= 0; i--) {
+		mshl(r, 1);
+		if (r->len == 0)
+			r->val[r->len++] = 0;
+		r->val[0] |= (n->val[i/16] >> (i % 16)) & 1;
+		if (geq(r, d)) {
+			mcopy(&b, d);
+			msub(r, &b, &a);
+			mcopy(r, &a);
+			q->val[i/16] |= (1 << (i % 16));
+		}
+	}
+	chomp(q);
 }
 
