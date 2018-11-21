@@ -720,7 +720,6 @@ enable_gcc_compat
 enable_pcc_debug
 enable_twopass
 enable_stripping
-enable_nativefp
 with_yasm
 enable_native
 '
@@ -1357,7 +1356,6 @@ Optional Features:
   --disable-pcc-debug     Disable PCC debugging
   --enable-twopass        Link PCC as a two-pass compiler
   --disable-stripping     Disable stripping of symbols in installed binaries
-  --disable-nativefp      Disable use of compiler host floating point.
   --enable-native         Build the compiler as a native rather than
                           cross-build compiler
 
@@ -2559,7 +2557,6 @@ gcccompat=yes
 pccdebug=yes
 stripping=yes
 native=no
-nativefp=yes
 useyasm=no
 stabs=no
 dwarf=no
@@ -3046,18 +3043,6 @@ if test "$stripping" = "yes"; then
 		{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Installed binaries may be unstripped" >&5
 $as_echo "$as_me: WARNING: Installed binaries may be unstripped" >&2;}
 	fi
-fi
-
-# Check whether --enable-nativefp was given.
-if test "${enable_nativefp+set}" = set; then :
-  enableval=$enable_nativefp; nfp=$enableval
-fi
-
-if test "$nfp" = "no"; then
-	nativefp=no
-fi
-if test "$nativefp" = "yes"; then
-	ADD_CPPFLAGS="$ADD_CPPFLAGS -DNATIVE_FLOATING_POINT"
 fi
 
 
@@ -6772,7 +6757,6 @@ echo "Using include path ............... ${altincdir-<default>}"
 echo "Using library path ............... ${altlibdir-<default>}"
 echo "Use libvmf ....................... $libvmf"
 echo "Has TLS support .................. $tls"
-echo "Has native floating point ........ $nativefp"
 echo "Has GCC compatibility ............ $gcccompat"
 echo "Has PCC debugging ................ $pccdebug"
 echo "Type of wchar_t is ............... ${wchar_type} (${wchar_size} chars)"
