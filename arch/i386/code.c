@@ -444,7 +444,7 @@ bjobcode(void)
 #if defined(__GNUC__) || defined(__PCC__)
 	/* Be sure that the compiler uses full x87 */
 	/* XXX cross-compiling will fail here */
-	int fcw;
+	volatile int fcw;
 	__asm("fstcw (%0)" : : "r"(&fcw));
 	fcw |= 0x300;
 	__asm("fldcw (%0)" : : "r"(&fcw));
