@@ -122,8 +122,6 @@
 #include "ccconfig.h"
 /* C command */
 
-#undef NATIVE_FLOATING_POINT
-#define NATIVE_FLOATING_POINT	/* avoid ccom typedefs */
 #define CC_DRIVER
 #include "softfloat.h"	/* for CPP floating point macros */
 
