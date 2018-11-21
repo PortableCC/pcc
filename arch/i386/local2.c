@@ -38,6 +38,7 @@
 
 int msettings = MI686;
 static int stkpos;
+static int flabwrtn, loadlab;
 
 void
 deflab(int label)
@@ -148,6 +149,12 @@ eoftn(struct interpass_prolog *ipp)
 	printf("\t.size " EXPREFIX "%s,.-" EXPREFIX "%s\n", ipp->ipp_name,
 	    ipp->ipp_name);
 #endif
+	if (flabwrtn == 0 && loadlab) {
+		printf("	.data\n");
+		printf(LABFMT ":	.long 0x5f800000\n", loadlab);
+		printf("	.text\n");
+		flabwrtn = 1;
+	}
 }
 
 /*
@@ -352,37 +359,15 @@ fcomp(NODE *p)
 static void
 ulltofp(NODE *p)
 {
-	int jmplab;
+	int jmplab = getlab2();
 
-#if defined(ELFABI) || defined(PECOFFABI) || defined(AOUTABI)
-	static int loadlab;
-
-	if (loadlab == 0) {
+	if (loadlab == 0)
 		loadlab = getlab2();
-		expand(p, 0, "	.data\n");
-		printf(LABFMT ":	.long 0,0x80000000,0x403f\n", loadlab);
-		expand(p, 0, "	.text\n");
-	}
-#endif
-
-	jmplab = getlab2();
-	expand(p, 0, "	pushl UL\n	pushl AL\n");
-	expand(p, 0, "	fildq (%esp)\n");
-	expand(p, 0, "	addl $8,%esp\n");
-	expand(p, 0, "	cmpl $0,UL\n");
+	expand(p, 0, "	movl UL,4+A2\n	movl AL,A2\n");
+	expand(p, 0, "	fildq A2\n");
+	expand(p, 0, "	test UL,UL\n");
 	printf("	jge " LABFMT "\n", jmplab);
-
-#if defined(ELFABI) || defined(AOUTABI)
-	printf("	fldt " LABFMT "%s\n", loadlab, kflag ? "@GOTOFF" : "");
-#elif defined(MACHOABI)
-	printf("\tpushl 0x5f800000\n");
-	printf("\tfadds (%%esp)\n");
-	printf("\taddl $4,%%esp\n");
-#else
-#error incomplete implementation
-#endif
-
-	printf("	faddp %%st,%%st(1)\n");
+	printf("	fadds " LABFMT "%s\n", loadlab, kflag ? "@GOTOFF" : "");
 	printf(LABFMT ":\n", jmplab);
 }
 

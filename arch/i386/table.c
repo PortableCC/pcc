@@ -515,7 +515,7 @@ struct optab table[] = {
 { SCONV,	INFL,
 	SCREG,	TULONGLONG,
 	SDREG,	TLDOUBLE|TDOUBLE|TFLOAT,
-		NEEDS(NREG(D, 1)),	RESC1,
+		NEEDS(NREG(D, 1), NTEMP(1)),	RESC1,
 		"ZJ", },
 
 /* float to something */
