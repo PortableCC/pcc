@@ -622,7 +622,8 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 #define IEEEFP_X80_BIAS	16383
 #define	IEEEFP_X80_MAXMINT	32768+64+16 /* exponent + subnormal + guard */
 #define IEEEFP_X80_MAKE(rv, sign, exp, mant)	\
-	(rv.fp[0] = mant >> 1, rv.fp[1] = (mant >> 33) | (1 << 31), \
+	(rv.fp[0] = mant >> 1, rv.fp[1] = (mant >> 33) | \
+	    (exp ? (1 << 31) : 0), \
 	    rv.fp[2] = (exp & 0x7fff) | (sign << 15))
 #else
 #error need long double definition
@@ -1549,6 +1550,10 @@ vals2fp(SF *sf, int k, int exp, uint32_t *mant)
 		if (mant[0] != sf->fp[0] || mant[1] != sf->fp[1])
 			fpwarn("vals2fp", sf->debugfp, sf->debugfp);
 #endif
+		break;
+	case SF_Denormal:
+		m = (((uint64_t)mant[1] << 32) | mant[0]) << 1;
+		LDOUBLE_MAKE((*sf), sign, 0, m);
 		break;
 	default:
 		fprintf(stderr, "vals2fp: unhandled %x\n", k);
