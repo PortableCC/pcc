@@ -573,7 +573,7 @@ ftnend(void)
 	cftnod = NIL;
 	tcheck();
 	brklab = contlab = retlab = NOLAB;
-	flostat = 0;
+	flostat &= FP_CONTR_CBR;
 	if (nerrors == 0) {
 		if (savbc != NULL)
 			cerror("bcsave error");

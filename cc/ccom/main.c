@@ -289,6 +289,7 @@ main(int argc, char *argv[])
 	lineno = 1;
 	sdflag = ddebug;
 	ddebug = 0;
+	flostat = FP_CONTR_CBR;
 #ifdef GCC_COMPAT
 	gcc_init();
 #endif

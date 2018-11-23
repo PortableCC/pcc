@@ -1066,11 +1066,11 @@ whprefix:	  C_WHILE  '('  e  ')' {
 			savebc();
 			$3 = eve($3);
 			if ($3->n_op == ICON && glval($3) != 0)
-				flostat = FLOOP;
+				flostat = FLOOP | (flostat & FP_CONTR_CBR);
 			plabel( contlab = getlab());
 			reached = 1;
 			brklab = getlab();
-			if (flostat == FLOOP)
+			if (flostat & FLOOP)
 				p1tfree($3);
 			else
 				xcbranch($3, brklab);
@@ -1452,7 +1452,7 @@ savebc(void)
 	bc->flostat = flostat;
 	bc->next = savbc;
 	savbc = bc;
-	flostat = 0;
+	flostat &= FP_CONTR_CBR;
 }
 
 static void

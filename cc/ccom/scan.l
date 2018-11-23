@@ -803,6 +803,15 @@ pragmas_unsupp(char *t)
 static int
 pragmas_stdc(char *t)
 {
+	char *s = pragtok(0);
+
+	if (strcmp(s, "FP_CONTRACT") == 0) {
+		if (strcmp(s = pragtok(0), "ON") == 0) {
+				flostat |= FP_CONTR_CBR;
+		} else if (strcmp(s, "OFF") == 0) {
+			flostat &= ~FP_CONTR_CBR;
+		}
+	}
 	return 0; /* Just ignore */
 }
 

@@ -187,7 +187,7 @@ extern	int odebug, pdebug, sdebug, tdebug, xdebug;
 /* various labels */
 extern	int brklab;
 extern	int contlab;
-extern	int flostat;
+extern	int flostat, fp_contract;
 extern	int retlab;
 extern	int doing_init, statinit;
 extern	short sztable[];
@@ -203,7 +203,7 @@ extern int pragma_allpacked, pragma_packed, pragma_aligned;
 #define FCONT		04
 #define FDEF		010
 #define FLOOP		020
-
+#define	FP_CONTR_CBR	040	/* use same flag field */
 /*
  * Location counters
  */
@@ -459,9 +459,8 @@ typedef struct flt FLT;
 /*
  * Only allowed to do float evaluation if either doing
  * static (compile-time) initialization or FP_CONTRACT is YES.
- * Currently we do not handle FP_CONTRACT.
  */
-#define	CAN_EVAL_FLOAT()	(statinit /* || FP_CONTRACT */ )
+#define	CAN_EVAL_FLOAT()	(statinit || (flostat & FP_CONTR_CBR))
 #define FLOAT_ISZERO(p)		soft_isz(p->sf)
 #define FLOAT_NEG(p)		p->sf = soft_neg(p->sf)
 #define FLOAT_FP2FP(f,t)	f->sf = soft_fp2fp(f->sf, t)
