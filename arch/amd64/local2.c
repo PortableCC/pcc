@@ -261,13 +261,42 @@ static void
 fcomp(NODE *p)	
 {
 
-	if (p->n_left->n_op != REG)
-		comperr("bad compare %p\n", p);
-	if ((p->n_su & DORIGHT) == 0)
+	int swap = ((p->n_su & DORIGHT) != 0);
+	int failjump = attr_find(p->n_ap, ATTR_FP_SWAPPED) != 0;
+
+//printf("fcomp: DOR %d op %s\n", swap, opst[p->n_op]);
+	if (p->n_op == GT || p->n_op == GE) {
+		swap ^= 1;
+		p->n_op = (p->n_op == GT ? LT : LE);
+	}
+//printf("fcomp2: DOR %d op %s\n", swap, opst[p->n_op]);
+	if (swap)
 		expand(p, 0, "\tfxch\n");
-	expand(p, 0, "\tfucomip %st(1),%st\n");	/* emit compare insn  */
+
+	expand(p, 0, "\tfucomip %st(1),%st\n"); /* emit compare insn  */
 	expand(p, 0, "\tfstp %st(0)\n");	/* pop fromstack */
-	zzzcode(p, 'U');
+
+	switch (p->n_op) {
+	case EQ: /* jump if: Z is set and P is clear */
+		expand(p, 0, "\tjne 1f\n");
+		expand(p, 0, "\tjnp LC\n");
+		expand(p, 0, "\t1:\n");
+		break;
+	case NE: /* jump if: Z is clear or P is set */
+		expand(p, 0, "\tjne LC\n");
+		expand(p, 0, "\tjp LC\n");
+		break;
+	case LT:
+		expand(p, 0, "\tja LC\n");
+		if (failjump)
+			expand(p, 0, "\tjp LC\n");
+		break;
+	case LE:
+		expand(p, 0, "\tjae LC\n");
+		if (failjump)
+			expand(p, 0, "\tjp LC\n");
+		break;
+	}
 }
 
 int
@@ -316,48 +345,6 @@ ultofd(NODE *p)
 }
 
 /*
- * Generate code to convert an x87 long double to an unsigned long.
- * This is ugly :-/
- */
-static void
-ldtoul(NODE *p)
-{
-
-	E("	subq $16,%rsp\n");
-	E("	movl $0x5f000000,(%rsp)\n"); /* More than long can have */
-	E("	flds (%rsp)\n");
-	if (p->n_left->n_op == REG) {
-		E("	fxch\n");
-	} else
-		E("	fldt AL\n");
-	E("	fucomi %st(1), %st\n");
-	E("	jae 2f\n");
-
-	E("	fstp %st(1)\n");	 /* Pop huge val from stack */
-	E("	fnstcw (%rsp)\n");	 /* store cw */
-	E("	movw $0x0f3f,4(%rsp)\n");/* round towards 0 */
-	E("	fldcw 4(%rsp)\n");	 /* new cw */
-	E("	fistpll 8(%rsp)\n");	 /* save val */
-	E("	fldcw (%rsp)\n");	 /* fetch old cw */
-	E("	movq 8(%rsp),A1\n");
-
-	E("	jmp 3f\n");
-
-	E("2:\n");
-
-	E("	fsubp %st, %st(1)\n");
-	E("	fnstcw (%rsp)\n");	
-	E("	movw $0x0f3f,4(%rsp)\n");
-	E("	fldcw 4(%rsp)\n");
-	E("	fistpll 8(%rsp)\n");
-	E("	fldcw (%rsp)\n");
-	E("	movabsq $0x8000000000000000,A1\n");
-	E("	xorq 8(%rsp),A1\n");
-
-	E("3:	addq $16,%rsp\n");
-}
-
-/*
  * Generate code to convert an SSE float/double to an unsigned long.
  */     
 static void     
@@ -397,10 +384,6 @@ zzzcode(NODE *p, int c)
 			else
 				printf("r");
 		}
-		break;
-
-	case 'B': /* ldouble to unsigned long cast */
-		ldtoul(p);
 		break;
 
 	case 'b': /* float/double to unsigned long cast */

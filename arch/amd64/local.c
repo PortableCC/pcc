@@ -419,8 +419,6 @@ clocal(NODE *p)
 		m = p->n_type;
 
 		if (o == ICON) {
-			CONSZ val = glval(l);
-
 			/* if named constant and pointer, allow cast 
 			   to long/ulong */
 			if (!nncon(l) && (l->n_type & TMASK) &&
@@ -433,70 +431,18 @@ clocal(NODE *p)
 			if (ISPTR(l->n_type) && !nncon(l))
 				break; /* cannot convert named pointers */
 
-			if (!ISPTR(m)) /* Pointers don't need to be conv'd */
-			    switch (m) {
-			case BOOL:
-				val = nncon(l) ? (val != 0) : 1;
-				slval(l, val);
-				l->n_sp = NULL;
+			if (l->n_sp == 0) {
+				p->n_type = ULONG;
+				concast(l, m);
+			} else if (m != LONG && m != ULONG)
 				break;
-			case CHAR:
-				slval(l, (char)val);
-				break;
-			case UCHAR:
-				slval(l, val & 0377);
-				break;
-			case SHORT:
-				slval(l, (short)val);
-				break;
-			case USHORT:
-				slval(l, val & 0177777);
-				break;
-			case UNSIGNED:
-				slval(l, val & 0xffffffff);
-				break;
-			case INT:
-				slval(l, (int)val);
-				break;
-			case LONG:
-			case LONGLONG:
-				slval(l, (long long)val);
-				break;
-			case ULONG:
-			case ULONGLONG:
-				slval(l, val);
-				break;
-			case VOID:
-				break;
-			case LDOUBLE:
-			case DOUBLE:
-			case FLOAT:
-				l->n_op = FCON;
-				l->n_dcon = fltallo();
-				FCAST(l->n_dcon)->fp = val;
-				break;
-			default:
-				cerror("unknown type %d", m);
-			}
+
 			l->n_type = m;
-			l->n_ap = NULL;
+			l->n_ap = 0;
 			nfree(p);
 			return l;
-		} else if (l->n_op == FCON) {
-			CONSZ lv;
-			if (p->n_type == BOOL)
-				lv = !FLOAT_ISZERO(FCAST(l->n_dcon));
-			else {
-				FLOAT_FP2INT(lv, FCAST(l->n_dcon), m);
-			}
-			slval(l, lv);
-			l->n_sp = NULL;
-			l->n_op = ICON;
-			l->n_type = m;
-			l->n_ap = NULL;
-			nfree(p);
-			return clocal(l);
-		}
+		} else if (l->n_op == FCON)
+			cerror("SCONV FCON");
 		if ((p->n_type == CHAR || p->n_type == UCHAR ||
 		    p->n_type == SHORT || p->n_type == USHORT) &&
 		    (l->n_type == FLOAT || l->n_type == DOUBLE ||
@@ -631,7 +577,7 @@ myp2tree(NODE *p)
 
 	locctr(DATA, sp);
 	defloc(sp);
-	ninval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
 
 	p->n_op = NAME;
 	slval(p, 0);
@@ -701,36 +647,7 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; long double l; int i[3]; } u;
-
-	switch (p->n_type) {
-	case LDOUBLE:
-		u.i[2] = 0;
-		u.l = (long double)FCAST(p->n_dcon)->fp;
-#if defined(HOST_BIG_ENDIAN)
-		/* XXX probably broken on most hosts */
-		printf("\t.long\t0x%x,0x%x,0x%x,0\n", u.i[2], u.i[1], u.i[0]);
-#else
-		printf("\t.long\t0x%x,0x%x,0x%x,0\n", u.i[0], u.i[1],
-		    u.i[2] & 0xffff);
-#endif
-		break;
-	case DOUBLE:
-		u.d = (double)FCAST(p->n_dcon)->fp;
-#if defined(HOST_BIG_ENDIAN)
-		printf("\t.long\t0x%x,0x%x\n", u.i[1], u.i[0]);
-#else
-		printf("\t.long\t0x%x,0x%x\n", u.i[0], u.i[1]);
-#endif
-		break;
-	case FLOAT:
-		u.f = (float)FCAST(p->n_dcon)->fp;
-		printf("\t.long\t0x%x\n", u.i[0]);
-		break;
-	default:
-		return 0;
-	}
-	return 1;
+	return 0;
 }
 
 /* make a name look like an external name in the local machine */
