@@ -1642,7 +1642,7 @@ soft_zero()
  * Save as a static array of uint32_t.
  */
 uint32_t *
-soft_toush(SF osf, TWORD t)
+soft_toush(SF osf, TWORD t, int *nbits)
 {
 	static SF sf;
 
@@ -1676,6 +1676,7 @@ soft_toush(SF osf, TWORD t)
 		fpwarn("soft_toush4", (long double)sf.debugfp, ldt);
 	}
 #endif
+	*nbits = fpis[t-FLOAT]->storage;
 	return sf.fp;
 }
 
