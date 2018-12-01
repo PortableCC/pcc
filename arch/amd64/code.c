@@ -41,7 +41,7 @@
 
 static int nsse, ngpr, nrsp, rsaoff;
 static int thissse, thisgpr, thisrsp;
-enum { INTEGER = 1, INTMEM, SSE, SSEMEM, X87,
+enum { NO_CLASS, INTEGER, INTMEM, SSE, SSEMEM, X87,
 	STRREG, STRMEM, STRSSE, STRIF, STRFI, STRX87 };
 static const int argregsi[] = { RDI, RSI, RDX, RCX, R08, R09 };
 /*
@@ -745,7 +745,7 @@ movtomem(NODE *p, int off, int reg)
 }  
 
 /*
- * Check what to do with a struct.  We traverse down in the struct to 
+ * Check what to do with a struct/union.  We traverse down in the struct to 
  * find which types it is and where the struct really should be.
  * The return vals we may end up with are:
  *	STRREG - The whole struct is saved in general registers.
@@ -753,6 +753,8 @@ movtomem(NODE *p, int off, int reg)
  *	STRSSE - the whole struct is saved in SSE registers.
  *	STRIF  - First word of struct is saved in general reg, other SSE.
  *	STRFI  - First word of struct is saved in SSE, next in general reg.
+ *
+ *	INTEGER, MEMORY, X87, X87UP, X87COMPLEX, SSE, NO_CLASS.
  *
  * - If size > 16 bytes or there are packed fields, use memory.
  * - If any part of an eight-byte should be in a general register,
@@ -768,92 +770,151 @@ movtomem(NODE *p, int off, int reg)
  * sp below is a pointer to a member list.
  * off tells how many bits in that the classification should start.
  */
+
+/*
+ * fill in an array of what elements are classified as.
+ * May return:
+ *	- NO_CLASS (if more checks needed)
+ *	- STRMEM (if known to end up in memory)
+ */
+#define	MAXCLELEM 128
+static struct {
+	int off;
+	int cl;
+} cla[MAXCLELEM];
+static int clp;
+
+static int fillstr(struct symtab *sp);
+static int fillun(struct symtab *sp);
+
 static int
-classifystruct(struct symtab *sp, int off, int osz)
+flatten(TWORD t, struct symtab *sp)
 {
-	struct symtab sps[16];
-	union dimfun *df;
+	int cl;
+
+	clp = 0;
+	cl = (t == STRTY ? fillstr(sp) : fillun(sp));
+	return cl;
+}
+static int
+fillstr(struct symtab *sp)
+{
+	int cl = NO_CLASS;
 	TWORD t;
-	int cl, cl2, sz, i;
+	int sz;
 
-//printf("classifystruct off %d, osz %d\n", off, osz);
-	for (cl = 0; sp; sp = sp->snext) {
+	for (; sp; sp = sp->snext) {
 		t = sp->stype;
+		sz = (int)tsize(t, sp->sdf, sp->sap);
+		while (ISARY(t))
+			t = DECREF(t);
 
-		/* fake a linked list of all array members */
-		if (ISARY(t)) {
-			sz = 1;
-			df = sp->sdf;
-			do {
-				sz *= df->ddim;
-				t = DECREF(t);
-				df++;
-			} while (ISARY(t));
-#ifdef PCC_DEBUG
-			if (sz >= 16)
-				cerror("classifystruct");
-#endif
-			for (i = 0; i < sz; i++) {
-				sps[i] = *sp;
-				sps[i].stype = t;
-				sps[i].sdf = df;
-				sps[i].snext = &sps[i+1];
-				sps[i].soffset = i * (int)tsize(t, df, sp->sap);
-				sps[i].soffset += sp->soffset;
-			}
-			sps[i-1].snext = sp->snext;
-			sp = &sps[0];
-		}
-//printf("new sp soff %d \n", (int)sp->soffset);
-		if (sp->soffset >= osz)
+		if (t <= ULONGLONG || ISPTR(t)) {
+			cla[clp].cl = STRREG;
+			cla[clp++].off = (int)sp->soffset;
+		} else if (t <= DOUBLE) {
+			cla[clp].cl = STRSSE;
+			cla[clp++].off = (int)sp->soffset;
+		} else if (t == LDOUBLE) {
+			cl = STRMEM;
 			break;
-		if (sp->soffset < off)
-			continue;
-
-		if (ISSOU(t)) {
-			int scoff = sp->soffset +
-			    tsize(sp->stype, sp->sdf, sp->sap);
+		} else { /* struct or union */
 #ifdef GCC_COMPAT
 			if (attr_find(sp->sap, GCC_ATYP_PACKED)) {
 				cl = STRMEM;
 				break;
 			}
 #endif
-			if (scoff < off)
-				continue;
-//printf("soffset %d\n", (int)sp->soffset);
-			cl2 = classifystruct(strmemb(sp->sap),
-			    sp->soffset-off, scoff-off);
-			if (cl2 == STRMEM) {
-				cl = STRMEM;
-			} else if (cl2 == STRREG) {
-				if (cl == 0 || cl == STRSSE)
-					cl = STRREG;
-			} else if (cl2 == STRSSE) {
-				if (cl == 0)
-					cl = STRSSE;
-			}
-			continue;
+			if (t == STRTY)
+				cl = fillstr(strmemb(sp->sap));
+			else if (t == UNIONTY)
+				cl = fillun(strmemb(sp->sap));
+			else
+				cerror("fillstr: %d", t);
+			if (cl == STRMEM)
+				break;
 		}
+	}
+	return cl;
+}
+
+/* NO_CLASS, STRMEM, STRREG, STRSSE, X87 */
+static int
+unmerge(int old, int new)
+{
+	int cl = old;
+
+	if (new == STRMEM)
+		cl = new;
+	else switch (old) {
+	case NO_CLASS:
+		cl = new;
+		break;
+	case STRREG:
+	case STRMEM:
+		break;
+	case X87:
+		if (new == STRREG)
+			cl = new;
+		else if (new == STRSSE)
+			cl = STRMEM;
+		else
+			cl = X87;
+		break;
+	case STRSSE:
+		if (new == X87)
+			cl = STRMEM;
+		else
+			cl = new;
+		break;
+	}
+	return cl;
+}
+
+static int
+fillun(struct symtab *sp)
+{
+	int cl = NO_CLASS;
+	TWORD t;
+
+	cla[clp].off = (int)sp->soffset;
+	for (; sp; sp = sp->snext) {
+		t = sp->stype;
+		while (ISARY(t))
+			t = DECREF(t);
 
 		if (t <= ULONGLONG || ISPTR(t)) {
-			if (cl == 0 || cl == STRSSE)
-				cl = STRREG;
+			cl = unmerge(cl, STRREG);
 		} else if (t <= DOUBLE) {
-			if (cl == 0)
-				cl = STRSSE;
+			cl = unmerge(cl, STRSSE);
 		} else if (t == LDOUBLE) {
-			return STRMEM;
-		} else
-			cerror("classifystruct: unknown type %x", t);
+			cl = unmerge(cl, X87);
+		} else { /* struct or union */
+#ifdef GCC_COMPAT
+			if (attr_find(sp->sap, GCC_ATYP_PACKED)) {
+				cl = STRMEM;
+			} else
+#endif
+			{	int cl2 = NO_CLASS;
+				if (t == STRTY)
+					cl2 = fillstr(strmemb(sp->sap));
+				else if (t == UNIONTY)
+					cl2 = fillun(strmemb(sp->sap));
+				else
+					cerror("fillstr: %d", t);
+				cl = unmerge(cl, cl2);
+			}
+		}
 		if (cl == STRMEM)
 			break;
 	}
-	if (cl == 0)
-		cerror("classifystruct: failed classify");
-//printf("Classify return %d\n", cl);
+	if (cl == X87)
+		cl = STRMEM;
+	cla[clp].cl = cl;
+	clp++;
 	return cl;
 }
+
 
 /*
  * Check for long double complex structs.
@@ -873,7 +934,7 @@ iscplx87(struct symtab *sp)
 static int
 argtyp(TWORD t, union dimfun *df, struct attr *ap)
 {
-	int cl2, cl = 0;
+	int i, cl2, cl = 0;
 
 	if (t <= ULONG || ISPTR(t) || t == BOOL) {
 		cl = ngpr < 6 ? INTEGER : INTMEM;
@@ -882,8 +943,7 @@ argtyp(TWORD t, union dimfun *df, struct attr *ap)
 	} else if (t == LDOUBLE || t == LIMAG) {
 		cl = X87; /* XXX */
 	} else if (t == STRTY || t == UNIONTY) {
-		OFFSZ sz = tsize(t, df, ap);
-
+		int sz = (int)tsize(t, df, ap);
 #ifdef GCC_COMPAT
 		if (attr_find(ap, GCC_ATYP_PACKED)) {
 			cl = STRMEM;
@@ -893,16 +953,19 @@ argtyp(TWORD t, union dimfun *df, struct attr *ap)
 			cl = STRX87;
 		} else if (sz > 2*SZLONG) {
 			cl = STRMEM;
-		} else if (sz <= SZLONG) {
-			/* only one member to check */
-			cl = classifystruct(strmemb(ap), 0, SZLONG);
-			if (cl == STRREG && ngpr > 5)
-				cl = STRMEM;
-			else if (cl == STRSSE && nsse > 7)
-				cl = STRMEM;
 		} else {
-			cl = classifystruct(strmemb(ap), 0, SZLONG);
-			cl2 = classifystruct(strmemb(ap), SZLONG, 2*SZLONG);
+			if ((cl = flatten(t, strmemb(ap))) == STRMEM)
+				return STRMEM;
+			cl = cl2 = NO_CLASS;
+			for (i = 0; i < clp; i++) {
+				if (cla[i].off < SZLONG) {
+					if (cl == NO_CLASS || cl == STRSSE)
+						cl = cla[i].cl;
+				} else {
+					if (cl2 == NO_CLASS || cl2 == STRSSE)
+						cl2 = cla[i].cl;
+				}
+			}
 			if (cl == STRMEM || cl2 == STRMEM)
 				cl = STRMEM;
 			else if (cl == STRREG && cl2 == STRSSE)
