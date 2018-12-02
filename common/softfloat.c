@@ -1176,33 +1176,33 @@ soft_fp2fp(SF sf, TWORD t)
  * Convert a fp number to a CONSZ. Always chop toward zero.
  */
 CONSZ
-soft_fp2int(SF sf, TWORD t)
+soft_fp2int(SF *sfp, TWORD t)
 {
 	uint64_t mant;
 	int exp;
 
-	if (soft_classify(sf, LDOUBLE) != SOFT_NORMAL)
+	if (soft_classify(*sfp, LDOUBLE) != SOFT_NORMAL)
 		return 0;
 	
-	exp = ldouble_exp(sf) - LDOUBLE_BIAS - 64 + 1;
-	mant = ldouble_mant(sf);
+	exp = ldouble_exp((*sfp)) - LDOUBLE_BIAS - 64 + 1;
+	mant = ldouble_mant((*sfp));
 	mant = (mant >> 1) | (1LL << 63);
 	while (exp > 0)
 		mant <<= 1, exp--;
 	while (exp < 0)
 		mant >>= 1, exp++;
 
-	if (ldouble_sign(sf))
+	if (ldouble_sign((*sfp)))
 		mant = -(int64_t)mant;
 #ifdef DEBUGFP
-	{ uint64_t u = (uint64_t)sf.debugfp;
-	  int64_t s = (int64_t)sf.debugfp;
+	{ uint64_t u = (uint64_t)sfp->debugfp;
+	  int64_t s = (int64_t)sfp->debugfp;
 		if (ISUNSIGNED(t)) {
 			if (u != mant)
-				fpwarn("soft_fp2int:u", 0.0, sf.debugfp);
+				fpwarn("soft_fp2int:u", 0.0, sfp->debugfp);
 		} else {
 			if (s != (int64_t)mant)
-				fpwarn("soft_fp2int:s", 0.0, sf.debugfp);
+				fpwarn("soft_fp2int:s", 0.0, sfp->debugfp);
 		}
 	}
 #endif
@@ -1217,11 +1217,10 @@ soft_fp2int(SF sf, TWORD t)
 /*
  * Negate a softfloat.
  */
-SF
-soft_neg(SF sf)
+void
+soft_neg(SFP sfp)
 {
-	LDOUBLE_NEG(sf);
-	return sf;
+	LDOUBLE_NEG((*sfp));
 }
 
 SF
@@ -1389,12 +1388,12 @@ soft_div(SF x1, SF x2, TWORD t)
  * Return true if fp number is zero. Easy.
  */
 int
-soft_isz(SF sf)
+soft_isz(SFP sfp)
 {
-	int r = LDOUBLE_ISZ(sf);
+	int r = LDOUBLE_ISZ((*sfp));
 #ifdef DEBUGFP
-	if ((sf.debugfp == 0.0 && r == 0) || (sf.debugfp != 0.0 && r == 1))
-		fpwarn("soft_isz", sf.debugfp, (long double)r);
+	if ((sfp->debugfp == 0.0 && r == 0) || (sfp->debugfp != 0.0 && r == 1))
+		fpwarn("soft_isz", sfp->debugfp, (long double)r);
 #endif
 	return r;
 }
@@ -1509,29 +1508,29 @@ soft_cmp_gl(SF x1, SF x2, int isless)
 }
 
 int
-soft_cmp(SF v1, SF v2, int v)
+soft_cmp(SFP v1p, SFP v2p, int v)
 {
 	int rv = 0;
 
-	if (LDOUBLE_ISNAN(v1) || LDOUBLE_ISNAN(v2))
+	if (LDOUBLE_ISNAN((*v1p)) || LDOUBLE_ISNAN((*v2p)))
 		return 0; /* never equal */
 
 	switch (v) {
 	case GT:
 	case LT:
-		rv = soft_cmp_gl(v1, v2, v == LT);
+		rv = soft_cmp_gl((*v1p), (*v2p), v == LT);
 		break;
 	case GE:
 	case LE:
-		if ((rv = soft_cmp_eq(v1, v2)))
+		if ((rv = soft_cmp_eq((*v1p), (*v2p))))
 			break;
-		rv = soft_cmp_gl(v1, v2, v == LE);
+		rv = soft_cmp_gl((*v1p), (*v2p), v == LE);
 		break;
 	case EQ:
-		rv = soft_cmp_eq(v1, v2);
+		rv = soft_cmp_eq((*v1p), (*v2p));
 		break;
 	case NE:
-		rv = !soft_cmp_eq(v1, v2);
+		rv = !soft_cmp_eq((*v1p), (*v2p));
 		break;
 	}
 	return rv;
