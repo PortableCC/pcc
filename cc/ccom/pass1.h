@@ -255,13 +255,14 @@ typedef struct p1node {
 				struct symtab *_sp;
 			} n_r;
 		} n_u;
-		struct flt *_dcon;
+		struct softfloat *_scon;
 	} n_f;
 } P1ND;
 
 #define glval(p)	((p)->n_f.n_u.n_l._val)
 #define slval(p,v)	((p)->n_f.n_u.n_l._val = (v))
 #define	n_ccon		n_f._ccon
+#define	n_scon		n_f._scon
 
 
 /*	mark an offset which is undefined */
@@ -448,32 +449,32 @@ struct flt {
 	TWORD t;
 };	
 typedef struct flt FLT;	
-#define	fltallo()		stmtalloc(sizeof(FLT))
+#define	sfallo()		stmtalloc(sizeof(struct softfloat))
 
 /*
  * Only allowed to do float evaluation if either doing
  * static (compile-time) initialization or FP_CONTRACT is YES.
  */
 #define	CAN_EVAL_FLOAT()	(statinit || (flostat & FP_CONTR_CBR))
-#define FLOAT_ISZERO(p)		soft_isz(&p->sf)
-#define FLOAT_NEG(p)		soft_neg(&(p->sf))
-#define FLOAT_FP2FP(f,t)	soft_fp2fp(&f->sf, t)
-#define FLOAT_EQ(d1,d2)		soft_cmp(&d1->sf, &d2->sf, EQ)
-#define FLOAT_NE(d1,d2)		soft_cmp(&d1->sf, &d2->sf, NE)
-#define FLOAT_GT(d1,d2)		soft_cmp(&d1->sf, &d2->sf, GT)
-#define FLOAT_GE(d1,d2)		soft_cmp(&d1->sf, &d2->sf, GE)
-#define FLOAT_LE(d1,d2)		soft_cmp(&d1->sf, &d2->sf, LE)
-#define FLOAT_LT(d1,d2)		soft_cmp(&d1->sf, &d2->sf, LT)
-#define FLOAT_INT2FP(f,p,t)	soft_int2fp(&f->sf, p, t, ctype(LDOUBLE))
-#define FLOAT_FP2INT(i,d,t)	i = soft_fp2int(&d->sf, t)
+#define FLOAT_ISZERO(p)		soft_isz(p)
+#define FLOAT_NEG(p)		soft_neg(p)
+#define FLOAT_FP2FP(f,t)	soft_fp2fp(f, t)
+#define FLOAT_EQ(d1,d2)		soft_cmp(d1, d2, EQ)
+#define FLOAT_NE(d1,d2)		soft_cmp(d1, d2, NE)
+#define FLOAT_GT(d1,d2)		soft_cmp(d1, d2, GT)
+#define FLOAT_GE(d1,d2)		soft_cmp(d1, d2, GE)
+#define FLOAT_LE(d1,d2)		soft_cmp(d1, d2, LE)
+#define FLOAT_LT(d1,d2)		soft_cmp(d1, d2, LT)
+#define FLOAT_INT2FP(f,p,t)	soft_int2fp(f, p, t, ctype(LDOUBLE))
+#define FLOAT_FP2INT(i,d,t)	i = soft_fp2int(d, t)
 #define FLOAT_PLUS(p1,p2)	\
-	soft_plus(&p1->n_dcon->sf, &p2->n_dcon->sf, p1->n_type)
+	soft_plus(p1->n_scon, p2->n_scon, p1->n_type)
 #define FLOAT_MINUS(p1,p2)	\
-	soft_minus(&p1->n_dcon->sf, &p2->n_dcon->sf, p1->n_type)
+	soft_minus(p1->n_scon, p2->n_scon, p1->n_type)
 #define FLOAT_MUL(p1,p2)	\
-	soft_mul(&p1->n_dcon->sf, &p2->n_dcon->sf, p1->n_type)
+	soft_mul(p1->n_scon, p2->n_scon, p1->n_type)
 #define FLOAT_DIV(p1,p2)	\
-	soft_div(&p1->n_dcon->sf, &p2->n_dcon->sf, p1->n_type)
+	soft_div(p1->n_scon, p2->n_scon, p1->n_type)
 
 enum {	ATTR_FIRST = ATTR_MI_MAX + 1,
 

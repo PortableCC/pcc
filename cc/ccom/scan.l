@@ -411,9 +411,9 @@ cvtdig(int radix)
 	switch (ntype) {
 	case DOUBLE: /* special case */
 		p = block(FCON, NULL, NULL, IMAG, 0, 0);
-		p->n_dcon = stmtalloc(sizeof(FLT));
-		FLOAT_INT2FP(p->n_dcon, v, ULONGLONG);
-		FLOAT_FP2FP(p->n_dcon, DOUBLE);
+		p->n_scon = sfallo();
+		FLOAT_INT2FP(p->n_scon, v, ULONGLONG);
+		FLOAT_FP2FP(p->n_scon, DOUBLE);
 		return p;
 
 	case INT:

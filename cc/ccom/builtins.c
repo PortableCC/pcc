@@ -771,8 +771,8 @@ builtin_huge_val(const struct bitable *bt, P1ND *a)
 {
 	P1ND *f = block(FCON, NULL, NULL, bt->rt, NULL, 0);
 
-	f->n_dcon = stmtalloc(sizeof(FLT));
-	soft_huge_val(&f->n_dcon->sf);
+	f->n_scon = sfallo();
+	soft_huge_val(f->n_scon);
 	return f;
 }
 
@@ -789,8 +789,8 @@ builtin_nanx(const struct bitable *bt, P1ND *a)
 	} else if (a->n_op == STRING && *a->n_name == '\0') {
 		p1nfree(a);
 		a = block(FCON, NULL, NULL, bt->rt, NULL, 0);
-		a->n_dcon = stmtalloc(sizeof(FLT));
-		soft_nan(&a->n_dcon->sf, NULL);
+		a->n_scon = sfallo();
+		soft_nan(a->n_scon, NULL);
 	} else
 		a = binhelp(eve(a), bt->rt, &bt->name[10]);
 	return a;

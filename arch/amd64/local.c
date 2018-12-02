@@ -555,7 +555,11 @@ myp2tree(NODE *p)
 		/* Do not lose negative zeros */
 		long long ll[2];
 		short ss;
+#ifdef LANG_CXX
 		memcpy(ll, &p->n_dcon, sizeof(ll));
+#else
+		memcpy(ll, p->n_scon, sizeof(ll));
+#endif
 		memcpy(&ss, &ll[1], sizeof(ss));
 		if (ll[0] == 0 && ss == 0)
 			return;

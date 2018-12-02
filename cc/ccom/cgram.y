@@ -1296,7 +1296,7 @@ mkty(TWORD t, union dimfun *d, struct attr *sue)
 P1ND *
 bdty(int op, ...)
 {
-	FLT *f1, *f2;
+	FLT *f2;
 	CONSZ c;
 	va_list ap;
 	int val;
@@ -1313,11 +1313,10 @@ bdty(int op, ...)
 		break;
 
 	case FCON:
-		f1 = stmtalloc(sizeof(FLT));
 		f2 = va_arg(ap, FLT *);
-		*f1 = *f2;
-		q->n_dcon = f1;
-		q->n_type = q->n_dcon->t;
+		q->n_scon = sfallo();
+		*q->n_scon = f2->sf;
+		q->n_type = f2->t;
 		break;
 
 	case CALL:

@@ -182,12 +182,12 @@ buildtree(int o, P1ND *l, P1ND *r)
 
 	if (o == ANDAND || o == OROR || o == NOT) {
 		if (l->n_op == FCON) {
-			p = bcon(!FLOAT_ISZERO(l->n_dcon));
+			p = bcon(!FLOAT_ISZERO(l->n_scon));
 			p1nfree(l);
 			l = p;
 		}
 		if (o != NOT && r->n_op == FCON) {
-			p = bcon(!FLOAT_ISZERO(r->n_dcon));
+			p = bcon(!FLOAT_ISZERO(r->n_scon));
 			p1nfree(r);
 			r = p;
 		}
@@ -206,7 +206,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 	} else if (o == NOT && l->n_op == FCON) {
 		l = clocal(block(SCONV, l, NULL, INT, 0, 0));
 	} else if( o == UMINUS && l->n_op == FCON && evalflt){
-			FLOAT_NEG(l->n_dcon);
+			FLOAT_NEG(l->n_scon);
 			return(l);
 
 	} else if( o==QUEST &&
@@ -281,7 +281,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 #ifndef CC_DIV_0
 		if (o == DIV &&
 		    ((r->n_op == ICON && glval(r) == 0) ||
-		     (r->n_op == FCON && FLOAT_ISZERO(r->n_dcon))))
+		     (r->n_op == FCON && FLOAT_ISZERO(r->n_scon))))
 				goto runtime; /* HW dependent */
 #endif
 		if (l->n_op == ICON) {
@@ -321,22 +321,22 @@ buildtree(int o, P1ND *l, P1ND *r)
 		case GT:
 			switch (o) {
 			case EQ:
-				n = FLOAT_EQ(l->n_dcon, r->n_dcon);
+				n = FLOAT_EQ(l->n_scon, r->n_scon);
 				break;
 			case NE:
-				n = FLOAT_NE(l->n_dcon, r->n_dcon);
+				n = FLOAT_NE(l->n_scon, r->n_scon);
 				break;
 			case LE:
-				n = FLOAT_LE(l->n_dcon, r->n_dcon);
+				n = FLOAT_LE(l->n_scon, r->n_scon);
 				break;
 			case LT:
-				n = FLOAT_LT(l->n_dcon, r->n_dcon);
+				n = FLOAT_LT(l->n_scon, r->n_scon);
 				break;
 			case GE:
-				n = FLOAT_GE(l->n_dcon, r->n_dcon);
+				n = FLOAT_GE(l->n_scon, r->n_scon);
 				break;
 			case GT:
-				n = FLOAT_GT(l->n_dcon, r->n_dcon);
+				n = FLOAT_GT(l->n_scon, r->n_scon);
 				break;
 			default:
 				n = 0; /* XXX flow analysis */
@@ -838,22 +838,22 @@ concast(P1ND *p, TWORD t)
 			if (!evalflt)
 				return 0;
 			p->n_op = FCON;
-			p->n_dcon = fltallo();
-			FLOAT_INT2FP(p->n_dcon, val, p->n_type);
+			p->n_scon = sfallo();
+			FLOAT_INT2FP(p->n_scon, val, p->n_type);
 		}
 	} else { /* p->n_op == FCON */
 		if (!evalflt)
 			return 0;
 		if (t == BOOL) {
 			p->n_op = ICON;
-			slval(p, !FLOAT_ISZERO(p->n_dcon));
+			slval(p, !FLOAT_ISZERO(p->n_scon));
 			p->n_sp = NULL;
 		} else if (t <= ULONGLONG) {
 			p->n_op = ICON;
-			FLOAT_FP2INT(glval(p), p->n_dcon, t);
+			FLOAT_FP2INT(glval(p), p->n_scon, t);
 			p->n_sp = NULL;
 		} else {
-			FLOAT_FP2FP(p->n_dcon, t);
+			FLOAT_FP2FP(p->n_scon, t);
 		}
 	}
 	p->n_type = t;

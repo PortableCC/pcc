@@ -369,29 +369,6 @@ floatcon(char *s)
 }
 #else
 
-#if 0
-/*
- * Do a "Round to nearest, tie even" on mantissa.
- * Mantissa has no hidden bit, and length nbits.
- * The rounded result have resbits length.
- */
-static uint64_t
-sfroundmant(uint64_t mant, int nbits, int resbits)
-{
-	int grs, sticky = nbits - resbits - 3;
-
-	if (mant & (sticky - 1))
-		mant |= (1 << sticky);
-	mant >>= sticky;
-
-	grs = (mant & 7);
-	if (grs > 4 || ((grs == 4) && (mant & 8)) /* round up */
-		mant += 8;
-	mant >>= 3;
-	return mant;
-}
-#endif
-
 /*
  * Use parametric floating-point representation, as used in the package gdtoa
  * published by David M. Gay and generally available as gdtoa.tgz at
@@ -486,25 +463,6 @@ typedef unsigned Long ULong;
 typedef unsigned long long ULLong;
 #endif
 
-#define ONEZEROES(n)	(1ull << (n))
-#define ONES(n) 	(ONEZEROES(n) | (ONEZEROES(n)-1))
-
-#define WORKBITS	64
-#define NORMALMANT	ONEZEROES(WORKBITS-1)
-
-#define SFNORMALIZE(sf)					\
-	while ((sf).significand < NORMALMANT)		\
-		(sf).significand <<= 1, (sf).exponent--;\
-	if (((sf).kind & SF_kmask) == SF_Denormal)	\
-		(sf).kind -= SF_Denormal - SF_Normal;
-
-#define SFNEG(sf)	((sf).kind ^= SF_Neg, sf)
-#define SFCOPYSIGN(sf, src)	\
-	((sf).kind ^= ((sf).kind & SF_Neg) ^ ((src).kind & SF_Neg), (sf))
-#define SFISZ(sf)	(((sf).kind & SF_kmask) == SF_Zero)
-#define SFISINF(sf)	(((sf).kind & SF_kmask) == SF_Infinite)
-#define SFISNAN(sf)	(((sf).kind & SF_kmask) >= SF_NaN)
-
 static uint64_t sfrshift(uint64_t mant, int bits);
 
 extern int strtodg (const char*, char**, FPI*, Long*, ULong*);
@@ -573,8 +531,6 @@ FPI fpi_binary64 = { 53,   1-1023-53+1,
 	((x)->fp[0] = 0, (x)->fp[1] = 0x7ff80000 | (sign << 31))
 #define IEEEFP_64_INF(x,sign)	\
 	((x)->fp[0] = 0, (x)->fp[1] = 0x7ff00000 | (sign << 31))
-#define	IEEEFP_64_ISZ(sf) \
-	((sf.fp[0] | (sf.fp[1] & 0x7fffffff)) == 0)
 #define	IEEEFP_64_NEG(x)	(x)->fp[1] ^= 0x80000000
 #define	IEEEFP_64_ISINF(x) (((x.fp[1] & 0x7fffffff) == 0x7ff00000) && \
 	    x.fp[0] == 0)
@@ -615,8 +571,6 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 	((x)->fp[0] = 0, (x)->fp[1] = 0x80000000, (x)->fp[2] = 0x7fff | ((s) << 15))
 #define IEEEFP_X80_ZERO(x,s)	\
 	((x)->fp[0] = (x)->fp[1] = 0, (x)->fp[2] = (s << 15))
-#define	IEEEFP_X80_ISZ(sf) \
-	((sf.fp[0] | sf.fp[1] | (sf.fp[2] & 0x7fff)) == 0)
 #define	IEEEFP_X80_NEG(x)	(x)->fp[2] ^= 0x8000
 #define	IEEEFP_X80_ISINF(x) ((((x)->fp[2] & 0x7fff) == 0x7fff) && \
 	((x)->fp[1] == 0x80000000) && (x)->fp[0] == 0)
@@ -654,7 +608,6 @@ int soft_classify(SFP sf, TWORD type);
 #define	LDOUBLE_INF	C(LDBL_PREFIX,_INF)
 #define	LDOUBLE_ZERO	C(LDBL_PREFIX,_ZERO)
 #define	LDOUBLE_NEG	C(LDBL_PREFIX,_NEG)
-#define	LDOUBLE_ISZ	C(LDBL_PREFIX,_ISZ)
 #define	LDOUBLE_ISINF	C(LDBL_PREFIX,_ISINF)
 #define	LDOUBLE_ISNAN	C(LDBL_PREFIX,_ISNAN)
 #define	LDOUBLE_ISINFNAN	C(LDBL_PREFIX,_ISINFNAN)
@@ -668,7 +621,6 @@ int soft_classify(SFP sf, TWORD type);
 #define	DOUBLE_INF	C(DBL_PREFIX,_INF)
 #define	DOUBLE_ZERO	C(DBL_PREFIX,_ZERO)
 #define	DOUBLE_NEG	C(DBL_PREFIX,_NEG)
-#define	DOUBLE_ISZ	C(DBL_PREFIX,_ISZ)
 #define	DOUBLE_ISINF	C(DBL_PREFIX,_ISINF)
 #define	DOUBLE_ISNAN	C(DBL_PREFIX,_ISNAN)
 #define	DOUBLE_ISZERO	C(DBL_PREFIX,_ISZERO)
@@ -682,7 +634,6 @@ int soft_classify(SFP sf, TWORD type);
 #define	FLOAT_INF	C(FLT_PREFIX,_INF)
 #define	FLOAT_ZERO	C(FLT_PREFIX,_ZERO)
 #define	FLOAT_NEG	C(FLT_PREFIX,_NEG)
-#define	FLOAT_ISZ	C(FLT_PREFIX,_ISZ)
 #define	FLOAT_ISINF	C(FLT_PREFIX,_ISINF)
 #define	FLOAT_ISNAN	C(FLT_PREFIX,_ISNAN)
 #define	FLOAT_ISZERO	C(FLT_PREFIX,_ISZERO)
@@ -1390,7 +1341,7 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 int
 soft_isz(SFP sfp)
 {
-	int r = LDOUBLE_ISZ((*sfp));
+	int r = LDOUBLE_ISZERO(sfp);
 #ifdef DEBUGFP
 	if ((sfp->debugfp == 0.0 && r == 0) || (sfp->debugfp != 0.0 && r == 1))
 		fpwarn("soft_isz", sfp->debugfp, (long double)r);

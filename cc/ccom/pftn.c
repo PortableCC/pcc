@@ -3439,8 +3439,8 @@ imret(NODE *p, NODE *q)
 		p1tfree(p);
 		if (ISITY(q->n_type)) {
 			p = block(FCON, 0, 0, q->n_type, 0, 0);
-			p->n_dcon = fltallo();
-			FLOAT_INT2FP(p->n_dcon, 0, INT);
+			p->n_scon = sfallo();
+			FLOAT_INT2FP(p->n_scon, 0, INT);
 		} else
 			p = bcon(0);
 	}
