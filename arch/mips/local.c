@@ -262,71 +262,24 @@ clocal(NODE *p)
 		m = p->n_type;
 
 		if (o == ICON) {
-			CONSZ val = glval(l);
-
-			if (!ISPTR(m)) /* Pointers don't need to be conv'd */
-			    switch (m) {
-			case BOOL:
-				val = nncon(l) ? (val != 0) : 1;
-				slval(l, val);
-				l->n_sp = NULL;
+			/*
+			 * Can only end up here if o is an address,
+			 * and in that case the only compile-time conversion
+			 * possible is to int.
+			 */
+			if ((TMASK & l->n_type) == 0 && l->n_sp == NULL)
+				cerror("SCONV ICON");
+			if (l->n_sp == 0) {
+				p->n_type = UNSIGNED;
+				concast(l, m);
+			} else if (m != INT && m != UNSIGNED)
 				break;
-			case CHAR:
-				slval(l, (char)val);
-				break;
-			case UCHAR:
-				slval(l, val & 0377);
-				break;
-			case SHORT:
-				slval(l, (short)val);
-				break;
-			case USHORT:
-				slval(l, val & 0177777);
-				break;
-			case ULONG:
-			case UNSIGNED:
-				slval(l, val & 0xffffffff);
-				break;
-			case LONG:
-			case INT:
-				slval(l, (int)val);
-				break;
-			case LONGLONG:
-				slval(l, (long long)val);
-				break;
-			case ULONGLONG:
-				slval(l, val);
-				break;
-			case VOID:
-				break;
-			case LDOUBLE:
-			case DOUBLE:
-			case FLOAT:
-				l->n_op = FCON;
-				l->n_dcon = fltallo();
-				FCAST(l->n_dcon)->fp = val;
-				break;
-			default:
-				cerror("unknown type %d", m);
-			}
-			l->n_type = m;
-			nfree(p);
-			p = l;
-		} else if (o == FCON) {
-			CONSZ lv;
-			if (p->n_type == BOOL)
-				lv = !FLOAT_ISZERO(FCAST(l->n_dcon));
-			else {
-				FLOAT_FP2INT(lv, FCAST(l->n_dcon), m);
-			}
-			slval(l, lv);
-			l->n_sp = NULL;
-			l->n_op = ICON;
 			l->n_type = m;
 			l->n_ap = 0;
 			nfree(p);
-			p = clocal(l);
-		}
+			return l;
+		} else if (l->n_op == FCON)
+			cerror("SCONV FCON");
 		break;
 
 	case MOD:
@@ -442,7 +395,6 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-        union { float f; double d; int i[2]; } u;
         struct symtab *q;
         TWORD t;
 #ifndef USE_GAS
@@ -493,21 +445,6 @@ ninval(CONSZ off, int fsz, NODE *p)
         case USHORT:
 		astypnames[SHORT] = astypnames[USHORT] = "\t.half";
                 return 0;
-        case LDOUBLE:
-        case DOUBLE:
-                u.d = (double)FCAST(p->n_dcon)->fp;
-		if (bigendian) {
-	                printf("\t.word\t%d\n", u.i[0]);
-			printf("\t.word\t%d\n", u.i[1]);
-		} else {
-			printf("\t.word\t%d\n", u.i[1]);
-	                printf("\t.word\t%d\n", u.i[0]);
-		}
-                break;
-        case FLOAT:
-                u.f = (float)FCAST(p->n_dcon)->fp;
-                printf("\t.word\t0x%x\n", u.i[0]);
-                break;
         default:
                 return 0;
         }
