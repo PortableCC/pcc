@@ -249,3 +249,10 @@ int COLORMAP(int c, int *r);
 int targarg(char *w, void *arg);
 #define XASM_TARGARG(w, ary) (w[1] == 'b' ? w++, 0 : targarg(w, ary))
 
+/* floating point definitions */
+#define USE_IEEEFP_32
+#define FLT_PREFIX	IEEEFP_32
+#define USE_IEEEFP_64
+#define DBL_PREFIX	IEEEFP_64
+#define LDBL_PREFIX	IEEEFP_64
+
