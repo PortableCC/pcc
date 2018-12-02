@@ -244,8 +244,12 @@ convert_ulltof(NODE *p)
 	q = block(SCONV, q, NIL, LONGLONG, 0, 0);
 	q = block(SCONV, q, NIL, ty, 0, 0);
 	t = block(FCON, NIL, NIL, ty, 0, 0);
+#ifndef LANG_CXX
 	t->n_dcon = fltallo();
-	FCAST(t->n_dcon)->fp = 2.0;
+	FLOAT_INT2FP(p->n_dcon, 2, INT);
+#else
+	cerror("convert_ulltof");
+#endif
 	l = block(MUL, q, t, ty, 0, 0);
 
 	r = buildtree(COLON, l, r);
@@ -494,65 +498,6 @@ clocal(NODE *p)
 		o = l->n_op;
 		m = p->n_type;
 
-		if (o == ICON) {
-			CONSZ val = glval(l);
-
-			if (!ISPTR(m)) /* Pointers don't need to be conv'd */
-			    switch (m) {
-			case BOOL:
-				slval(l, val != 0);
-				break;
-			case CHAR:
-				slval(l, (char)val);
-				break;
-			case UCHAR:
-				slval(l, val & 0377);
-				break;
-			case SHORT:
-				slval(l, (short)val);
-				break;
-			case USHORT:
-				slval(l, val & 0177777);
-				break;
-			case ULONG:
-			case UNSIGNED:
-				slval(l, val & 0xffffffff);
-				break;
-			case LONG:
-			case INT:
-				slval(l, (int)val);
-				break;
-			case LONGLONG:
-				slval(l, (long long)val);
-				break;
-			case ULONGLONG:
-				slval(l, val);
-				break;
-			case VOID:
-				break;
-			case LDOUBLE:
-			case DOUBLE:
-			case FLOAT:
-				l->n_op = FCON;
-				l->n_dcon = fltallo();
-				FCAST(l->n_dcon)->fp = val;
-				break;
-			default:
-				cerror("unknown type %d", m);
-			}
-			l->n_type = m;
-			l->n_ap = 0;
-			nfree(p);
-			return l;
-		} else if (o == FCON) {
-			slval(l, FCAST(l->n_dcon)->fp);
-			l->n_sp = NULL;
-			l->n_op = ICON;
-			l->n_type = m;
-			l->n_ap = 0;
-			nfree(p);
-			return clocal(l);
-		}
 		if (DEUNSIGN(p->n_type) == SHORT &&
 		    DEUNSIGN(l->n_type) == SHORT) {
 			nfree(p);
@@ -861,7 +806,6 @@ instring(struct symtab *sp)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; long double l; int i[3]; } u;
 	struct symtab *q;
 	TWORD t;
 	int i;
@@ -933,24 +877,6 @@ ninval(CONSZ off, int fsz, NODE *p)
 			}
 		}
 		printf("\n");
-		break;
-	case LDOUBLE:
-		u.i[2] = 0;
-		u.l = (long double)FCAST(p->n_dcon)->fp;
-#if 0
-		/* little-endian */
-		printf("\t.long 0x%x,0x%x,0x%x\n", u.i[0], u.i[1], u.i[2]);
-#endif
-		/* big-endian */
-		printf("\t.long 0x%x,0x%x,0x%x\n", u.i[0], u.i[1], u.i[2]);
-		break;
-	case DOUBLE:
-		u.d = (double)FCAST(p->n_dcon)->fp;
-		printf("\t.long 0x%x\n\t.long 0x%x\n", u.i[0], u.i[1]);
-		break;
-	case FLOAT:
-		u.f = (float)FCAST(p->n_dcon)->fp;
-		printf("\t.long 0x%x\n", u.i[0]);
 		break;
 	default:
 		return 0;
