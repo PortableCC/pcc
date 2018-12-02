@@ -150,28 +150,21 @@ extern FPI * fpis[3]; /* FLOAT, DOUBLE, LDOUBLE, respectively */
 
 #ifndef CC_DRIVER
 void soft_neg(SF *);
-SF soft_int2fp(CONSZ p, TWORD f, TWORD v);
+void soft_int2fp(SFP, CONSZ p, TWORD f, TWORD v);
 CONSZ soft_fp2int(SF *p, TWORD v);
-SF soft_fp2fp(SF p, TWORD v);
-SFP soft_cast(CONSZ v, TWORD);
-SF soft_plus(SF, SF, TWORD);
-SF soft_minus(SF, SF, TWORD);
-SF soft_mul(SF, SF, TWORD);
-SF soft_div(SF, SF, TWORD);
+void soft_fp2fp(SFP p, TWORD v);
+void soft_plus(SFP, SFP, TWORD);
+void soft_minus(SFP, SFP, TWORD);
+void soft_mul(SFP, SFP, TWORD);
+void soft_div(SFP, SFP, TWORD);
 int soft_cmp(SF*, SF*, int);
 int soft_isz(SF*);
-SF strtosf(char *, TWORD);
-SF hugesf(int, TWORD);
-SF nansf(int);
-SF zerosf(int kind);
-SF infsf(int kind);
+void strtosf(SFP, char *, TWORD);
 CONSZ soft_signbit(SF sf);
-SF soft_copysign(SF, SF);
 int soft_isnan(SF sf);
-SF soft_huge_val(void);
-SF soft_nan(char *);
-SF soft_zero(void);
-uint32_t *soft_toush(SF, TWORD, int *);
+void soft_huge_val(SFP);
+void soft_nan(SFP, char *);
+uint32_t *soft_toush(SFP, TWORD, int *);
 #ifdef DEBUGFP
 void fpwarn(const char *s, long double soft, long double hard);
 #endif

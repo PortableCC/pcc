@@ -358,7 +358,7 @@ fhexcon(char *s)
 	FLT flt;
 
 	flt.t = ctype(endtyp(s));
-	flt.sf = strtosf(s, flt.t);
+	strtosf(&flt.sf, s, flt.t);
 	return flt;
 }
 

@@ -277,7 +277,7 @@ inval(CONSZ off, int fsz, NODE *p)
 		uint32_t *ufp;
 		int i, nbits;
 
-		ufp = soft_toush(p->n_dcon->sf, t, &nbits);
+		ufp = soft_toush(&p->n_dcon->sf, t, &nbits);
 		for (i = 0; i < sztable[t]; i += SZINT) {
 			printf(PRTPREF "%s %u\n", astypnames[INT], 
 			    (i < nbits ? ufp[i/SZINT] : 0));
