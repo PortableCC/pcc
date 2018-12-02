@@ -256,7 +256,7 @@ struct savbc {
 	struct rstack *rp;
 	char *strp;
 	struct bks *bkp;
-	FLT *flt;
+	struct flt flt;
 	struct genlist *g;
 }
 
@@ -1237,7 +1237,7 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 			$$ = biop(CAST, $3, $$);
 		}
 		|  C_ICON { $$ = $1; }
-		|  C_FCON { $$ = bdty(FCON, $1); }
+		|  C_FCON { $$ = bdty(FCON, &($1)); }
 		|  svstr { $$ = bdty(STRING, $1, styp()); }
 		|  '(' e ')' { $$=$2; }
 		|  '(' xbegin e ';' '}' ')' { $$ = gccexpr($2, eve($3)); }
@@ -1296,6 +1296,7 @@ mkty(TWORD t, union dimfun *d, struct attr *sue)
 P1ND *
 bdty(int op, ...)
 {
+	FLT *f1, *f2;
 	CONSZ c;
 	va_list ap;
 	int val;
@@ -1312,7 +1313,10 @@ bdty(int op, ...)
 		break;
 
 	case FCON:
-		q->n_dcon = va_arg(ap, FLT *);
+		f1 = stmtalloc(sizeof(FLT));
+		f2 = va_arg(ap, FLT *);
+		*f1 = *f2;
+		q->n_dcon = f1;
 		q->n_type = q->n_dcon->t;
 		break;
 

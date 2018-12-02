@@ -352,17 +352,17 @@ endtyp(char *s)
 	return tw;
 }
 
-FLT *
+FLT
 fhexcon(char *s)
 {
-	FLT *flt = stmtalloc(sizeof(FLT));
+	FLT flt;
 
-	flt->t = ctype(endtyp(s));
-	flt->sf = strtosf(s, flt->t);
+	flt.t = ctype(endtyp(s));
+	flt.sf = strtosf(s, flt.t);
 	return flt;
 }
 
-FLT *
+FLT
 floatcon(char *s)
 {
 	return fhexcon(s);
