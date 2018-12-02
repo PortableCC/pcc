@@ -487,9 +487,9 @@ FPI fpi_binary32 = { 24,  1-127-24+1,
 #define IEEEFP_32_ZERO(x,s)	((x)->fp[0] = (s << 31))
 #define IEEEFP_32_NAN(x,sign)	((x)->fp[0] = 0x7fc00000 | (sign << 31))
 #define IEEEFP_32_INF(x,sign)	((x)->fp[0] = 0x7f800000 | (sign << 31))
-#define	IEEEFP_32_ISINF(x)	((x.fp[0] & 0x7fffffff) == 0x7f800000)
-#define	IEEEFP_32_ISZERO(x)	((x.fp[0] & 0x7fffffff) == 0)
-#define	IEEEFP_32_ISNAN(x)	((x.fp[0] & 0x7fffffff) == 0x7fc00000)
+#define	IEEEFP_32_ISINF(x)	(((x)->fp[0] & 0x7fffffff) == 0x7f800000)
+#define	IEEEFP_32_ISZERO(x)	(((x)->fp[0] & 0x7fffffff) == 0)
+#define	IEEEFP_32_ISNAN(x)	(((x)->fp[0] & 0x7fffffff) == 0x7fc00000)
 #define IEEEFP_32_BIAS	127
 #define	IEEEFP_32_TOOLARGE(exp, mant)	ieeefp_32_toolarge(exp, mant)
 #define	IEEEFP_32_TOOSMALL(exp, mant)	ieeefp_32_toosmall(exp, mant)
@@ -532,12 +532,12 @@ FPI fpi_binary64 = { 53,   1-1023-53+1,
 #define IEEEFP_64_INF(x,sign)	\
 	((x)->fp[0] = 0, (x)->fp[1] = 0x7ff00000 | (sign << 31))
 #define	IEEEFP_64_NEG(x)	(x)->fp[1] ^= 0x80000000
-#define	IEEEFP_64_ISINF(x) (((x.fp[1] & 0x7fffffff) == 0x7ff00000) && \
-	    x.fp[0] == 0)
+#define	IEEEFP_64_ISINF(x) ((((x)->fp[1] & 0x7fffffff) == 0x7ff00000) && \
+	    (x)->fp[0] == 0)
 #define	IEEEFP_64_ISINFNAN(x) (((x)->fp[1] & 0x7ff00000) == 0x7ff00000)
-#define	IEEEFP_64_ISZERO(x) (((x.fp[1] & 0x7fffffff) == 0) && x.fp[0] == 0)
-#define	IEEEFP_64_ISNAN(x) (((x.fp[1] & 0x7fffffff) == 0x7ff80000) && \
-	    x.fp[0] == 0)
+#define	IEEEFP_64_ISZERO(x) ((((x)->fp[1] & 0x7fffffff) == 0) && (x)->fp[0] == 0)
+#define	IEEEFP_64_ISNAN(x) ((((x)->fp[1] & 0x7fffffff) == 0x7ff80000) && \
+	    (x)->fp[0] == 0)
 #define IEEEFP_64_BIAS	1023
 #define	IEEEFP_64_TOOLARGE(exp, mant)	ieeefp_64_toolarge(exp, mant)
 #define	IEEEFP_64_MAXMINT	2048+64+16 /* exponent + subnormal + guard */
@@ -1357,26 +1357,25 @@ int
 soft_classify(SFP sfp, TWORD t)
 {
 	int rv;
-	SF sf = *sfp;
 
 	switch (t) {
 	case FLOAT:
-		if (FLOAT_ISINF(sf))
+		if (FLOAT_ISINF(sfp))
 			rv = SOFT_INFINITE;
-		else if (FLOAT_ISNAN(sf))
+		else if (FLOAT_ISNAN(sfp))
 			rv = SOFT_NAN;
-		else if (FLOAT_ISZERO(sf))
+		else if (FLOAT_ISZERO(sfp))
 			rv = SOFT_ZERO;
 		else
 			rv = SOFT_NORMAL;
 		break;
 
 	case DOUBLE:	
-		if (DOUBLE_ISINF(sf))
+		if (DOUBLE_ISINF(sfp))
 			rv = SOFT_INFINITE;
-		else if (DOUBLE_ISNAN(sf))
+		else if (DOUBLE_ISNAN(sfp))
 			rv = SOFT_NAN;
-		else if (DOUBLE_ISZERO(sf))
+		else if (DOUBLE_ISZERO(sfp))
 			rv = SOFT_ZERO;
 		else
 			rv = SOFT_NORMAL;
