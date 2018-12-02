@@ -267,3 +267,10 @@ NODE *arm_builtin_va_copy(const struct bitable *bt, NODE *a);
 
 #define COM     "\t@ "
 #define NARGREGS	4
+
+/* floating point definitions */
+#define USE_IEEEFP_32
+#define FLT_PREFIX	IEEEFP_32
+#define USE_IEEEFP_64
+#define DBL_PREFIX	IEEEFP_64
+#define LDBL_PREFIX	IEEEFP_64
