@@ -573,13 +573,18 @@ FPI fpi_binary64 = { 53,   1-1023-53+1,
 	(sf.fp[0] = 0, sf.fp[1] = 0x7ff80000 | (sign << 31))
 #define IEEEFP_64_INF(sf,sign)	\
 	(sf.fp[0] = 0, sf.fp[1] = 0x7ff00000 | (sign << 31))
+#define	IEEEFP_64_ISZ(sf) \
+	((sf.fp[0] | (sf.fp[1] & 0x7fffffff)) == 0)
+#define	IEEEFP_64_NEG(sf)	sf.fp[1] ^= 0x80000000
 #define	IEEEFP_64_ISINF(x) (((x.fp[1] & 0x7fffffff) == 0x7ff00000) && \
 	    x.fp[0] == 0)
+#define	IEEEFP_64_ISINFNAN(x) ((x.fp[1] & 0x7ff00000) == 0x7ff00000)
 #define	IEEEFP_64_ISZERO(x) (((x.fp[1] & 0x7fffffff) == 0) && x.fp[0] == 0)
 #define	IEEEFP_64_ISNAN(x) (((x.fp[1] & 0x7fffffff) == 0x7ff80000) && \
 	    x.fp[0] == 0)
 #define IEEEFP_64_BIAS	1023
 #define	IEEEFP_64_TOOLARGE(exp, mant)	ieeefp_64_toolarge(exp, mant)
+#define	IEEEFP_64_MAXMINT	2048+64+16 /* exponent + subnormal + guard */
 #define IEEEFP_64_MAKE(rv, sign, exp, mant)		\
 	{ uint64_t xmant = sfrshift(mant, 12);		\
 	(rv.fp[0] = xmant, rv.fp[1] = ((sign << 31) | 	\
@@ -625,8 +630,6 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 	(rv.fp[0] = mant >> 1, rv.fp[1] = (mant >> 33) | \
 	    (exp ? (1 << 31) : 0), \
 	    rv.fp[2] = (exp & 0x7fff) | (sign << 15))
-#else
-#error need long double definition
 #endif
 
 #ifdef USE_IEEEFP_X80
@@ -672,6 +675,7 @@ int soft_classify(SF sf, TWORD type);
 #define	DOUBLE_TOOLARGE	C(DBL_PREFIX,_TOOLARGE)
 #define	DOUBLE_TOOSMALL	C(DBL_PREFIX,_TOOSMALL)
 #define	DOUBLE_MAKE	C(DBL_PREFIX,_MAKE)
+#define	DOUBLE_MAXMINT	C(DBL_PREFIX,_MAXMINT)
 
 #define	FLOAT_NAN	C(FLT_PREFIX,_NAN)
 #define	FLOAT_INF	C(FLT_PREFIX,_INF)
@@ -721,6 +725,7 @@ void mdump(char *c, MINT *a);
 
 #define	LX(x,n)	((uint64_t)x.fp[n] << n*32)
 
+#ifdef USE_IEEEFP_X80
 /*
  * Get long double mantissa without hidden bit.
  * Hidden bit is expected to be at position 65.
@@ -736,6 +741,11 @@ ldouble_mant(SF sf)
 
 #define	ldouble_exp(x)	(x.fp[2] & 0x7FFF)
 #define	ldouble_sign(x)	((x.fp[2] >> 15) & 1)
+#elif defined(USE_IEEEFP_64)
+#define	ldouble_mant double_mant
+#define	ldouble_exp double_exp
+#define	ldouble_sign double_sign
+#endif
 
 #define	double_mant(x)	(((uint64_t)x.fp[1] << 44) | ((uint64_t)x.fp[0] << 12))
 #define	double_exp(x)	((x.fp[1] >> 20) & 0x7fff)
@@ -1741,8 +1751,10 @@ mshl(MINT *a, int nbits)
 	/* XXXXXXX must improve speed significantly */
 	for (j = 0; j < nbits; j++) {
 		if (a->val[a->len-1] & 0x8000) {
+#ifdef DEBUGFP
 			if (a->len >= MAXMINT)
 				fpwarn("mshl: shifting out", 0, 0);
+#endif
 			a->val[a->len++] = 0;
 		}
 		for (i = a->len-1; i > 0; i--)
