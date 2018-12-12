@@ -608,7 +608,9 @@ xloop:			if (ch < 0) ch = 0; /* XXX */
 			break;
 
 		case '/': /* Comments */
+			incmnt++;
 			ch = qcchar();
+			incmnt--;
 			if (ch  == '/' || ch == '*') {
 				if (Cflag == 0) {
 					int n = ifiles->lineno;
