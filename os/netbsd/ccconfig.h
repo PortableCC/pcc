@@ -41,6 +41,7 @@
 #define	DYNLINKLIB	"/usr/libexec/ld.elf_so"
 
 #define CRTEND_T	"crtend.o"
+#define RCRT0		"crt0.o"
 
 #define DEFLIBS		{ "-lc", NULL }
 #define DEFPROFLIBS	{ "-lc_p", NULL }
