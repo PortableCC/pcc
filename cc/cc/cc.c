@@ -351,6 +351,7 @@ struct Wflags {
 	{ "unreachable-code", INWEXTRA },
 	{ "deprecated-declarations", INWEXTRA },
 	{ "attributes", 0 },
+	{ "uninitialized", INWEXTRA },
 	{ NULL, 0 },
 };
 
