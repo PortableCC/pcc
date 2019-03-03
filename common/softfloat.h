@@ -50,6 +50,9 @@ typedef SF *SFP;
 #define C(x,y) C2(x,y)
 #define C2(x,y) x##y
 
+/*
+ * These defines are used in cpp.
+ */
 #ifdef USE_IEEEFP_32
 #define	IEEEFP_32_RADIX 2
 #define IEEEFP_32_DIG 6
@@ -89,66 +92,6 @@ typedef SF *SFP;
 #endif
 
 #define	TARGET_FLT_RADIX	C(FLT_FP,_RADIX)
-
-/*
- * Description of a floating point format, based what is in gdtoa package.
- * The first members are the same as in gdtoa,  the rest are pcc specific.
- */
-typedef struct FPI {
-	int nbits;
-	int emin;
-	int emax;
-	int rounding;
-
-	int sudden_underflow:1;
-	int explicit_one:1; /* if MSB is explicitely stored */
-	int has_inf_nan:1;  /* highest exponent means INF and NaN */
-	int has_neg_zero:1;
-	int has_radix_16:1;
-	int storage;
-	int exp_bias;
-	int bias;
-	int maxexp;
-} FPI;
-
-/* SF.kind values; same as STRTODG_* values */
-enum {
-	SF_Zero		= 0,
-	SF_Normal	= 1,
-	SF_Denormal	= 2,
-	SF_Infinite	= 3,
-	SF_NaN		= 4, /* default quiet NaN */
-	SF_NaNbits	= 5, /* (not used) */
-	SF_NoNumber	= 6, /* signaling NaN */
-	SF_kmask	= 7,
-
-	/* The following may be or-ed into one of the above values. */
-	SF_Neg		= 0x80, /* does not affect SFEXCP_Inex(lo|hi) */
-	SFEXCP_Inexlo	= 0x100, /* returned result rounded toward zero */
-	SFEXCP_Inexhi	= 0x200, /* returned result rounded away from zero */
-	SFEXCP_Inexact	= 0x300,
-	SFEXCP_Underflow= 0x400,
-	SFEXCP_Overflow = 0x800,
-	SFEXCP_DivByZero= 0x1000,
-	SFEXCP_Invalid	= 0x2000,
-
-	SFEXCP_Aborted	= 0x8000, /* Not IEEE; operation not performed */
-	SFEXCP_ALLmask	= 0xFF00 /* All exceptions (mask) */
-};
-
-/* FPI.rounding values: same as FLT_ROUNDS */
-enum {
-	FPI_Round_zero = 0,	/* same meaning as FE_TOWARDZERO */
-	FPI_Round_near = 1,	/* same meaning as FE_TONEAREST */
-	FPI_Round_up = 2,	/* same meaning as FE_UPWARD */
-	FPI_Round_down = 3,	/* same meaning as FE_DOWNWARD */
-/* Warning: if adding new modes, keep same meaning for 2 low bits. */
-	FPI_Round_near_from0 = 5, /* to nearest but ties up (Vax) */
-
-	FPI_RoundNotSet = -4,	/* to implement dynamic rounding */
-};
-
-extern FPI * fpis[3]; /* FLOAT, DOUBLE, LDOUBLE, respectively */
 
 #ifndef CC_DRIVER
 void soft_neg(SF *);

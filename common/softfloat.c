@@ -37,6 +37,19 @@
 #else
 #define assert(e) (!(e)?cerror("assertion failed " #e " at softfloat:%d",__LINE__):(void)0)
 #endif
+
+/*
+ * Description of a floating point format.
+ */
+typedef struct FPI {
+	int nbits;	/* size of mantissa */
+	int storage;	/* size of fp word */
+	int bias;	/* exponent bias */
+	int maxexp;	/* max exponent */
+} FPI;
+
+extern FPI * fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
+
 /*
  * Floating point emulation, to not depend on the characteristics (and bugs)
  * of the host floating-point implementation when compiling.
@@ -46,7 +59,6 @@
  *	- long is at least 32 bits.
  *	- short is at least 16 bits.
  */
-#define NEW_STRTOLD
 
 #ifdef FDFLOAT
 
@@ -474,7 +486,7 @@ FPI fpi_binary16 = { 11, 1-15-11+1,
                         30-15-11+1, 1, 0,
         0, 1, 1, 0,  16,   15+11-1 };
 #endif
-#ifndef notyet
+#ifdef notyet
 FPI fpi_binary128 = { 113,   1-16383-113+1,
                          32766-16383-113+1, 1, 0,
         0, 1, 1, 0,   128,     16383+113-1 };
@@ -482,9 +494,12 @@ FPI fpi_binary128 = { 113,   1-16383-113+1,
 
 #ifdef USE_IEEEFP_32
 #define IEEEFP_32_FPI	fpi_binary32
-FPI fpi_binary32 = { 24,  1-127-24+1,
-                        254-127-24+1, 1, 0,
-        0, 1, 1, 0,  32,    127+24-1, .bias = 127, .maxexp = 128 };
+FPI fpi_binary32 = { 
+	.nbits = IEEEFP_32_MAX_EXP,  
+	.storage = 32,
+        .bias = 127,
+	.maxexp = IEEEFP_32_MAX_EXP
+};
 #define IEEEFP_32_ZERO(x,s)	((x)->fp[0] = (s << 31))
 #define IEEEFP_32_NAN(x,sign)	((x)->fp[0] = 0x7fc00000 | (sign << 31))
 #define IEEEFP_32_INF(x,sign)	((x)->fp[0] = 0x7f800000 | (sign << 31))
@@ -523,9 +538,13 @@ ieeefp_32_toosmall(int exp, uint64_t mant)
 
 #ifdef USE_IEEEFP_64
 #define IEEEFP_64_FPI	fpi_binary64
-FPI fpi_binary64 = { 53,   1-1023-53+1,
-                        2046-1023-53+1, 1, 0,
-        0, 1, 1, 0,  64,     1023+53-1, .bias = 1023, .maxexp = 1024 };
+FPI fpi_binary64 = {
+	.nbits = IEEEFP_64_MANT_DIG,
+	.storage = 64,
+	.bias = 1023,
+	.maxexp = IEEEFP_64_MAX_EXP
+};      
+
 //static SF ieee64_zero = { { { 0, 0, 0 } } };
 #define IEEEFP_64_ZERO(x,s)	((x)->fp[0] = 0, (x)->fp[1] = (s << 31))
 #define IEEEFP_64_NAN(x,sign)	\
@@ -563,9 +582,12 @@ ieeefp_64_toolarge(int exp, uint64_t mant)
 #ifdef USE_IEEEFP_X80
 #define IEEEFP_X80_FPI	fpi_binaryx80
 /* IEEE double extended in its usual form, for example Intel 387 */
-FPI fpi_binaryx80 = { 64,   1-16383-64+1,
-                        32766-16383-64+1, 1, 0,
-        1, 1, 1, 0,   80,     16383+64-1, .bias = 16383, .maxexp = 16384 };
+FPI fpi_binaryx80 = {
+	.nbits = IEEEFP_X80_MANT_DIG,
+	.storage = 80,
+	.bias = 16383,
+	.maxexp = IEEEFP_X80_MAX_EXP
+};      
 #define IEEEFP_X80_NAN(x,s)	\
 	((x)->fp[0] = 0, (x)->fp[1] = 0xc0000000, (x)->fp[2] = 0x7fff | ((s) << 15))
 #define IEEEFP_X80_INF(x,s)	\
@@ -1021,16 +1043,6 @@ float32_to_floatx80(SFP a)
 		break;
 	}
 }
-
-/*
- * Constant rounding control mode (cf. TS 18661 clause 11).
- * Default is to have no effect. Set through #pragma STDC FENV_ROUND
- */
-int sf_constrounding = FPI_RoundNotSet;
-/*
- * Exceptions raised by functions which do not return a SF; behave like errno
- */
-int sf_exceptions = 0;
 
 /* 
  * Shift right, rounding to even.
@@ -1503,45 +1515,6 @@ soft_cmp(SFP v1p, SFP v2p, int v)
 
 #endif /* FDFLOAT */
 
-#ifndef NEW_STRTOLD
-static void
-vals2fp(SF *sf, int k, int exp, uint32_t *mant)
-{
-	int sign = (k & SF_Neg) != 0;
-	uint64_t m;
-
-	switch (k & SF_kmask) {
-	case SF_Zero:
-		LDOUBLE_ZERO(sf, sign);
-		break; /* already 0 */
-
-	case SF_Normal:
-		m = (((uint64_t)mant[1] << 32) | mant[0]) << 1;
-//printf("vals2fp m %llx\n", m);
-		exp += FPI_LDOUBLE.exp_bias;
-		LDOUBLE_MAKE(sf, sign, exp, m);
-//printf("vals2fp: %llx %llx\n", *(long long *)&sf->debugfp, m);
-#ifdef DEBUGFP
-		if (mant[0] != sf->fp[0] || mant[1] != sf->fp[1])
-			fpwarn("vals2fp", sf->debugfp, sf->debugfp);
-#endif
-		break;
-	case SF_Denormal:
-		m = (((uint64_t)mant[1] << 32) | mant[0]) << 1;
-		LDOUBLE_MAKE(sf, sign, 0, m);
-		break;
-	default:
-		fprintf(stderr, "vals2fp: unhandled %x\n", k);
-		break;
-	}
-
-	if (k & (SFEXCP_ALLmask & ~(SFEXCP_Inexlo|SFEXCP_Inexhi)))
-		fprintf(stderr, "vals2fp: unhandled2 %x\n", k);
-}
-#endif
-
-#ifdef NEW_STRTOLD
-
 static void
 mshr(MINT *a, int nbits)
 {
@@ -1802,8 +1775,6 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 	return SOFT_NORMAL;
 }
 
-#endif
-
 /*
  * Conversions from decimal and hexadecimal strings.
  * Rounds correctly to the target type (subject to FLT_EVAL_METHOD.)
@@ -1814,9 +1785,6 @@ strtosf(SFP sfp, char *str, TWORD tw)
 {
 	ULong bits[2] = { 0, 0 };
 	Long expt;
-
-//printf("strtosf %s\n", str);
-#ifdef NEW_STRTOLD
 	int rv;
 
 	/* XXX obey floating point number ending */
@@ -1830,18 +1798,6 @@ strtosf(SFP sfp, char *str, TWORD tw)
 		LDOUBLE_ZERO(sfp, 0);
 		break;
 	}
-#else
-	char *eptr;
-	int k;
-	k = strtodg(str, &eptr, &FPI_LDOUBLE, &expt, bits);
-
-	if (k & SFEXCP_Overflow)
-		werror("Overflow in floating-point constant");
-	if (k & SFEXCP_Inexact && (str[1] == 'x' || str[1] == 'X'))
-		werror("Hexadecimal floating-point constant not exactly");
-	vals2fp(sfp, k, expt, bits);
-//printf("strtosf: %llx\n", *(long long *)&sf.debugfp);
-#endif
 
 #ifdef DEBUGFP
 	{
