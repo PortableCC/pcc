@@ -46,6 +46,7 @@
  *	- long is at least 32 bits.
  *	- short is at least 16 bits.
  */
+#define NEW_STRTOLD
 
 #ifdef FDFLOAT
 
@@ -483,7 +484,7 @@ FPI fpi_binary128 = { 113,   1-16383-113+1,
 #define IEEEFP_32_FPI	fpi_binary32
 FPI fpi_binary32 = { 24,  1-127-24+1,
                         254-127-24+1, 1, 0,
-        0, 1, 1, 0,  32,    127+24-1 };
+        0, 1, 1, 0,  32,    127+24-1, .bias = 127, .maxexp = 128 };
 #define IEEEFP_32_ZERO(x,s)	((x)->fp[0] = (s << 31))
 #define IEEEFP_32_NAN(x,sign)	((x)->fp[0] = 0x7fc00000 | (sign << 31))
 #define IEEEFP_32_INF(x,sign)	((x)->fp[0] = 0x7f800000 | (sign << 31))
@@ -524,7 +525,7 @@ ieeefp_32_toosmall(int exp, uint64_t mant)
 #define IEEEFP_64_FPI	fpi_binary64
 FPI fpi_binary64 = { 53,   1-1023-53+1,
                         2046-1023-53+1, 1, 0,
-        0, 1, 1, 0,  64,     1023+53-1 };
+        0, 1, 1, 0,  64,     1023+53-1, .bias = 1023, .maxexp = 1024 };
 //static SF ieee64_zero = { { { 0, 0, 0 } } };
 #define IEEEFP_64_ZERO(x,s)	((x)->fp[0] = 0, (x)->fp[1] = (s << 31))
 #define IEEEFP_64_NAN(x,sign)	\
@@ -564,7 +565,7 @@ ieeefp_64_toolarge(int exp, uint64_t mant)
 /* IEEE double extended in its usual form, for example Intel 387 */
 FPI fpi_binaryx80 = { 64,   1-16383-64+1,
                         32766-16383-64+1, 1, 0,
-        1, 1, 1, 0,   80,     16383+64-1 };
+        1, 1, 1, 0,   80,     16383+64-1, .bias = 16383, .maxexp = 16384 };
 #define IEEEFP_X80_NAN(x,s)	\
 	((x)->fp[0] = 0, (x)->fp[1] = 0xc0000000, (x)->fp[2] = 0x7fff | ((s) << 15))
 #define IEEEFP_X80_INF(x,s)	\
@@ -584,6 +585,9 @@ FPI fpi_binaryx80 = { 64,   1-16383-64+1,
 #define IEEEFP_X80_MAKE(x, sign, exp, mant)	\
 	((x)->fp[0] = mant >> 1, (x)->fp[1] = (mant >> 33) | \
 	    (exp ? (1 << 31) : 0), \
+	    (x)->fp[2] = (exp & 0x7fff) | (sign << 15))
+#define IEEEFP_X80_MAKE2(x, sign, exp, mant)	\
+	((x)->fp[0] = mant[0], (x)->fp[1] = mant[1], \
 	    (x)->fp[2] = (exp & 0x7fff) | (sign << 15))
 #endif
 
@@ -614,6 +618,7 @@ int soft_classify(SFP sf, TWORD type);
 #define	LDOUBLE_ISZERO	C(LDBL_PREFIX,_ISZERO)
 #define	LDOUBLE_BIAS	C(LDBL_PREFIX,_BIAS)
 #define	LDOUBLE_MAKE	C(LDBL_PREFIX,_MAKE)
+#define	LDOUBLE_MAKE2	C(LDBL_PREFIX,_MAKE2)
 #define	LDOUBLE_MAXMINT	C(LDBL_PREFIX,_MAXMINT)
 #define	LDOUBLE_SIGN	C(LDBL_PREFIX,_SIGN)
 
@@ -656,14 +661,17 @@ typedef struct mint {
 	uint16_t val[MAXMINT];
 } MINT;
 
+#define MINTZ(x) ((x)->len == 0 || ((x)->len == 1 && (x)->val[0] == 0))
+
 void madd(MINT *a, MINT *b, MINT *c);
 void msub(MINT *a, MINT *b, MINT *c);
 void mult(MINT *a, MINT *b, MINT *c);
 void mdiv(MINT *a, MINT *b, MINT *c, MINT *r);
-void minit(MINT *m);
+void minit(MINT *m, int v);
 void mshl(MINT *m, int nbits);
 static void chomp(MINT *a);
 void mdump(char *c, MINT *a);
+static int geq(MINT *l, MINT *r);
 
 
 /*
@@ -712,7 +720,7 @@ mant2mint(MINT *a, SFP sfp)
 {
 	uint64_t rv = (LX(sfp,0) | LX(sfp,1));
 
-	minit(a);
+	minit(a, 0);
 	a->val[0] = rv;
 	a->val[1] = rv >> 16;
 	a->val[2] = rv >> 32;
@@ -805,7 +813,7 @@ grsround(MINT *a)
 	}
 	if (doadd && h >= 0) {
 		MINT d, e;
-		minit(&d);
+		minit(&d, 0);
 		mcopy(a, &e);
 		d.len = (h/16)+1;
 		d.val[(h/16)] = 1 << (h % 16);
@@ -1356,7 +1364,7 @@ soft_isz(SFP sfp)
 int
 soft_classify(SFP sfp, TWORD t)
 {
-	int rv;
+	int rv = 0;
 
 	switch (t) {
 	case FLOAT:
@@ -1489,6 +1497,7 @@ soft_cmp(SFP v1p, SFP v2p, int v)
 
 #endif /* FDFLOAT */
 
+#ifndef NEW_STRTOLD
 static void
 vals2fp(SF *sf, int k, int exp, uint32_t *mant)
 {
@@ -1523,6 +1532,269 @@ vals2fp(SF *sf, int k, int exp, uint32_t *mant)
 	if (k & (SFEXCP_ALLmask & ~(SFEXCP_Inexlo|SFEXCP_Inexhi)))
 		fprintf(stderr, "vals2fp: unhandled2 %x\n", k);
 }
+#endif
+
+#ifdef NEW_STRTOLD
+
+static void
+mshr(MINT *a, int nbits)
+{
+	int i, j;
+
+	for (j = 0; j < nbits; j++) {
+		for (i = 0; i < a->len; i++)
+			a->val[i] = (a->val[i] >> 1) |	(a->val[i+1] << 15);
+		a->val[i] >>= 1;
+	}
+	chomp(a);
+}
+
+/*
+ * Round q(uot) using "half-to-even".
+ * Destroys r(emainder).
+ */
+static void
+mround(MINT *d, MINT *q, MINT *r)
+{
+	MINT a, b;
+
+	mshl(r, 1);
+	chomp(r);
+	chomp(d);
+	if (geq(r, d)) {
+		if (memcmp(r->val, d->val, d->len * 2) || (q->val[0] & 1)) {
+			minit(&a, 1);
+			madd(&a, q, &b);
+			mcopy(&b, q);
+		}
+	}
+}
+
+/*
+ * Sanity check mantissa and exponent.
+ * we decide that exponent more than 5 digits is too large.
+ */
+static int
+mesanity(MINT *m, char *s)
+{	
+	int i, neg = 0;
+	
+	if (MINTZ(m))
+		return SOFT_ZERO; 
+	if ((*s == '-') || (*s == '+')) {
+		neg = (*s == '-');
+		s++;
+	}
+	for (i = 0; s[i] >= '0' && s[i] <= '9'; i++)
+		;
+	if (i > 4)
+		return (neg ? SOFT_ZERO : SOFT_INFINITE);
+	return 0;
+}
+
+
+/*
+ * - [0-9]+[Ee][+-]?[0-9]+				222e-33
+ * - [0-9]*.[0-9]+([Ee][+-]?[0-9]+)?			.222e-33
+ * - [0-9]+.[0-9]*([Ee][+-]?[0-9]+)?			222.e-33
+ * Convert a decimal floating point number to a numerator and a denominator.
+ * Return overflow, inexact, or 0.
+ */
+static int
+decbig(char *str, MINT *mmant, MINT *mexp)
+{
+	MINT ten, b, ind, *cur;
+	int exp10 = 0, gotdot = 0;
+	int ch, i;
+
+	minit(&ten, 10);
+
+	while ((ch = *str++)) {
+		switch (ch) {
+		case '0' ... '9':
+			mult(mmant, &ten, &b);
+			minit(&ind, ch - '0');
+			madd(&b, &ind, mmant);
+			if (gotdot)
+				exp10--;
+			continue;
+	
+		case '.':
+			gotdot = 1;
+			continue;
+
+		case 0:
+			break;
+
+		case 'e':
+		case 'E':
+			exp10 += atoi(str);
+			break;
+
+		case 'l':
+		case 'L':
+		case 'f':
+		case 'F':
+			break;
+
+		default:
+			cerror("decbig %d", ch);
+			break;
+		}
+		break;
+	}
+	if ((ch = mesanity(mmant, str)))
+		return ch;
+	if (exp10 < 0) {
+		cur = mexp;
+		exp10 = -exp10;
+	} else
+		cur = mmant;
+	for (i = 0; i < exp10; i++) {
+		mult(cur, &ten, &b);
+		mcopy(&b, cur);
+	}
+	return SOFT_NORMAL;
+}
+
+/*
+ * - 0[xX][a-fA-F0-9]+.[Pp][+-]?[0-9]+			0x.FFp+33
+ * - 0[xX][a-fA-F0-9]*.[a-fA-F0-9]+[Pp][+-]?[0-9]+	0x1.FFp+33
+ * - 0[xX][a-fA-F0-9]+[Pp][+-]?[0-9]+			0x1FFp+33
+ * Convert a hex floating point number to a numerator and a denominator.
+ * Return overflow, inexact, or 0.
+ */
+static int
+hexbig(char *str, MINT *mmant, MINT *mexp)
+{
+	int exp2 = 0, gotdot = 0;
+	int ch;
+
+	while ((ch = *str++)) {
+		switch (ch) {
+		case 'a' ... 'f':
+			ch -= ('a' - 'A');
+			/* FALLTHROUGH */
+		case 'A' ... 'F':
+			ch -= ('A' - '9' - 1);
+			/* FALLTHROUGH */
+		case '0' ... '9':
+			mshl(mmant, 4);
+			mmant->val[0] |= (ch - '0');
+			if (gotdot)
+				exp2 -= 4;
+			continue;
+	
+		case '.':
+			gotdot = 1;
+			continue;
+
+		case 'p':
+		case 'P':
+			if ((ch = mesanity(mmant, str)))
+				return ch;
+			exp2 += atoi(str);
+			if (exp2 < 0)
+				mshl(mexp, -exp2);
+			else
+				mshl(mmant, exp2);
+			return SOFT_NORMAL;
+
+		default:
+			break;
+		}
+		break;
+	}
+	cerror("hexbig %c", str[-1]);
+	return SOFT_NORMAL;
+}
+
+static int
+str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
+{
+	MINT c, d, mm, me;
+	int t, u, i, rv;
+
+	minit(&mm, 0);
+	minit(&me, 1);
+
+	if (*str == '0' && (str[1] == 'x' || str[1] == 'X')) {
+		rv = hexbig(str+2, &mm, &me);
+	} else {
+		rv = decbig(str, &mm, &me);
+	}
+//printf("rv1 %d\n", rv);
+	if (rv != SOFT_NORMAL)
+		return rv;
+//printf("rv2\n");
+
+	/* 3. Scale into floating point mantissa len */
+	t = topbit(&mm);
+	u = topbit(&me);
+	if ((t-u) < fpi->nbits) {
+		int scale = fpi->nbits - (t-u) - 1;
+		int sub = 0;
+
+		/* check if we end up in subnormal range */
+		/* must do that before division */
+		if (fpi->nbits - scale - 1 <= -(fpi->bias-1)) {
+			int recount = fpi->nbits - scale - 1;
+			recount = -recount - (fpi->bias - 2);
+			sub = 1;
+			scale -= recount;
+		}
+
+		mshl(&mm, scale);	/* scale up numerator */
+		mdiv(&mm, &me, &c, &d);
+
+		if (topbit(&c) < fpi->nbits-1) {
+			mshl(&mm, 1);
+			mdiv(&mm, &me, &c, &d);
+			scale++;
+		}
+		mround(&me, &c, &d);	/* round correctly */
+		t = topbit(&c);
+		if (sub && t == fpi->nbits-1)
+			sub = 0;
+		if (topbit(&c) == fpi->nbits) {
+			mshr(&c, 1);
+			scale--;
+		}
+
+		if (sub)
+			*exp = -fpi->bias;
+		else
+			*exp = fpi->nbits - scale - 1;
+	} else {
+		int scale = (t-u) - fpi->nbits + 1;
+		mshl(&me, scale);
+		mdiv(&mm, &me, &c, &d);
+		if (topbit(&c) < fpi->nbits-1) {
+			mshl(&me, 1);
+			mdiv(&mm, &me, &c, &d);
+			scale++;
+		}
+		mround(&me, &c, &d);
+		if (topbit(&c) == fpi->nbits) {
+			mshr(&c, 1);
+			scale++;
+		}
+
+		*exp = fpi->nbits + scale - 1;
+		if (*exp >= fpi->maxexp) {
+			*exp = fpi->maxexp;
+			minit(&c, 1);
+			mshl(&c, fpi->nbits-1);
+		}
+	}
+	for (i = 0; i < fpi->nbits; i += 32)
+		mant[i/32] = ((uint32_t)c.val[i/16+1] << 16) | c.val[i/16];
+	*exp += fpi->bias;
+//printf("mant0 %08x mant1 %08x exp %d\n", mant[0], mant[1], *exp);
+	return SOFT_NORMAL;
+}
+
+#endif
 
 /*
  * Conversions from decimal and hexadecimal strings.
@@ -1532,11 +1804,27 @@ vals2fp(SF *sf, int k, int exp, uint32_t *mant)
 void
 strtosf(SFP sfp, char *str, TWORD tw)
 {
-	char *eptr;
 	ULong bits[2] = { 0, 0 };
 	Long expt;
-	int k;
 
+//printf("strtosf %s\n", str);
+#ifdef NEW_STRTOLD
+	int rv;
+
+	/* XXX obey floating point number ending */
+	rv = str2num(str, &expt, bits, fpis[2]);
+//printf("strtosf: rv %d, expt %d, bits[0] %08x, bits[1] %08x\n", rv, expt, bits[0], bits[1]);
+	switch (rv) {
+	case SOFT_NORMAL:
+		LDOUBLE_MAKE2(sfp, 0, expt, bits);
+		break;
+	case SOFT_ZERO:
+		LDOUBLE_ZERO(sfp, 0);
+		break;
+	}
+#else
+	char *eptr;
+	int k;
 	k = strtodg(str, &eptr, &FPI_LDOUBLE, &expt, bits);
 
 	if (k & SFEXCP_Overflow)
@@ -1545,6 +1833,7 @@ strtosf(SFP sfp, char *str, TWORD tw)
 		werror("Hexadecimal floating-point constant not exactly");
 	vals2fp(sfp, k, expt, bits);
 //printf("strtosf: %llx\n", *(long long *)&sf.debugfp);
+#endif
 
 #ifdef DEBUGFP
 	{
@@ -1644,11 +1933,12 @@ fpwarn(const char *s, long double soft, long double hard)
  * Interface similar to old libmp package.
  */
 void
-minit(MINT *m)
+minit(MINT *m, int v)
 {
 	m->sign = 0;
-	m->len = 0;
+	m->len = 1;
 	memset(m->val, 0, MAXMINT);
+	m->val[0] = v;
 }
 
 static void
@@ -1759,6 +2049,8 @@ mult(MINT *a, MINT *b, MINT *c)
 	uint32_t sum;
 	int i, j;
 
+	chomp(a);
+	chomp(b);
 	c->len = a->len + b->len;
 	for (i = 0; i < c->len; i++)
 		c->val[i] = 0;
@@ -1804,8 +2096,8 @@ mdiv(MINT *n, MINT *d, MINT *q, MINT *r)
 	MINT a, b;
 	int i;
 
-	minit(q);
-	minit(r);
+	minit(q, 0);
+	minit(r, 0);
 	chomp(n);
 	chomp(d);
 	for (i = 0; i < n->len; i++)

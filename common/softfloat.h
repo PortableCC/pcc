@@ -107,6 +107,8 @@ typedef struct FPI {
 	int has_radix_16:1;
 	int storage;
 	int exp_bias;
+	int bias;
+	int maxexp;
 } FPI;
 
 /* SF.kind values; same as STRTODG_* values */
