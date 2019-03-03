@@ -1058,6 +1058,7 @@ sfrshift(uint64_t b, int count)
 /*
  * Convert from integer type f to floating-point type t.
  * Rounds correctly to the target type.
+ * XXXX - routine must be cleaned from x80 dependencies!
  */
 void
 soft_int2fp(SFP rv, CONSZ l, TWORD f, TWORD t)
@@ -1073,6 +1074,11 @@ soft_int2fp(SFP rv, CONSZ l, TWORD f, TWORD t)
 
 	if (ll == 0) {
 		LDOUBLE_ZERO(rv, 0);
+	} else if ((l ^ 0x8000000000000000ULL) == 0) {
+		/* max negative long long */
+		uint32_t m[2];
+		m[0] = 0; m[1] = 0x80000000;
+		LDOUBLE_MAKE2(rv, 1, (LDOUBLE_BIAS + 63), m);
 	} else {
 		exp = LDOUBLE_BIAS + 64;
 		while (ll > 0)
@@ -1631,6 +1637,8 @@ decbig(char *str, MINT *mmant, MINT *mexp)
 			exp10 += atoi(str);
 			break;
 
+		case 'i':
+		case 'I':
 		case 'l':
 		case 'L':
 		case 'f':
@@ -1770,9 +1778,9 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		mshl(&me, scale);
 		mdiv(&mm, &me, &c, &d);
 		if (topbit(&c) < fpi->nbits-1) {
-			mshl(&me, 1);
+			mshr(&me, 1);
 			mdiv(&mm, &me, &c, &d);
-			scale++;
+			scale--;
 		}
 		mround(&me, &c, &d);
 		if (topbit(&c) == fpi->nbits) {
