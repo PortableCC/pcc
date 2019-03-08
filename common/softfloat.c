@@ -45,7 +45,8 @@ typedef struct FPI {
 	int nbits;	/* size of mantissa */
 	int storage;	/* size of fp word */
 	int bias;	/* exponent bias */
-	int maxexp;	/* max exponent */
+	int maxexp;	/* max exponent (except INF) */
+	int expadj;	/* adjust for fraction point position */
 } FPI;
 
 extern FPI * fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
@@ -478,7 +479,25 @@ typedef unsigned long long ULLong;
 
 static uint64_t sfrshift(uint64_t mant, int bits);
 
-extern int strtodg (const char*, char**, FPI*, Long*, ULong*);
+#ifdef FDFLOAT
+#define FFLOAT_FPI	fpi_ffloat
+FPI fpi_ffloat = { 
+	.nbits = FFLOAT_MANT_DIG,  
+	.storage = 32,
+        .bias = 128,
+	.maxexp = FFLOAT_MAX_EXP,
+	.expadj = 0,
+};
+
+#define DFLOAT_FPI	fpi_dfloat
+FPI fpi_dfloat = { 
+	.nbits = DFLOAT_MANT_DIG,  
+	.storage = 32,
+        .bias = 128,
+	.maxexp = DFLOAT_MAX_EXP,
+	.expadj = 0,
+};
+#endif
 
 /* IEEE binary formats, and their interchange format encodings */
 #ifdef notdef
@@ -495,10 +514,11 @@ FPI fpi_binary128 = { 113,   1-16383-113+1,
 #ifdef USE_IEEEFP_32
 #define IEEEFP_32_FPI	fpi_binary32
 FPI fpi_binary32 = { 
-	.nbits = IEEEFP_32_MAX_EXP,  
+	.nbits = IEEEFP_32_MANT_DIG,  
 	.storage = 32,
         .bias = 127,
-	.maxexp = IEEEFP_32_MAX_EXP
+	.maxexp = IEEEFP_32_MAX_EXP-1,
+	.expadj = 1,
 };
 #define IEEEFP_32_ZERO(x,s)	((x)->fp[0] = (s << 31))
 #define IEEEFP_32_NAN(x,sign)	((x)->fp[0] = 0x7fc00000 | (sign << 31))
@@ -542,7 +562,8 @@ FPI fpi_binary64 = {
 	.nbits = IEEEFP_64_MANT_DIG,
 	.storage = 64,
 	.bias = 1023,
-	.maxexp = IEEEFP_64_MAX_EXP
+	.maxexp = IEEEFP_64_MAX_EXP-1,
+	.expadj = 1,
 };      
 
 //static SF ieee64_zero = { { { 0, 0, 0 } } };
@@ -586,7 +607,8 @@ FPI fpi_binaryx80 = {
 	.nbits = IEEEFP_X80_MANT_DIG,
 	.storage = 80,
 	.bias = 16383,
-	.maxexp = IEEEFP_X80_MAX_EXP
+	.maxexp = IEEEFP_X80_MAX_EXP-1,
+	.expadj = 1,
 };      
 #define IEEEFP_X80_NAN(x,s)	\
 	((x)->fp[0] = 0, (x)->fp[1] = 0xc0000000, (x)->fp[2] = 0x7fff | ((s) << 15))
@@ -1707,6 +1729,8 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 //printf("rv1 %d\n", rv);
 	if (rv != SOFT_NORMAL)
 		return rv;
+	if (MINTZ(&mm))
+		return SOFT_ZERO;
 //printf("rv2\n");
 
 	/* 3. Scale into floating point mantissa len */
@@ -1728,7 +1752,7 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		mshl(&mm, scale);	/* scale up numerator */
 		mdiv(&mm, &me, &c, &d);
 
-		if (topbit(&c) < fpi->nbits-1) {
+		while (topbit(&c) < fpi->nbits-1) {
 			mshl(&mm, 1);
 			mdiv(&mm, &me, &c, &d);
 			scale++;
@@ -1745,7 +1769,7 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		if (sub)
 			*exp = -fpi->bias;
 		else
-			*exp = fpi->nbits - scale - 1;
+			*exp = fpi->nbits - scale - fpi->expadj;
 	} else {
 		int scale = (t-u) - fpi->nbits + 1;
 		mshl(&me, scale);
@@ -1761,12 +1785,9 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 			scale++;
 		}
 
-		*exp = fpi->nbits + scale - 1;
-		if (*exp >= fpi->maxexp) {
-			*exp = fpi->maxexp;
-			minit(&c, 1);
-			mshl(&c, fpi->nbits-1);
-		}
+		*exp = fpi->nbits + scale - fpi->expadj;
+		if (*exp > fpi->maxexp)
+			return SOFT_INFINITE;
 	}
 	for (i = 0; i < fpi->nbits; i += 32)
 		mant[i/32] = ((uint32_t)c.val[i/16+1] << 16) | c.val[i/16];
@@ -1797,6 +1818,11 @@ strtosf(SFP sfp, char *str, TWORD tw)
 	case SOFT_ZERO:
 		LDOUBLE_ZERO(sfp, 0);
 		break;
+	case SOFT_INFINITE:
+		LDOUBLE_INF(sfp, 0);
+		break;
+	default:
+		cerror("strtosf %d\n", rv);
 	}
 
 #ifdef DEBUGFP
