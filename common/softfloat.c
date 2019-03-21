@@ -31,11 +31,19 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef PCC_DEBUG
 #define assert(e) ((void)0)
 #else
 #define assert(e) (!(e)?cerror("assertion failed " #e " at softfloat:%d",__LINE__):(void)0)
+#endif
+
+#ifdef SFDEBUG
+int sfdebug;
+#define	SD(x)	if (sfdebug) printf x
+#else
+#define SD(x)
 #endif
 
 /*
@@ -45,11 +53,56 @@ typedef struct FPI {
 	int nbits;	/* size of mantissa */
 	int storage;	/* size of fp word */
 	int bias;	/* exponent bias */
+	int minexp;	/* min exponent (except zero/subnormal) */
 	int maxexp;	/* max exponent (except INF) */
 	int expadj;	/* adjust for fraction point position */
+
+	/* fp-specific routines */
+	void (*make)	/* make this type in sfp */
+	    (SFP, int typ, int sign, int exp, MINT *mant);
+	int (*unmake)	/* growel out this type from sfp */
+	    (SFP, int *sign, int *exp, MINT *mant);
+	int (*classify)(SFP sfp);
 } FPI;
 
 extern FPI * fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
+#define	LDBLPTR	fpis[SF_LDOUBLE]
+
+#define MKSF(t)		((t)-FLOAT)
+#define SF_FLOAT	(0)
+#define SF_DOUBLE	(1)
+#define SF_LDOUBLE	(2)
+
+#define	SOFT_INFINITE	1
+#define	SOFT_NAN	2
+#define	SOFT_ZERO	3
+#define	SOFT_NORMAL	4
+#define	SOFT_SUBNORMAL	5
+int soft_classify(SFP sf, TWORD type);
+#ifdef SFDEBUG
+static char *sftyp[] = { "0", "Inf", "Nan", "Zero", "Normal", "Subnormal" };
+#endif
+
+#define MINTZ(x) ((x)->len == 0 || ((x)->len == 1 && (x)->val[0] == 0))
+
+void madd(MINT *a, MINT *b, MINT *c);
+void msub(MINT *a, MINT *b, MINT *c);
+void mult(MINT *a, MINT *b, MINT *c);
+void mdiv(MINT *a, MINT *b, MINT *c, MINT *r);
+void minit(MINT *m, int v);
+void mshl(MINT *m, int nbits);
+static void mshr(MINT *m, int nbits, int sticky);
+static void chomp(MINT *a);
+void mdump(char *c, MINT *a);
+static int geq(MINT *l, MINT *r);
+static int topbit(MINT *a);
+static void grsround(MINT *a, FPI *);
+//static int mground(MINT *m, int nbits);
+static void mcopy(MINT *b, MINT *a);
+static void mexpand(MINT *a, int minsz);
+
+
+static int mknormal(FPI *, int *e, MINT *m);
 
 /*
  * Floating point emulation, to not depend on the characteristics (and bugs)
@@ -61,7 +114,7 @@ extern FPI * fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
  *	- short is at least 16 bits.
  */
 
-#ifdef FDFLOAT
+#if 0
 
 /*
  * Supports F- and D-float, used in DEC machines.
@@ -512,14 +565,6 @@ FPI fpi_binary128 = { 113,   1-16383-113+1,
 #endif
 
 #ifdef USE_IEEEFP_32
-#define IEEEFP_32_FPI	fpi_binary32
-FPI fpi_binary32 = { 
-	.nbits = IEEEFP_32_MANT_DIG,  
-	.storage = 32,
-        .bias = 127,
-	.maxexp = IEEEFP_32_MAX_EXP-1,
-	.expadj = 1,
-};
 #define IEEEFP_32_ZERO(x,s)	((x)->fp[0] = (s << 31))
 #define IEEEFP_32_NAN(x,sign)	((x)->fp[0] = 0x7fc00000 | (sign << 31))
 #define IEEEFP_32_INF(x,sign)	((x)->fp[0] = 0x7f800000 | (sign << 31))
@@ -552,20 +597,93 @@ ieeefp_32_toosmall(int exp, uint64_t mant)
 		return 1;
 	return 0;
 }
+
+static int
+ieee32_classify(SFP sfp)
+{
+	uint32_t val = sfp->fp[0] & 0x7fffffff;
+
+	if (val == 0x7f800000)
+		return SOFT_INFINITE;
+	if (val == 0x7fc00000)
+		return SOFT_NAN;
+	if (val == 0)
+		return SOFT_ZERO;
+	if (val & 0x7f800000)
+		return SOFT_NORMAL;
+	return SOFT_SUBNORMAL;
+}
+
+static void
+ieee32_make(SFP sfp, int typ, int sign, int exp, MINT *m)
+{
+	sfp->fp[0] = (sign << 31);
+
+	SD(("ieee32_make: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	   sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	if (typ == SOFT_NORMAL)
+		typ = mknormal(&fpi_binary32, &exp, m);
+
+	SD(("ieee32_make2: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	    sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	switch (typ) {
+	case SOFT_ZERO:
+		break;
+	case SOFT_INFINITE:
+		sfp->fp[0] |= 0x7f800000;
+		break;
+	case SOFT_NAN:
+		sfp->fp[0] |= 0x7fc00000;
+		break;
+	case SOFT_NORMAL:
+		exp += (fpi_binary32.bias-1);
+		sfp->fp[0] |= (uint32_t)(exp & 0xff) << 23;
+		sfp->fp[0] += (((uint32_t)m->val[1] << 16) | m->val[0]);
+		break;
+	case SOFT_SUBNORMAL:
+		sfp->fp[0] |= ((uint32_t)m->val[1] << 16) | m->val[0];
+		break;
+	}
+	SD(("ieee32_make3: fp %08x\n", sfp->fp[0]));
+	
+}
+
+static int
+ieee32_unmake(SFP sfp, int *sign, int *exp, MINT *m)
+{
+	int v = ieee32_classify(sfp);
+
+	*sign = (sfp->fp[0] >> 31) & 1;
+	*exp = (sfp->fp[0] >> 23) & 0xff;
+	minit(m, sfp->fp[0]);
+	m->val[1] = (sfp->fp[1] >> 16);
+	m->len = 2;
+	if (v == SOFT_SUBNORMAL) {
+		v = SOFT_NORMAL;
+	} else if (v == SOFT_NORMAL)
+		m->val[1] |= (1 << 8);
+	*exp -= (fpi_binary32.bias - IEEEFP_32_MANT_DIG + 1);
+	return v;
+}
+
+#define IEEEFP_32_FPI	fpi_binary32
+FPI fpi_binary32 = { 
+	.nbits = IEEEFP_32_MANT_DIG,  
+	.storage = 32,
+        .bias = 127,
+	.minexp = IEEEFP_32_MIN_EXP-1,
+	.maxexp = IEEEFP_32_MAX_EXP-1,
+	.expadj = 1,
+
+	.make = ieee32_make,
+	.unmake = ieee32_unmake,
+	.classify = ieee32_classify,
+};
 #else
 #error need float definition
 #endif
 
 #ifdef USE_IEEEFP_64
-#define IEEEFP_64_FPI	fpi_binary64
-FPI fpi_binary64 = {
-	.nbits = IEEEFP_64_MANT_DIG,
-	.storage = 64,
-	.bias = 1023,
-	.maxexp = IEEEFP_64_MAX_EXP-1,
-	.expadj = 1,
-};      
-
 //static SF ieee64_zero = { { { 0, 0, 0 } } };
 #define IEEEFP_64_ZERO(x,s)	((x)->fp[0] = 0, (x)->fp[1] = (s << 31))
 #define IEEEFP_64_NAN(x,sign)	\
@@ -596,20 +714,60 @@ ieeefp_64_toolarge(int exp, uint64_t mant)
 		return 1;
 	return 0;
 }
+
+static void
+ieee64_make(SFP sfp, int typ, int sign, int exp, MINT *m)
+{
+	sfp->fp[0] = 0;
+	sfp->fp[1] = (sign << 31);
+
+	SD(("ieee64_make: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	   sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+
+	if (typ == SOFT_NORMAL)
+		typ = mknormal(&fpi_binary64, &exp, m);
+
+	SD(("ieee64_make2: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	    sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	switch (typ) {
+	case SOFT_ZERO:
+		break;
+	case SOFT_INFINITE:
+		sfp->fp[1] |= 0x7ff00000;
+		break;
+	case SOFT_NAN:
+		sfp->fp[1] |= 0x7ff80000;
+		break;
+	case SOFT_NORMAL:
+		exp += (fpi_binary64.bias-1);
+		sfp->fp[0] = ((uint32_t)m->val[1] << 16) | m->val[0];
+		sfp->fp[1] |= ((uint32_t)m->val[3] << 16) | m->val[2];
+		sfp->fp[1] += (uint32_t)(exp & 0x7ff) << 20;
+		break;
+	case SOFT_SUBNORMAL:
+		sfp->fp[0] = ((uint32_t)m->val[1] << 16) | m->val[0];
+		sfp->fp[1] |= ((uint32_t)m->val[3] << 16) | m->val[2];
+		break;
+	}
+	SD(("ieee64_make3: fp %08x %08x\n", sfp->fp[1], sfp->fp[0]));
+}
+
+#define IEEEFP_64_FPI	fpi_binary64
+FPI fpi_binary64 = {
+	.nbits = IEEEFP_64_MANT_DIG,
+	.storage = 64,
+	.bias = 1023,
+	.minexp = IEEEFP_64_MIN_EXP-1,
+	.maxexp = IEEEFP_64_MAX_EXP-1,
+	.expadj = 1,
+
+	.make = ieee64_make,
+};      
 #else
 #error need double definition
 #endif
 
 #ifdef USE_IEEEFP_X80
-#define IEEEFP_X80_FPI	fpi_binaryx80
-/* IEEE double extended in its usual form, for example Intel 387 */
-FPI fpi_binaryx80 = {
-	.nbits = IEEEFP_X80_MANT_DIG,
-	.storage = 80,
-	.bias = 16383,
-	.maxexp = IEEEFP_X80_MAX_EXP-1,
-	.expadj = 1,
-};      
 #define IEEEFP_X80_NAN(x,s)	\
 	((x)->fp[0] = 0, (x)->fp[1] = 0xc0000000, (x)->fp[2] = 0x7fff | ((s) << 15))
 #define IEEEFP_X80_INF(x,s)	\
@@ -633,6 +791,100 @@ FPI fpi_binaryx80 = {
 #define IEEEFP_X80_MAKE2(x, sign, exp, mant)	\
 	((x)->fp[0] = mant[0], (x)->fp[1] = mant[1], \
 	    (x)->fp[2] = (exp & 0x7fff) | (sign << 15))
+
+
+static int
+ieeex80_classify(SFP sfp)
+{
+	short val = sfp->fp[2] & 0x7fff;
+
+	if (IEEEFP_X80_ISINF(sfp))
+		return SOFT_INFINITE;
+	if (IEEEFP_X80_ISNAN(sfp))
+		return SOFT_NAN;
+	if (IEEEFP_X80_ISZERO(sfp))
+		return SOFT_ZERO;
+	if (val)
+		return SOFT_NORMAL;
+	return SOFT_SUBNORMAL;
+}
+
+static void
+ieeex80_make(SFP sfp, int typ, int sign, int exp, MINT *m)
+{
+	sfp->fp[0] = sfp->fp[1] = 0;
+	sfp->fp[2] = (sign << 15);
+
+	SD(("ieeex80_make: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	   sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+
+	m->sign = 0;
+	if (typ == SOFT_NORMAL)
+		typ = mknormal(&fpi_binaryx80, &exp, m);
+
+	SD(("ieeex80_make2: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	    sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	switch (typ) {
+	case SOFT_ZERO:
+		break;
+	case SOFT_INFINITE:
+		sfp->fp[1] = 0x80000000;
+		sfp->fp[2] |= 0x7fff;
+		break;
+	case SOFT_NAN:
+		sfp->fp[1] = 0xc0000000;
+		sfp->fp[2] |= 0x7fff;
+		break;
+	case SOFT_NORMAL:
+		exp += fpi_binaryx80.bias;
+		sfp->fp[0] = ((uint32_t)m->val[1] << 16) | m->val[0];
+		sfp->fp[1] = ((uint32_t)m->val[3] << 16) | m->val[2];
+		sfp->fp[2] |= (uint32_t)(exp & 0x7fff);
+		if (m->len ==5 && m->val[4])
+			sfp->fp[2]++;
+		break;
+	case SOFT_SUBNORMAL:
+		sfp->fp[0] = ((uint32_t)m->val[1] << 16) | m->val[0];
+		sfp->fp[1] = ((uint32_t)m->val[3] << 16) | m->val[2];
+		break;
+	}
+	SD(("ieeex80_make3: fp %04x %08x %08x\n", sfp->fp[2], sfp->fp[1], sfp->fp[0]));
+}
+
+
+static int
+ieeex80_unmake(SFP sfp, int *sign, int *exp, MINT *m)
+{
+	int v = ieeex80_classify(sfp);
+
+	SD(("ieeex80_unmake: %04x %08x %08x\n", sfp->fp[2], sfp->fp[1], sfp->fp[0]));
+	*sign = (sfp->fp[2] >> 15) & 1;
+	*exp = (sfp->fp[2] & 0x7fff) - fpi_binaryx80.bias;
+	minit(m, sfp->fp[0]);
+	m->val[1] = (sfp->fp[0] >> 16);
+	m->val[2] = sfp->fp[1];
+	m->val[3] = (sfp->fp[1] >> 16);
+	m->len = 4;
+	if (v == SOFT_SUBNORMAL)
+		v = SOFT_NORMAL;
+	SD(("ieeex80_unmake: sign %d exp %d m %04x%04x %04x%04x\n",
+	    *sign, *exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	return v;
+}
+
+#define IEEEFP_X80_FPI	fpi_binaryx80
+/* IEEE double extended in its usual form, for example Intel 387 */
+FPI fpi_binaryx80 = {
+	.nbits = IEEEFP_X80_MANT_DIG,
+	.storage = 80,
+	.bias = 16383,
+	.minexp = IEEEFP_X80_MIN_EXP-1,
+	.maxexp = IEEEFP_X80_MAX_EXP-1,
+	.expadj = 1,
+
+	.make = ieeex80_make,
+	.unmake = ieeex80_unmake,
+};      
 #endif
 
 #ifdef USE_IEEEFP_X80
@@ -640,13 +892,6 @@ FPI fpi_binaryx80 = {
 #else
 #define SZLD sizeof(long double)
 #endif
-
-#define	SOFT_INFINITE	1
-#define	SOFT_NAN	2
-#define	SOFT_ZERO	3
-#define	SOFT_NORMAL	4
-#define	SOFT_SUBNORMAL	5
-int soft_classify(SFP sf, TWORD type);
 
 #define FPI_FLOAT	C(FLT_PREFIX,_FPI)
 #define FPI_DOUBLE	C(DBL_PREFIX,_FPI)
@@ -698,25 +943,6 @@ FPI * fpis[3] = {
 	&FPI_LDOUBLE
 };
 
-#define	MAXMINT	(LDOUBLE_MAXMINT/16) /* nbits per uint16 */
-/* MP package */
-typedef struct mint {
-	unsigned int len:15, sign:1; /* sign 1 if minus */
-	uint16_t val[MAXMINT];
-} MINT;
-
-#define MINTZ(x) ((x)->len == 0 || ((x)->len == 1 && (x)->val[0] == 0))
-
-void madd(MINT *a, MINT *b, MINT *c);
-void msub(MINT *a, MINT *b, MINT *c);
-void mult(MINT *a, MINT *b, MINT *c);
-void mdiv(MINT *a, MINT *b, MINT *c, MINT *r);
-void minit(MINT *m, int v);
-void mshl(MINT *m, int nbits);
-static void chomp(MINT *a);
-void mdump(char *c, MINT *a);
-static int geq(MINT *l, MINT *r);
-
 
 /*
  * IEEE specials:
@@ -751,6 +977,100 @@ ldouble_mant(SFP sfp)
 #define	ldouble_sign double_sign
 #endif
 
+/*
+ * Create correct floating point values for f.
+ * Exponent is not biased, and if it is negative it is a subnormal number.
+ * Return may be any class.
+ */
+#define	RNDBIT 10
+static int
+mknormal(FPI *f, int *exp, MINT *m)
+{
+	MINT a, c;
+	int t = topbit(m);
+	int e = *exp;
+	int bno = f->nbits-1;
+	int sav, issub = 0;
+
+	MINTDECL(a);
+	MINTDECL(c);
+
+	SD(("mknormal: t %d bno %d exp %d m %04x%04x %04x%04x\n",
+	    t, bno, e, m->val[3], m->val[2], m->val[1], m->val[0]));
+	/* first make distance between in and out number RNDBIT bits */
+	if (t - bno < RNDBIT)
+		mshl(m, RNDBIT - (t - bno));
+	if (t - bno > RNDBIT)
+		mshr(m, (t - bno) - RNDBIT, 1);
+
+	minit(&a, 1 << (RNDBIT-1));
+
+	SD(("mknormal2: a0 %x m %04x%04x %04x%04x\n",
+	    a.val[0], m->val[3], m->val[2], m->val[1], m->val[0]));
+	if (e < f->minexp) {
+		mshr(m, -(e-f->minexp), 1);
+		SD(("mknormal3: shr %d m %04x%04x %04x%04x\n", e-f->minexp,
+		    m->val[3], m->val[2], m->val[1], m->val[0]));
+		issub = 1;
+	} else if (e >= f->maxexp) {
+		SD(("mknormal4: e %d m %04x%04x %04x%04x\n",
+		    e, m->val[3], m->val[2], m->val[1], m->val[0]));
+		if (e > f->maxexp)
+			return SOFT_INFINITE;
+		madd(m, &a, &c);
+		if (topbit(&c) == topbit(m)+1)
+			return SOFT_INFINITE;
+	}
+	sav = m->val[0] & ((a.val[0] << 1)-1);
+	mshr(m, RNDBIT, 0);
+	SD(("mknormal5: m %04x%04x %04x%04x\n",
+	    m->val[3], m->val[2], m->val[1], m->val[0]));
+	if ((sav & a.val[0])) {
+		if ((sav & (a.val[0]-1)) || (m->val[0] & 1)) {
+			a.val[0] = 1;
+			madd(m, &a, &c);
+			mcopy(&c, m);
+		}
+	}
+	SD(("mknormal6: m %04x%04x %04x%04x\n",
+	    m->val[3], m->val[2], m->val[1], m->val[0]));
+	if (MINTZ(m))
+		return SOFT_ZERO;
+	return issub ? SOFT_SUBNORMAL : SOFT_NORMAL;
+}
+
+/*
+ * Round using "nearest-to-even".
+ */
+static void
+grsround(MINT *m, FPI *f)
+{
+	int t = topbit(m);
+	int bno = f->nbits-1;
+	MINT a, c;
+	int sav;
+
+	MINTDECL(a);
+	MINTDECL(c);
+	minit(&a, 1 << (RNDBIT-1));
+
+	if (t - bno < RNDBIT)
+		mshl(m, RNDBIT - (t - bno));
+	if (t - bno > RNDBIT)
+		mshr(m, (t - bno) - RNDBIT, 1);
+
+	sav = m->val[0] & ((a.val[0] << 1)-1);
+	mshr(m, RNDBIT, 0);
+	if ((sav & a.val[0])) {
+		if ((sav & (a.val[0]-1)) || (m->val[0] & 1)) {
+			a.val[0] = 1;
+			madd(m, &a, &c);
+			mcopy(&c, m);
+		}
+	}
+}
+
+
 #define	double_mant(x)	(((uint64_t)(x)->fp[1] << 44) | ((uint64_t)(x)->fp[0] << 12))
 #define	double_exp(x)	(((x)->fp[1] >> 20) & 0x7fff)
 #define	double_sign(x)	(((x)->fp[1] >> 31) & 1)
@@ -773,19 +1093,9 @@ mant2mint(MINT *a, SFP sfp)
 }
 
 /*
- * convert a long double to MINT.
- * Known here to only be valid numbers.
+ * Return highest set bit in a.  
+ * Bit numbering starts with 0.
  */
-static void
-ldbl2mint(MINT *a, SFP sfp)
-{
-	int exp = ldouble_exp(sfp);
-
-	mant2mint(a, sfp);
-	mshl(a, exp + 16); /* 16 == guard bits, 64 bit mant is in len */
-	a->sign = ldouble_sign(sfp);
-}
-
 static int
 topbit(MINT *a)
 {
@@ -801,69 +1111,17 @@ topbit(MINT *a)
 	return res;
 }
 
-static int
-getbit(MINT *a, int h)
-{
-	if (h < 0 || h/16 >= a->len)
-		return 0;
-	return (a->val[h/16] & (1 << (h%16))) != 0;
-}
-
 static void
 mcopy(MINT *b, MINT *a)
 {
 	int i;
 
+	if (a->allo < b->len)
+		mexpand(a, b->len);
 	a->len = b->len;
 	a->sign = b->sign;
 	for (i = 0; i < a->len; i++)
 		a->val[i] = b->val[i];
-}
-
-/*
- * Round the MINT number.
- */
-static void
-grsround(MINT *a)
-{
-	int h = topbit(a);
-	int doadd, i;
-
-	h -= 63; /* points to lsb */
-	/* if guard AND either lsb, round or sticky set, add to lsb */
-//printf("grs: h %d a %x\n", h, a->val[1]);
-	doadd = 0;
-	if (getbit(a, h-1)) { /* guard bit set */
-//printf("grs: getbit!\n");
-		if (getbit(a, h) || getbit(a, h-2) || getbit(a, h-3)) {
-			doadd = 1;
-		} else {
-			/* find out whether sticky should be set */
-			for (i = (h/16)-1; i >= 0; i--) {
-				if (a->val[i]) {
-					doadd = 1;
-					break;
-				}
-			}
-			if (doadd == 0) {
-				for (i = 0; i < (h%16)-2; i++) {
-					if (getbit(a, i)) {
-						doadd = 1;
-						break;
-					}
-				}
-			}
-		}
-	}
-	if (doadd && h >= 0) {
-		MINT d, e;
-		minit(&d, 0);
-		mcopy(a, &e);
-		d.len = (h/16)+1;
-		d.val[(h/16)] = 1 << (h % 16);
-		madd(&d, &e, a);
-	}
-//printf("grs2: h %d a %x\n", h, a->val[1]);
 }
 
 /*
@@ -887,22 +1145,6 @@ mint2mant(MINT *a, uint64_t *r)
 	return e;
 }
 
-static void
-mint2ldbl(SFP sfp, MINT *a)
-{
-	uint64_t mant;
-	int exp;
-
-	chomp(a);
-	grsround(a);
-	exp = -mint2mant(a, &mant);
-
-	exp += (a->len-1) * 16;
-	exp -= 64; /* bits in mantissa */
-	mant <<= 1;
-	LDOUBLE_MAKE(sfp, a->sign, exp, mant);
-}
-
 /*
  * Convert a extended float (x80) number to float (32-bit). 
  * Store as float.
@@ -917,7 +1159,7 @@ floatx80_to_float32(SFP a)
 	exp = ldouble_exp(a);
 	sign = ldouble_sign(a);
 //printf("x80: sign %d exp %x mant %llx\n", sign, exp, mant);
-//printf("x80s: 0 %x 1 %x 2 %x\n", a.fp[0], a.fp[1], a.fp[2]);
+//printf("x80s: 0 %x 1 %x 2 %x\n", a->fp[0], a->fp[1], a->fp[2]);
 
 	if (LDOUBLE_ISINF(a)) {
 		FLOAT_INF(a, sign);
@@ -932,7 +1174,7 @@ floatx80_to_float32(SFP a)
 	} else {
 //printf("4\n");
 		exp = exp - LDOUBLE_BIAS + FLOAT_BIAS;
-//printf("4: ecp %x\n", exp);
+//printf("4: ecp %x %d\n", exp, exp);
 		if (FLOAT_TOOLARGE(exp, mant)) {
 			FLOAT_INF(a, sign);
 		} else if (FLOAT_TOOSMALL(exp, mant)) {
@@ -1223,26 +1465,47 @@ soft_neg(SFP sfp)
 void
 soft_plus(SFP x1p, SFP x2p, TWORD t)
 {
-	MINT a, b, c;
+	MINT a, m1, m2;
 	SF rv;
+	int d, c1, c2, s1, s2, e1, e2, ediff, mtop;
 
-	if (LDOUBLE_ISINF(x1p) && LDOUBLE_ISINF(x2p)) {
-		if (ldouble_sign(x1p) == ldouble_sign(x2p))
-			return;
-		LDOUBLE_NAN(x1p,0);
-		return;
-	}
-	if (LDOUBLE_ISNAN(x1p) || LDOUBLE_ISINF(x1p))
-		return;
-	if (LDOUBLE_ISNAN(x2p) || LDOUBLE_ISNAN(x2p)) {
-		*x1p = *x2p;
-		return;
-	}
+	MINTDECL(a);
+	MINTDECL(m1);
+	MINTDECL(m2);
 
-	ldbl2mint(&a, x1p);
-	ldbl2mint(&b, x2p);
-	madd(&a, &b, &c);
-	mint2ldbl(&rv, &c);
+	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
+	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
+	SD(("s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
+
+	ediff = e1 - e2;
+	if (c1 == SOFT_INFINITE && c2 == SOFT_INFINITE) {
+		if (s1 != s2)
+			c1 = SOFT_NAN;
+	} else if (c1 == SOFT_NAN || c1 == SOFT_INFINITE) {
+		;
+	} else if (c2 == SOFT_NAN || c2 == SOFT_INFINITE) {
+		c1 = c2;
+		s1 = s2;
+	} else {
+		if (ediff > LDBLPTR->nbits+1)
+			return; /* result x1 */
+		if (ediff < -(LDBLPTR->nbits+1)) {
+			*x1p = *x2p;
+			return; /* result x2 */
+		}
+		if (e1 > e2)
+			mshl(&m1, ediff), mtop = LDBLPTR->nbits-1+ediff;
+		else
+			mshl(&m2, -ediff), mtop = LDBLPTR->nbits-1-ediff;
+		m1.sign = s1;
+		m2.sign = s2;
+		madd(&m1, &m2, &a);
+		d = topbit(&a) - mtop;
+		e1 += d, e2 += d;
+		s1 = a.sign;
+	}
+	LDBLPTR->make(&rv, c1, s1, ediff > 0 ? e1 : e2, &a);
+
 #ifdef DEBUGFP
 	if (x1p->debugfp + x2p->debugfp != rv.debugfp)
 		fpwarn("soft_plus", rv.debugfp, x1p->debugfp + x2p->debugfp);
@@ -1263,42 +1526,40 @@ soft_minus(SFP x1, SFP x2, TWORD t)
 void
 soft_mul(SFP x1p, SFP x2p, TWORD t)
 {
-	MINT a, b, c;
-	uint64_t mant;
-	int exp1, exp2, sign, sh;
-	int s1 = ldouble_sign(x1p);
-	int s2 = ldouble_sign(x2p);
+	MINT a, m1, m2;
+	int ee, c1, c2, s1, s2, e1, e2;
 	SF rv;
 
-	if (LDOUBLE_ISINFNAN(x1p) || LDOUBLE_ISINFNAN(x2p)) {
-		if (LDOUBLE_ISNAN(x1p) || LDOUBLE_ISNAN(x2p)) {
-			LDOUBLE_NAN(x1p, 0);
-		} else if (LDOUBLE_ISINF(x1p) && LDOUBLE_ISINF(x2p)) {
-			LDOUBLE_INF(x1p, s1 == s2);
-		} else if (LDOUBLE_ISINF(x1p) && LDOUBLE_ISZERO(x2p)) {
-			LDOUBLE_NAN(x1p, 0);
-		} else if (LDOUBLE_ISINF(x2p) && LDOUBLE_ISZERO(x1p)) {
-			LDOUBLE_NAN(x1p, 0);
-		} else /* if (LDOUBLE_ISINF(x1p) || LDOUBLE_ISINF(x2p)) */ {
-			LDOUBLE_INF(x1p, s1 == s2);
-		}
-		return;
+	MINTDECL(a);
+	MINTDECL(m1);
+	MINTDECL(m2);
+
+	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
+	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
+	SD(("s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
+
+	if (c1 == SOFT_NAN || c2 == SOFT_NAN) {
+		c1 = SOFT_NAN;
+		s1 = 0;
+	} else if (c1 == SOFT_INFINITE && c2 == SOFT_INFINITE) {
+		c1 = SOFT_INFINITE;
+		s1 = s1 == s2;
+	} else if (c1 == SOFT_INFINITE && c2 == SOFT_ZERO) {
+		c1 = SOFT_NAN;
+		s1 = 0;
+	} else if (c2 == SOFT_INFINITE && c1 == SOFT_ZERO) {
+		c1 = SOFT_NAN;
+		s1 = 0;
+	} else if (c1 == SOFT_INFINITE || c2 == SOFT_INFINITE) {
+		c1 = SOFT_INFINITE;
+		s1 = s1 == s2;
+	} else {
+		mult(&m1, &m2, &a);
+		ee = topbit(&a) - (2 * (LDBLPTR->nbits-1));
+		e1 += (e2 + ee);
+		s1 = s1 != s2;
 	}
-	mant2mint(&a, x1p);
-	mant2mint(&b, x2p);
-//mdump("x1: ", &a);
-//mdump("x2: ", &b);
-	mult(&a, &b, &c);
-//mdump("res: ", &c);
-	grsround(&c);
-	sh = 1 - mint2mant(&c, &mant);
-
-	exp1 = ldouble_exp(x1p) - LDOUBLE_BIAS;
-	exp2 = ldouble_exp(x2p) - LDOUBLE_BIAS;
-//printf("exp1 %d exp2 %d\n", exp1, exp2);
-
-	sign = s1 != s2;
-	LDOUBLE_MAKE(&rv, sign, (exp1 + exp2 + sh + LDOUBLE_BIAS), (mant << 1));
+	LDBLPTR->make(&rv, c1, s1, e1, &a);
 #ifdef DEBUGFP
 	if (x1p->debugfp * x2p->debugfp != rv.debugfp)
 		fpwarn("soft_mul", rv.debugfp, x1p->debugfp * x2p->debugfp);
@@ -1315,6 +1576,13 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 	int s1 = ldouble_sign(x1p);
 	int s2 = ldouble_sign(x2p);
 	SF rv;
+
+	MINTDECL(a);
+	MINTDECL(b);
+	MINTDECL(c);
+	MINTDECL(d);
+	MINTDECL(e);
+	MINTDECL(f);
 
 	if (LDOUBLE_ISINFNAN(x1p) || LDOUBLE_ISINFNAN(x2p)) {
 		if (LDOUBLE_ISNAN(x1p) || LDOUBLE_ISNAN(x2p)) {
@@ -1355,7 +1623,7 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 		madd(&c, &e, &f);
 
 		/* do correct rounding */
-		grsround(&f);
+		grsround(&f, LDBLPTR);
 		mint2mant(&f, &mant);
 
 		exp1 = ldouble_exp(x1p) - LDOUBLE_BIAS;
@@ -1538,14 +1806,17 @@ soft_cmp(SFP v1p, SFP v2p, int v)
 #endif /* FDFLOAT */
 
 static void
-mshr(MINT *a, int nbits)
+mshr(MINT *a, int nbits, int sticky)
 {
-	int i, j;
+	int i, j, k;
 
 	for (j = 0; j < nbits; j++) {
-		for (i = 0; i < a->len; i++)
+		k = a->val[0] & 1;
+		for (i = 0; i < a->len-1; i++)
 			a->val[i] = (a->val[i] >> 1) |	(a->val[i+1] << 15);
 		a->val[i] >>= 1;
+		if (sticky)
+			a->val[0] |= k;
 	}
 	chomp(a);
 }
@@ -1558,6 +1829,9 @@ static void
 mround(MINT *d, MINT *q, MINT *r)
 {
 	MINT a, b;
+
+	MINTDECL(a);
+	MINTDECL(b);
 
 	mshl(r, 1);
 	chomp(r);
@@ -1607,6 +1881,10 @@ decbig(char *str, MINT *mmant, MINT *mexp)
 	MINT ten, b, ind, *cur;
 	int exp10 = 0, gotdot = 0;
 	int ch, i;
+
+	MINTDECL(ten);
+	MINTDECL(b);
+	MINTDECL(ind);
 
 	minit(&ten, 10);
 
@@ -1718,6 +1996,11 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 	MINT c, d, mm, me;
 	int t, u, i, rv;
 
+	MINTDECL(c);
+	MINTDECL(d);
+	MINTDECL(mm);
+	MINTDECL(me);
+
 	minit(&mm, 0);
 	minit(&me, 1);
 
@@ -1762,7 +2045,7 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		if (sub && t == fpi->nbits-1)
 			sub = 0;
 		if (topbit(&c) == fpi->nbits) {
-			mshr(&c, 1);
+			mshr(&c, 1, 0);
 			scale--;
 		}
 
@@ -1775,13 +2058,13 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		mshl(&me, scale);
 		mdiv(&mm, &me, &c, &d);
 		if (topbit(&c) < fpi->nbits-1) {
-			mshr(&me, 1);
+			mshr(&me, 1, 0);
 			mdiv(&mm, &me, &c, &d);
 			scale--;
 		}
 		mround(&me, &c, &d);
 		if (topbit(&c) == fpi->nbits) {
-			mshr(&c, 1);
+			mshr(&c, 1, 0);
 			scale++;
 		}
 
@@ -1808,9 +2091,9 @@ strtosf(SFP sfp, char *str, TWORD tw)
 	Long expt;
 	int rv;
 
-	/* XXX obey floating point number ending */
-	rv = str2num(str, &expt, bits, fpis[2]);
-//printf("strtosf: rv %d, expt %d, bits[0] %08x, bits[1] %08x\n", rv, expt, bits[0], bits[1]);
+	rv = str2num(str, &expt, bits, fpis[/*MKSF(tw)*/ 2]);
+	SD(("strtosf: rv %d, expt %d, bits[0] %08x, bits[1] %08x\n",
+	    rv, expt, bits[0], bits[1]));
 	switch (rv) {
 	case SOFT_NORMAL:
 		LDOUBLE_MAKE2(sfp, 0, expt, bits);
@@ -1858,29 +2141,29 @@ soft_nan(SFP sfp, char *c)
  * Convert internally stored floating point to fp type in TWORD.
  * Save as a static array of uint32_t.
  */
-uint32_t *
-soft_toush(SFP sfp, TWORD t, int *nbits)
+uint32_t * soft_toush(SFP sfp, TWORD t, int *nbits)
 {
 	static SF sf;
+	MINT mant;
+	int exp, sign, typ;
 
-//printf("soft_toush: osf %Lf %La t %d\n", osf.debugfp, osf.debugfp, t);
-//printf("soft_toushLD: %x %x %x\n", osf.fp[2], osf.fp[1], osf.fp[0]);
-//float d = osf.debugfp; printf("soft_toush-D: d %x %x\n", *(((int *)&d)+1), *(int *)&d);
+	MINTDECL(mant);
 
-	memset(&sf, 0, sizeof(SF));
-	if (t == LDOUBLE) {
-		sf = *sfp;
-	} else if (t == DOUBLE) {
-		sf = *sfp;
-		floatx80_to_float64(&sf);
-//printf("soft_toushD: sf %f\n", *(double *)&sf.debugfp);
-//printf("soft_toushD2: %x %x\n", sf.fp[1], sf.fp[0]);
-	} else /* if (t == FLOAT) */ {
-		sf = *sfp;
-		floatx80_to_float32(&sf);
-//printf("soft_toushD: sf %f\n", (double)*(float *)&sf.debugfp);
-//printf("soft_toushD2: %x\n", sf.fp[0]);
+	SD(("soft_toush: sfp %Lf %La t %d\n", sfp->debugfp, sfp->debugfp, t));
+	SD(("soft_toushLD: %x %x %x\n", sfp->fp[2], sfp->fp[1], sfp->fp[0]));
+#ifdef SFDEBUG
+	if (sfdebug) {
+	double d = sfp->debugfp;
+	printf("soft_toush-D: d %08x %08x\n", *(((int *)&d)+1), *(int *)&d);
 	}
+#endif
+
+	typ = fpis[SF_LDOUBLE]->unmake(sfp, &sign, &exp, &mant);
+	SD(("soft_toush2: typ %s sign %d exp %d mant %04x%04x %04x%04x\n",
+	    sftyp[typ], sign, exp, mant.val[3], mant.val[2],
+	    mant.val[1], mant.val[0]));
+	fpis[MKSF(t)]->make(&sf, typ, sign, exp, &mant);
+
 #ifdef DEBUGFP
 	{ float ldf; double ldd; long double ldt;
 	ldt = (t == FLOAT ? (float)sfp->debugfp :
@@ -1895,7 +2178,7 @@ soft_toush(SFP sfp, TWORD t, int *nbits)
 		fpwarn("soft_toush4", (long double)sf.debugfp, ldt);
 	}
 #endif
-	*nbits = fpis[t-FLOAT]->storage;
+	*nbits = fpis[MKSF(t)]->storage;
 	return sf.fp;
 }
 
@@ -1903,7 +2186,7 @@ soft_toush(SFP sfp, TWORD t, int *nbits)
 void
 fpwarn(const char *s, long double soft, long double hard)
 {
-	extern int nerrors;
+	extern int nerrors, lineno;
 
 	union { long double ld; int i[3]; } X;
 	fprintf(stderr, "WARNING: In function %s: soft=%La hard=%La\n",
@@ -1914,6 +2197,7 @@ fpwarn(const char *s, long double soft, long double hard)
 	    X.i[0], X.i[1], X.i[2]);
 	X.ld=hard;
 	fprintf(stderr, "h[0]=%x h[1]=%x h[2]=%x\n", X.i[0], X.i[1], X.i[2]);
+fprintf(stderr, "lineno %d\n", lineno);
 	nerrors++;
 }
 #endif
@@ -1927,7 +2211,6 @@ minit(MINT *m, int v)
 {
 	m->sign = 0;
 	m->len = 1;
-	memset(m->val, 0, MAXMINT);
 	m->val[0] = v;
 }
 
@@ -1953,6 +2236,22 @@ neg2com(MINT *a)
 	}
 }
 
+static void
+mexpand(MINT *a, int minsz)
+{
+	int newsz = minsz == 0 ? a->allo * 2 : minsz;
+
+	if (minsz == 0)
+		newsz = a->allo * 2;
+	else if (minsz > a->allo)
+		newsz = minsz;
+	else
+		return;
+
+	a->val = memcpy(stmtalloc(newsz * 2), a->val, a->allo * 2);
+	a->allo = newsz;
+}
+
 void
 mshl(MINT *a, int nbits)
 {
@@ -1961,10 +2260,8 @@ mshl(MINT *a, int nbits)
 	/* XXXXXXX must improve speed significantly */
 	for (j = 0; j < nbits; j++) {
 		if (a->val[a->len-1] & 0x8000) {
-#ifdef DEBUGFP
-			if (a->len >= MAXMINT)
-				fpwarn("mshl: shifting out", 0, 0);
-#endif
+			if (a->len >= a->allo)
+				mexpand(a, 0);
 			a->val[a->len++] = 0;
 		}
 		for (i = a->len-1; i > 0; i--)
@@ -1998,17 +2295,33 @@ madd(MINT *a, MINT *b, MINT *c)
 	chomp(b);
 	/* ensure both numbers are the same size + 1 (for two-complement) */
 	mx = (b->len > a->len ? b->len : a->len) + 1;
+	mexpand(a, mx);
 	for (i = a->len; i < mx; i++)
 		a->val[i] = 0;
+	mexpand(b, mx);
 	for (i = b->len; i < mx; i++)
 		b->val[i] = 0;
 	a->len = b->len = mx;
+
+	minit(c, 0);
+	mexpand(c, mx);
 
 	if (a->sign)
 		neg2com(a);
 	if (b->sign)
 		neg2com(b);
 
+#ifdef SFDEBUG
+	if (sfdebug) {
+		printf("madd1: len %d m", a->len);
+		for (i = a->len-1; i >= 0; i--)
+			printf(" %04x", a->val[i]);
+		printf("\nmadd1: len %d m", b->len);
+		for (i = b->len-1; i >= 0; i--)
+			printf(" %04x", b->val[i]);
+		printf("\n");
+	}
+#endif
 	sum = 0;
 	for (i = 0; i < a->len; i++) {
 		sum = a->val[i] + b->val[i] + sum;
@@ -2016,12 +2329,28 @@ madd(MINT *a, MINT *b, MINT *c)
 		sum >>= 16;
 	}
 	c->len = a->len;
+#ifdef SFDEBUG
+	if (sfdebug) {
+		printf("madd2: len %d m", c->len);
+		for (i = c->len-1; i >= 0; i--)
+			printf(" %04x", c->val[i]);
+		printf("\n");
+	}
+#endif
 
 	if (c->val[c->len-1] & 0x8000) {
 		neg2com(c);
 		c->sign = 1;
 	} else
 		c->sign = 0;
+#ifdef SFDEBUG
+	if (sfdebug) {
+		printf("madd3: len %d m", c->len);
+		for (i = c->len-1; i >= 0; i--)
+			printf(" %04x", c->val[i]);
+		printf("\n");
+	}
+#endif
 	chomp(c);
 }
 
@@ -2041,7 +2370,10 @@ mult(MINT *a, MINT *b, MINT *c)
 
 	chomp(a);
 	chomp(b);
-	c->len = a->len + b->len;
+	minit(c, 0);
+	i = a->len + b->len;
+	mexpand(c, i);
+	c->len = i;
 	for (i = 0; i < c->len; i++)
 		c->val[i] = 0;
 
@@ -2086,10 +2418,15 @@ mdiv(MINT *n, MINT *d, MINT *q, MINT *r)
 	MINT a, b;
 	int i;
 
+	MINTDECL(a);
+	MINTDECL(b);
+
 	minit(q, 0);
 	minit(r, 0);
 	chomp(n);
 	chomp(d);
+	mexpand(q, n->len);
+	mexpand(r, n->len);
 	for (i = 0; i < n->len; i++)
 		q->val[i] = 0;
 	q->len = n->len;

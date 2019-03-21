@@ -50,6 +50,24 @@ typedef SF *SFP;
 #define C(x,y) C2(x,y)
 #define C2(x,y) x##y
 
+struct FPI;
+extern struct FPI *fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
+extern struct FPI fpi_ffloat;
+extern struct FPI fpi_dfloat;
+extern struct FPI fpi_binary32;
+extern struct FPI fpi_binary64;
+extern struct FPI fpi_binaryx80;
+
+/* MP package */
+#define MAXMINT (256/16) /* nbits per uint16 */
+typedef struct mint {
+	unsigned int len:15, sign:1; /* sign 1 if minus */
+	uint16_t allo;	/* size in uint16_t */
+	uint16_t *val;
+	uint16_t vals[MAXMINT];
+} MINT;
+#define	MINTDECL(x)	x.len = x.sign = 0, x.allo = MAXMINT, x.val = x.vals
+
 /*
  * These defines are used in cpp.
  */
@@ -91,9 +109,17 @@ typedef SF *SFP;
 #ifdef IEEEFP_128
 #endif
 
+#ifdef FDFLOAT
+#define	FFLOAT_MANT_DIG	24
+#define FFLOAT_MAX_EXP	+128
+#define	DFLOAT_MANT_DIG	56
+#define DFLOAT_MAX_EXP	+128
+#endif
+
 #define	TARGET_FLT_RADIX	C(FLT_FP,_RADIX)
 
 #ifndef CC_DRIVER
+void strtosf(SFP, char *, TWORD);
 void soft_neg(SF *);
 void soft_int2fp(SFP, CONSZ p, TWORD f, TWORD v);
 CONSZ soft_fp2int(SF *p, TWORD v);
@@ -104,7 +130,6 @@ void soft_mul(SFP, SFP, TWORD);
 void soft_div(SFP, SFP, TWORD);
 int soft_cmp(SF*, SF*, int);
 int soft_isz(SF*);
-void strtosf(SFP, char *, TWORD);
 CONSZ soft_signbit(SF sf);
 int soft_isnan(SF sf);
 void soft_huge_val(SFP);
