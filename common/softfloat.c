@@ -39,6 +39,7 @@
 #define assert(e) (!(e)?cerror("assertion failed " #e " at softfloat:%d",__LINE__):(void)0)
 #endif
 
+#define SFDEBUG
 #ifdef SFDEBUG
 int sfdebug;
 #define	SD(x)	if (sfdebug) printf x
@@ -1475,7 +1476,7 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 
 	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
 	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
-	SD(("s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
+	SD(("soft_plus: s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
 
 	ediff = e1 - e2;
 	if (c1 == SOFT_INFINITE && c2 == SOFT_INFINITE) {
@@ -1536,7 +1537,7 @@ soft_mul(SFP x1p, SFP x2p, TWORD t)
 
 	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
 	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
-	SD(("s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
+	SD(("soft_mul: s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
 
 	if (c1 == SOFT_NAN || c2 == SOFT_NAN) {
 		c1 = SOFT_NAN;
@@ -1584,6 +1585,7 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 	MINTDECL(e);
 	MINTDECL(f);
 
+	SD(("soft_div: \n"));
 	if (LDOUBLE_ISINFNAN(x1p) || LDOUBLE_ISINFNAN(x2p)) {
 		if (LDOUBLE_ISNAN(x1p) || LDOUBLE_ISNAN(x2p)) {
 			LDOUBLE_NAN(&rv, 1);
@@ -1924,6 +1926,7 @@ decbig(char *str, MINT *mmant, MINT *mexp)
 		}
 		break;
 	}
+	str--;
 	if ((ch = mesanity(mmant, str)))
 		return ch;
 	if (exp10 < 0) {
@@ -2009,12 +2012,10 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 	} else {
 		rv = decbig(str, &mm, &me);
 	}
-//printf("rv1 %d\n", rv);
 	if (rv != SOFT_NORMAL)
 		return rv;
 	if (MINTZ(&mm))
 		return SOFT_ZERO;
-//printf("rv2\n");
 
 	/* 3. Scale into floating point mantissa len */
 	t = topbit(&mm);
@@ -2186,7 +2187,7 @@ uint32_t * soft_toush(SFP sfp, TWORD t, int *nbits)
 void
 fpwarn(const char *s, long double soft, long double hard)
 {
-	extern int nerrors, lineno;
+	extern int nerrors;
 
 	union { long double ld; int i[3]; } X;
 	fprintf(stderr, "WARNING: In function %s: soft=%La hard=%La\n",
@@ -2197,7 +2198,6 @@ fpwarn(const char *s, long double soft, long double hard)
 	    X.i[0], X.i[1], X.i[2]);
 	X.ld=hard;
 	fprintf(stderr, "h[0]=%x h[1]=%x h[2]=%x\n", X.i[0], X.i[1], X.i[2]);
-fprintf(stderr, "lineno %d\n", lineno);
 	nerrors++;
 }
 #endif
