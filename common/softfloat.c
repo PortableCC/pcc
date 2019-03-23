@@ -107,22 +107,7 @@ static int mknormal(FPI *, int *e, MINT *m);
 /*
  * Floating point emulation, to not depend on the characteristics (and bugs)
  * of the host floating-point implementation when compiling.
- *
- * Assumes that:
- *	- long long is (at least) 64 bits
- *	- long is at least 32 bits.
- *	- short is at least 16 bits.
  */
-
-#ifndef Long
-#define Long int
-#endif
-#ifndef ULong
-typedef unsigned Long ULong;
-#endif
-#ifndef ULLong
-typedef unsigned long long ULLong;
-#endif
 
 static uint64_t sfrshift(uint64_t mant, int bits);
 
@@ -1561,12 +1546,11 @@ hexbig(char *str, MINT *mmant, MINT *mexp)
 }
 
 static int
-str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
+str2num(char *str, int *exp, MINT *m, struct FPI *fpi)
 {
-	MINT c, d, mm, me;
-	int t, u, i, rv;
+	MINT d, mm, me;
+	int t, u, rv;
 
-	MINTDECL(c);
 	MINTDECL(d);
 	MINTDECL(mm);
 	MINTDECL(me);
@@ -1601,19 +1585,19 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		}
 
 		mshl(&mm, scale);	/* scale up numerator */
-		mdiv(&mm, &me, &c, &d);
+		mdiv(&mm, &me, m, &d);
 
-		while (topbit(&c) < fpi->nbits-1) {
+		while (topbit(m) < fpi->nbits-1) {
 			mshl(&mm, 1);
-			mdiv(&mm, &me, &c, &d);
+			mdiv(&mm, &me, m, &d);
 			scale++;
 		}
-		mround(&me, &c, &d);	/* round correctly */
-		t = topbit(&c);
+		mround(&me, m, &d);	/* round correctly */
+		t = topbit(m);
 		if (sub && t == fpi->nbits-1)
 			sub = 0;
-		if (topbit(&c) == fpi->nbits) {
-			mshr(&c, 1, 0);
+		if (topbit(m) == fpi->nbits) {
+			mshr(m, 1, 0);
 			scale--;
 		}
 
@@ -1624,15 +1608,15 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 	} else {
 		int scale = (t-u) - fpi->nbits + 1;
 		mshl(&me, scale);
-		mdiv(&mm, &me, &c, &d);
-		if (topbit(&c) < fpi->nbits-1) {
+		mdiv(&mm, &me, m, &d);
+		if (topbit(m) < fpi->nbits-1) {
 			mshr(&me, 1, 0);
-			mdiv(&mm, &me, &c, &d);
+			mdiv(&mm, &me, m, &d);
 			scale--;
 		}
-		mround(&me, &c, &d);
-		if (topbit(&c) == fpi->nbits) {
-			mshr(&c, 1, 0);
+		mround(&me, m, &d);
+		if (topbit(m) == fpi->nbits) {
+			mshr(m, 1, 0);
 			scale++;
 		}
 
@@ -1640,10 +1624,6 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 		if (*exp > fpi->maxexp)
 			return SOFT_INFINITE;
 	}
-	for (i = 0; i < fpi->nbits; i += 32)
-		mant[i/32] = ((uint32_t)c.val[i/16+1] << 16) | c.val[i/16];
-	*exp += fpi->bias;
-//printf("mant0 %08x mant1 %08x exp %d\n", mant[0], mant[1], *exp);
 	return SOFT_NORMAL;
 }
 
@@ -1655,26 +1635,17 @@ str2num(char *str, int *exp, uint32_t *mant, struct FPI *fpi)
 void
 strtosf(SFP sfp, char *str, TWORD tw)
 {
-	ULong bits[2] = { 0, 0 };
-	Long expt;
+	MINT m;
+	int e;
 	int rv;
 
-	rv = str2num(str, &expt, bits, fpis[/*MKSF(tw)*/ 2]);
-	SD(("strtosf: rv %d, expt %d, bits[0] %08x, bits[1] %08x\n",
-	    rv, expt, bits[0], bits[1]));
-	switch (rv) {
-	case SOFT_NORMAL:
-		LDOUBLE_MAKE2(sfp, 0, expt, bits);
-		break;
-	case SOFT_ZERO:
-		LDOUBLE_ZERO(sfp, 0);
-		break;
-	case SOFT_INFINITE:
-		LDOUBLE_INF(sfp, 0);
-		break;
-	default:
-		cerror("strtosf %d\n", rv);
-	}
+	MINTDECL(m);
+
+	rv = str2num(str, &e, &m, fpis[/*MKSF(tw)*/ 2]);
+	SD(("strtosf: rv %d, expt %d, m[0] %04x, bits[1] %04x\n",
+	    rv, e, m.val[0], m.val[1]));
+
+	LDBLPTR->make(sfp, rv, 0, e, &m);
 
 #ifdef DEBUGFP
 	{
