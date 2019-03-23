@@ -39,7 +39,6 @@
 #define assert(e) (!(e)?cerror("assertion failed " #e " at softfloat:%d",__LINE__):(void)0)
 #endif
 
-#define SFDEBUG
 #ifdef SFDEBUG
 int sfdebug;
 #define	SD(x)	if (sfdebug) printf x
@@ -1080,19 +1079,6 @@ grsround(MINT *m, FPI *f)
 #define	float_exp(x)	(((x)->fp[0] >> 23) & 0xff)
 #define	float_sign(x)	(((x)->fp[0] >> 31) & 1)
 
-static void
-mant2mint(MINT *a, SFP sfp)
-{
-	uint64_t rv = (LX(sfp,0) | LX(sfp,1));
-
-	minit(a, 0);
-	a->val[0] = rv;
-	a->val[1] = rv >> 16;
-	a->val[2] = rv >> 32;
-	a->val[3] = rv >> 48;
-	a->len = 4;
-}
-
 /*
  * Return highest set bit in a.  
  * Bit numbering starts with 0.
@@ -1123,27 +1109,6 @@ mcopy(MINT *b, MINT *a)
 	a->sign = b->sign;
 	for (i = 0; i < a->len; i++)
 		a->val[i] = b->val[i];
-}
-
-/*
- * fillin SF with the mantissa.  Expect to already be rounded.
- * return number of times a is left-shifted.
- */
-static int
-mint2mant(MINT *a, uint64_t *r)
-{
-	int e = 0;
-	uint64_t mant;
-	int len = a->len-1;
-
-	while ((a->val[len] & 0x8000) == 0)
-		mshl(a, 1), e++;
-	mant = (uint64_t)a->val[len] << 48;
-	if (len > 0) mant |= (uint64_t)a->val[len-1] << 32;
-	if (len > 1) mant |= (uint64_t)a->val[len-2] << 16;
-	if (len > 2) mant |= (uint64_t)a->val[len-3];
-	*r = mant;
-	return e;
 }
 
 /*
@@ -1571,81 +1536,65 @@ soft_mul(SFP x1p, SFP x2p, TWORD t)
 void
 soft_div(SFP x1p, SFP x2p, TWORD t)
 {
-	MINT a, b, c, d, e, f;
-	uint64_t mant;
-	int exp1, exp2, sign, sh;
-	int s1 = ldouble_sign(x1p);
-	int s2 = ldouble_sign(x2p);
+	MINT m1, m2, q, r, e, f;
+	int sh, c1, c2, s1, s2, e1, e2;
 	SF rv;
 
-	MINTDECL(a);
-	MINTDECL(b);
-	MINTDECL(c);
-	MINTDECL(d);
+	MINTDECL(m1);
+	MINTDECL(m2);
+	MINTDECL(q);
+	MINTDECL(r);
 	MINTDECL(e);
 	MINTDECL(f);
 
-	SD(("soft_div: \n"));
-	if (LDOUBLE_ISINFNAN(x1p) || LDOUBLE_ISINFNAN(x2p)) {
-		if (LDOUBLE_ISNAN(x1p) || LDOUBLE_ISNAN(x2p)) {
-			LDOUBLE_NAN(&rv, 1);
-		} else if (LDOUBLE_ISINF(x1p) && LDOUBLE_ISINF(x2p)) {
-			LDOUBLE_NAN(&rv, 0);
-		} else if (LDOUBLE_ISINF(x1p) && LDOUBLE_ISZERO(x2p)) {
-			LDOUBLE_NAN(&rv, 0);
-		} else if (LDOUBLE_ISINF(x2p)) {
-			LDOUBLE_ZERO(&rv, 0);
-		} else if (LDOUBLE_ISZERO(x2p)) {
-			LDOUBLE_INF(&rv, 0);
-		} else /* if (LDOUBLE_ISINF(x1p)) */ {
-			LDOUBLE_INF(&rv, s1);
-		}
-	} else if (LDOUBLE_ISZERO(x2p)) {
-		if (LDOUBLE_ISZERO(x1p)) {
-			LDOUBLE_NAN(&rv, s1 == s2);
-		} else {
-			LDOUBLE_INF(&rv, s1 != s2);
-		}
-	} else {
+	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
+	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
 
+	SD(("soft_div: c1 %s c2 %s s1 %d s2 %d e1 %d e2 %d\n", 
+	    sftyp[c1], sftyp[c2], s1, s2, e1, e2));
+	if (c1 == SOFT_NAN || c2 == SOFT_NAN) {
+		c1 = SOFT_NAN, s1 = 1;
+	} else if (c1 == SOFT_INFINITE) {
+		if (c2 == SOFT_INFINITE) {
+			c1 = SOFT_NAN, s1 = 1;
+		} else
+			c1 = SOFT_INFINITE, s1 = s1 != s2;
+	} else if (c1 == SOFT_ZERO) {
+		if (c2 == SOFT_ZERO)
+			c1 = SOFT_NAN, s1 = s1 == s2;
+		else
+			c1 = SOFT_ZERO, s1 = s1 == s2;
+	} else if (c2 == SOFT_ZERO) {
+		c1 = SOFT_INFINITE, s1 = s1 != s2;
+	} else if (c2 == SOFT_INFINITE) {
+		c1 = SOFT_ZERO, s1 = s1 == s2;
+	} else {
 		/* get quot and remainder of divided mantissa */
-		mant2mint(&a, x1p);
-		mshl(&a, 64);
-		mant2mint(&b, x2p);
-		mdiv(&a, &b, &c, &d);
-		sh = topbit(&c) - 64; /* MANT_BITS */
+		mshl(&m1, LDBLPTR->nbits);
+		mdiv(&m1, &m2, &q, &r);
+		sh = topbit(&q) - LDBLPTR->nbits;
 
 		/* divide remainder as well, for use in rounding */
-		mshl(&d, 64);
-		mant2mint(&b, x2p);
-		mdiv(&d, &b, &e, &f);
+		mshl(&r, LDBLPTR->nbits);
+		mdiv(&r, &m2, &e, &f);
 
-		/* create 128-bit number of the two quotients */
-		mshl(&c, 64);
-		madd(&c, &e, &f);
+		/* create double bit number of the two quotients */
+		mshl(&q, LDBLPTR->nbits);
+		madd(&q, &e, &f);
 
-		/* do correct rounding */
 		grsround(&f, LDBLPTR);
-		mint2mant(&f, &mant);
-
-		exp1 = ldouble_exp(x1p) - LDOUBLE_BIAS;
-		exp2 = ldouble_exp(x2p) - LDOUBLE_BIAS;
-
-		sign = s1 != s2;
-		LDOUBLE_MAKE(&rv, sign,
-		    (exp1 - exp2 + sh + LDOUBLE_BIAS), (mant << 1));
+		s1 = s1 != s2;
+		e1 = (e1 - e2 + sh);
 	}
+	SD(("soft_div2: c1 %d s1 %d e1 %d\n", c1, s1, e1));
+	LDBLPTR->make(&rv, c1, s1, e1, &f);
+
 #ifdef DEBUGFP
 	{ long double ldd = x1p->debugfp / x2p->debugfp;
 	if (memcmp(&ldd, &rv.debugfp, SZLD))
 		fpwarn("soft_div", rv.debugfp, ldd);
 	}
 #endif
-//long double ldou = x1p->debugfp / x2p->debugfp;
-//printf("x1: %llx %x\n", *(long long *)&x1.debugfp, ((int *)&x1.debugfp)[2]);
-//printf("x2: %llx %x\n", *(long long *)&x2.debugfp, ((int *)&x2.debugfp)[2]);
-//printf("rv: %llx %x\n", *(long long *)&rv.debugfp, ((int *)&rv.debugfp)[2]);
-//printf("rv: %llx %x\n", *(long long *)&ldou, ((int *)&ldou)[2]);
 	*x1p = rv;
 }
 
@@ -2240,6 +2189,7 @@ static void
 mexpand(MINT *a, int minsz)
 {
 	int newsz = minsz == 0 ? a->allo * 2 : minsz;
+	void *stmtalloc(int);
 
 	if (minsz == 0)
 		newsz = a->allo * 2;
