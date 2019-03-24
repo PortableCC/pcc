@@ -690,42 +690,43 @@ mcopy(MINT *b, MINT *a)
 /*
  * Convert from integer type f to floating-point type t.
  * Rounds correctly to the target type.
- * XXXX - routine must be cleaned from x80 dependencies!
  */
 void
 soft_int2fp(SFP rv, CONSZ l, TWORD f, TWORD t)
 {
-	int64_t ll = l;
-	uint64_t mant;
-	int sign = 0, exp;
+	MINT m;
+	int c, s, e;
+#ifdef DEBUGFP
+	CONSZ debl = l;
+#endif
 
-	if (!ISUNSIGNED(f) && ll < 0) {
-		ll = -ll;
-		sign = 1;
-	}
+	MINTDECL(m);
 
-	if (ll == 0) {
-		LDOUBLE_ZERO(rv, 0);
-	} else if ((l ^ 0x8000000000000000ULL) == 0) {
-		/* max negative long long */
-		uint32_t m[2];
-		m[0] = 0; m[1] = 0x80000000;
-		LDOUBLE_MAKE2(rv, 1, (LDOUBLE_BIAS + 63), m);
-	} else {
-		exp = LDOUBLE_BIAS + 64;
-		while (ll > 0)
-			ll <<= 1, exp--;
-		ll <<= 1, exp--;
-		mant = ll;
+	e = s = 0;
+	c = SOFT_NORMAL;
+	if (!ISUNSIGNED(f) && l < 0) {
+		if (l ^ 0x8000000000000000ULL)
+			l = -l;
+		s = 1;
+	} else if (l == 0)
+		c = SOFT_ZERO;
 
-		LDOUBLE_MAKE(rv, sign, exp, mant);
-		if (t == FLOAT || t == DOUBLE)
-			soft_fp2fp(rv, t);
-	}
+	m.val[0] = l;
+	m.val[1] = l >> 16;
+	m.val[2] = l >> 32;
+	m.val[3] = l >> 48;
+	m.len = 4;
+
+	e = topbit(&m);
+
+	LDBLPTR->make(rv, c, s, e, &m);
+	if (t == FLOAT || t == DOUBLE)
+		soft_fp2fp(rv, t);
+
 #ifdef DEBUGFP
 	{ long double dl;
-		dl = ISUNSIGNED(f) ? (long double)(U_CONSZ)(l) :
-		    (long double)(CONSZ)(l);
+		dl = ISUNSIGNED(f) ? (long double)(U_CONSZ)(debl) :
+		    (long double)(CONSZ)(debl);
 		dl = t == FLOAT ? (float)dl : t == DOUBLE ? (double)dl : dl;
 		if (dl != rv->debugfp)
 			fpwarn("soft_int2fp", rv->debugfp, dl);
@@ -745,15 +746,9 @@ soft_fp2fp(SFP sfp, TWORD t)
 
 	MINTDECL(m);
 
-//printf("soft_fp2fp: t %d\n", t);
 	c = LDBLPTR->unmake(sfp, &s, &e, &m);
-//printf("soft_fp2fp2: c %d s %d e %d m %04x%04x %04x%04x\n", 
-//    c, s, e, m.val[3], m.val[2], m.val[1], m.val[0]);
 	fpis[MKSF(t)]->make(&rv2, c, s, e, &m);
-//printf("soft_fp2fp3: rv2 %04x %08x %08x\n", rv2.fp[2], rv2.fp[1], rv2.fp[0]);
 	c = fpis[MKSF(t)]->unmake(&rv2, &s, &e, &m);
-//printf("soft_fp2fp4: c %d s %d e %d m %04x%04x %04x%04x\n", 
-//    c, s, e, m.val[3], m.val[2], m.val[1], m.val[0]);
 	LDBLPTR->make(&rv, c, s, e, &m);
 
 #ifdef DEBUGFP
