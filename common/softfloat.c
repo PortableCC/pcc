@@ -109,8 +109,6 @@ static int mknormal(FPI *, int *e, MINT *m);
  * of the host floating-point implementation when compiling.
  */
 
-static uint64_t sfrshift(uint64_t mant, int bits);
-
 #ifdef FDFLOAT
 #define FFLOAT_FPI	fpi_ffloat
 FPI fpi_ffloat = { 
@@ -151,31 +149,6 @@ FPI fpi_binary128 = { 113,   1-16383-113+1,
 #define	IEEEFP_32_ISZERO(x)	(((x)->fp[0] & 0x7fffffff) == 0)
 #define	IEEEFP_32_ISNAN(x)	(((x)->fp[0] & 0x7fffffff) == 0x7fc00000)
 #define IEEEFP_32_BIAS	127
-#define	IEEEFP_32_TOOLARGE(exp, mant)	ieeefp_32_toolarge(exp, mant)
-#define	IEEEFP_32_TOOSMALL(exp, mant)	ieeefp_32_toosmall(exp, mant)
-#define IEEEFP_32_MAKE(x, sign, exp, mant)	\
-	((x)->fp[0] = (sign << 31) | (((exp & 0xff) << 23) + sfrshift(mant, 41)))
-static int
-ieeefp_32_toolarge(int exp, uint64_t mant)
-{
-	if (exp >= IEEEFP_32_MAX_EXP + IEEEFP_32_BIAS)
-		return 1;
-	if ((exp == IEEEFP_32_MAX_EXP + IEEEFP_32_BIAS - 1) &&
-	    (sfrshift(mant, 41) > 0x7fffff))
-		return 1;
-	return 0;
-}
-static int
-ieeefp_32_toosmall(int exp, uint64_t mant)
-{
-	if ( exp >= 0 )
-		return 0;
-	mant = sfrshift(mant, -exp);
-	mant |= (mant & 0xffffffffff ? 0x10000000000 : 0);
-	if (mant & 0xfffffe0000000000)
-		return 1;
-	return 0;
-}
 
 static int
 ieee32_classify(SFP sfp)
@@ -233,15 +206,14 @@ ieee32_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	int v = ieee32_classify(sfp);
 
 	*sign = (sfp->fp[0] >> 31) & 1;
-	*exp = (sfp->fp[0] >> 23) & 0xff;
+	*exp = ((sfp->fp[0] >> 23) & 0xff) - fpi_binary32.bias;
 	minit(m, sfp->fp[0]);
-	m->val[1] = (sfp->fp[1] >> 16);
+	m->val[1] = ((sfp->fp[0] >> 16) & 0x7f);
 	m->len = 2;
 	if (v == SOFT_SUBNORMAL) {
 		v = SOFT_NORMAL;
 	} else if (v == SOFT_NORMAL)
-		m->val[1] |= (1 << 8);
-	*exp -= (fpi_binary32.bias - IEEEFP_32_MANT_DIG + 1);
+		m->val[1] |= (1 << 7);
 	return v;
 }
 
@@ -277,22 +249,7 @@ FPI fpi_binary32 = {
 #define	IEEEFP_64_ISNAN(x) ((((x)->fp[1] & 0x7fffffff) == 0x7ff80000) && \
 	    (x)->fp[0] == 0)
 #define IEEEFP_64_BIAS	1023
-#define	IEEEFP_64_TOOLARGE(exp, mant)	ieeefp_64_toolarge(exp, mant)
 #define	IEEEFP_64_MAXMINT	2048+64+16 /* exponent + subnormal + guard */
-#define IEEEFP_64_MAKE(x, sign, exp, mant)		\
-	{ uint64_t xmant = sfrshift(mant, 12);		\
-	((x)->fp[0] = xmant, (x)->fp[1] = ((sign << 31) | 	\
-	    ((exp & 0x7ff) << 20)) + (xmant >> 32)); }
-static int
-ieeefp_64_toolarge(int exp, uint64_t mant)
-{
-	if (exp >= IEEEFP_64_MAX_EXP + IEEEFP_64_BIAS)
-		return 1;
-	if ((exp == IEEEFP_64_MAX_EXP + IEEEFP_64_BIAS - 1) &&
-	    (sfrshift(mant, 12) > 0xfffffffffffff))
-		return 1;
-	return 0;
-}
 
 static int
 ieee64_classify(SFP sfp)
@@ -313,8 +270,18 @@ ieee64_classify(SFP sfp)
 static int
 ieee64_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 {
-	cerror("unmake 64");
-	return 0;
+	int v = ieee64_classify(sfp);
+
+	*sign = (sfp->fp[1] >> 31) & 1;
+	*exp = ((sfp->fp[1] >> 20) & 0x7ff) - fpi_binary64.bias;
+	minit(m, sfp->fp[0]);
+	m->val[1] = (sfp->fp[0] >> 16);
+	m->val[2] = sfp->fp[1];
+	m->val[3] = ((sfp->fp[1] >> 16) & 0x0f) | (1 << 4);
+	m->len = 4;
+	if (v == SOFT_SUBNORMAL)
+		v = SOFT_NORMAL;
+	return v;
 }
 
 static void
@@ -717,188 +684,6 @@ mcopy(MINT *b, MINT *a)
 }
 
 /*
- * Convert a extended float (x80) number to float (32-bit). 
- * Store as float.
- */
-static void
-floatx80_to_float32(SFP a)
-{
-	int exp, sign;
-	uint64_t mant;
-
-	mant = ldouble_mant(a);
-	exp = ldouble_exp(a);
-	sign = ldouble_sign(a);
-//printf("x80: sign %d exp %x mant %llx\n", sign, exp, mant);
-//printf("x80s: 0 %x 1 %x 2 %x\n", a->fp[0], a->fp[1], a->fp[2]);
-
-	if (LDOUBLE_ISINF(a)) {
-		FLOAT_INF(a, sign);
-//printf("1\n");
-	} else if (LDOUBLE_ISNAN(a)) {
-		FLOAT_NAN(a, sign);
-		a->fp[0] |= mant >> 41;
-//printf("2\n");
-	} else if (LDOUBLE_ISZERO(a)) {
-//printf("3\n");
-		FLOAT_ZERO(a, sign);
-	} else {
-//printf("4\n");
-		exp = exp - LDOUBLE_BIAS + FLOAT_BIAS;
-//printf("4: ecp %x %d\n", exp, exp);
-		if (FLOAT_TOOLARGE(exp, mant)) {
-			FLOAT_INF(a, sign);
-		} else if (FLOAT_TOOSMALL(exp, mant)) {
-			FLOAT_ZERO(a, sign);
-		} else {
-			FLOAT_MAKE(a, sign, exp, mant);
-		}
-	}
-}
-
-/*
- * Convert a extended float (x80) number to double (64-bit). 
- * Store as double.
- */
-static void
-floatx80_to_float64(SFP a)
-{
-	SF rv;
-	int exp, sign;
-	uint64_t mant;
-
-	mant = ldouble_mant(a);
-	exp = ldouble_exp(a);
-	sign = ldouble_sign(a);
-//printf("x80: sign %d exp %x mant %llx\n", sign, exp, mant);
-//printf("x80s: 0 %x 1 %x 2 %x\n", a.fp[0], a.fp[1], a.fp[2]);
-
-	if (LDOUBLE_ISINF(a)) {
-		DOUBLE_INF(&rv, sign);
-//printf("1\n");
-	} else if (LDOUBLE_ISNAN(a)) {
-		DOUBLE_NAN(&rv, sign);
-		rv.fp[1] |= (mant >> 44);
-		rv.fp[0] = mant >> 12;
-//printf("2\n");
-	} else if (LDOUBLE_ISZERO(a)) {
-//printf("3\n");
-		DOUBLE_ZERO(&rv, sign);
-	} else {
-//printf("4\n");
-		exp = exp - LDOUBLE_BIAS + DOUBLE_BIAS;
-//printf("4: exp %d mant %llx sign %d\n", exp, mant, sign);
-		if (DOUBLE_TOOLARGE(exp, mant)) {
-			DOUBLE_INF(&rv, sign);
-		} else {
-			if (exp < 0) {
-//printf("done1: sign %d exp %d mant %llx\n", sign, exp, mant);
-				mant = (mant >> 1) | (1ULL << 63) | (mant & 1);
-//printf("done2: sign %d exp %d mant %llx\n", sign, exp, mant);
-				if (exp < 0)
-					mant = sfrshift(mant, -exp);
-//printf("done3: sign %d exp %d mant %llx\n", sign, exp, mant);
-				exp = 0;
-			}
-//printf("done: sign %d exp %d mant %llx\n", sign, exp, mant);
-			DOUBLE_MAKE(&rv, sign, exp, mant);
-		}
-//printf("X: %x %x %x\n", rv.fp[0], rv.fp[1], rv.fp[2]);
-	}
-#ifdef DEBUGFP
-	{ 	double d = a->debugfp;
-//printf("d: %llx\n", *(long long *)&d);
-		if (memcmp(&rv, &d, sizeof(double)))
-			fpwarn("floatx80_to_float64",
-			    (long double)*(double*)&rv.debugfp, (long double)d);
-	}
-#endif
-	*a = rv;
-}
-
-/*
- * Opposite to above; move a 64-bit float into an 80-bit value.
- */
-static void
-float64_to_floatx80(SFP a)
-{
-	SF rv;
-	int exp, sign;
-	uint64_t mant;
-
-	sign = double_sign(a);
-	switch (soft_classify(a, DOUBLE)) {
-	case SOFT_ZERO:
-		LDOUBLE_ZERO(&rv, sign);
-		break;
-	case SOFT_INFINITE:
-		LDOUBLE_INF(&rv, sign);
-		break;
-	case SOFT_NAN:
-		LDOUBLE_NAN(&rv, sign);
-		break;
-	default:
-		mant = double_mant(a);
-		exp = double_exp(a);
-		exp = exp - DOUBLE_BIAS + LDOUBLE_BIAS;
-		LDOUBLE_MAKE(&rv, sign, exp, mant);
-		break;
-	}
-	*a = rv;
-}
-
-/*
- * Opposite to above; move a 32-bit float into an 80-bit value.
- */
-static void
-float32_to_floatx80(SFP a)
-{
-	int exp, sign;
-	uint64_t mant;
-
-	sign = float_sign(a);
-//printf("float32_to_floatx80: classify %d\n", soft_classify(&a, FLOAT));
-	switch (soft_classify(a, FLOAT)) {
-	case SOFT_ZERO:
-		LDOUBLE_ZERO(a, sign);
-		break;
-	case SOFT_INFINITE:
-		LDOUBLE_INF(a, sign);
-		break;
-	case SOFT_NAN:
-		LDOUBLE_NAN(a, sign);
-		break;
-	default:
-		mant = float_mant(a);
-		exp = float_exp(a);
-//printf("exp %x\n", exp);
-		exp = exp - FLOAT_BIAS + LDOUBLE_BIAS;
-//printf("exp %x sign %d mant %llx\n", exp, sign, mant);
-		LDOUBLE_MAKE(a, sign, exp, mant);
-		break;
-	}
-}
-
-/* 
- * Shift right, rounding to even.
- */
-static uint64_t
-sfrshift(uint64_t b, int count)
-{
-	uint64_t z;
-
-	z = b >> (count - 3);
-	if (b & ((1 << (count - 3)) - 1))
-		z |= 1;	/* sticky */
-	if (z & 4) {
-		if ((z & 3) || (z & 8))
-			z += 8;
-	}
-	return z >> 3;
-}
-
-
-/*
  * Conversions.
  */
 
@@ -954,24 +739,23 @@ soft_int2fp(SFP rv, CONSZ l, TWORD f, TWORD t)
 void
 soft_fp2fp(SFP sfp, TWORD t)
 {
-#ifdef DEBUGFP
-//	SF rvsave = *sfp;
-#endif
-	SF rv;
+	SF rv, rv2;
+	MINT m;
+	int e, s, c;
 
-	if (t == DOUBLE) {
-		rv = *sfp;
-		floatx80_to_float64(&rv);
-		float64_to_floatx80(&rv);
-	} else if (t == FLOAT) {
-		rv = *sfp;
-		floatx80_to_float32(&rv);
-//printf("soft_fp2fp: %f\n", (double)*(float *)&rv.debugfp);
-		float32_to_floatx80(&rv);
-//printf("soft_fp2fpX: %Lf\n", rv.debugfp);
-	} else
-		rv = *sfp;
+	MINTDECL(m);
+
 //printf("soft_fp2fp: t %d\n", t);
+	c = LDBLPTR->unmake(sfp, &s, &e, &m);
+//printf("soft_fp2fp2: c %d s %d e %d m %04x%04x %04x%04x\n", 
+//    c, s, e, m.val[3], m.val[2], m.val[1], m.val[0]);
+	fpis[MKSF(t)]->make(&rv2, c, s, e, &m);
+//printf("soft_fp2fp3: rv2 %04x %08x %08x\n", rv2.fp[2], rv2.fp[1], rv2.fp[0]);
+	c = fpis[MKSF(t)]->unmake(&rv2, &s, &e, &m);
+//printf("soft_fp2fp4: c %d s %d e %d m %04x%04x %04x%04x\n", 
+//    c, s, e, m.val[3], m.val[2], m.val[1], m.val[0]);
+	LDBLPTR->make(&rv, c, s, e, &m);
+
 #ifdef DEBUGFP
 	{ long double l = (t == DOUBLE ? (double)sfp->debugfp :
 	    (t == FLOAT ? (float)sfp->debugfp : sfp->debugfp));
@@ -1729,7 +1513,7 @@ uint32_t * soft_toush(SFP sfp, TWORD t, int *nbits)
 void
 fpwarn(const char *s, long double soft, long double hard)
 {
-	extern int nerrors;
+	extern int nerrors, lineno;
 
 	union { long double ld; int i[3]; } X;
 	fprintf(stderr, "WARNING: In function %s: soft=%La hard=%La\n",
@@ -1740,6 +1524,7 @@ fpwarn(const char *s, long double soft, long double hard)
 	    X.i[0], X.i[1], X.i[2]);
 	X.ld=hard;
 	fprintf(stderr, "h[0]=%x h[1]=%x h[2]=%x\n", X.i[0], X.i[1], X.i[2]);
+	fprintf(stderr, "WARNING: lineno %d\n", lineno);
 	nerrors++;
 }
 #endif
