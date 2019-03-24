@@ -78,7 +78,6 @@ extern FPI * fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
 #define	SOFT_ZERO	3
 #define	SOFT_NORMAL	4
 #define	SOFT_SUBNORMAL	5
-int soft_classify(SFP sf, TWORD type);
 #ifdef SFDEBUG
 static char *sftyp[] = { "0", "Inf", "Nan", "Zero", "Normal", "Subnormal" };
 #endif
@@ -97,11 +96,8 @@ void mdump(char *c, MINT *a);
 static int geq(MINT *l, MINT *r);
 static int topbit(MINT *a);
 static void grsround(MINT *a, FPI *);
-//static int mground(MINT *m, int nbits);
 static void mcopy(MINT *b, MINT *a);
 static void mexpand(MINT *a, int minsz);
-
-
 static int mknormal(FPI *, int *e, MINT *m);
 
 /*
@@ -142,13 +138,9 @@ FPI fpi_binary128 = { 113,   1-16383-113+1,
 #endif
 
 #ifdef USE_IEEEFP_32
-#define IEEEFP_32_ZERO(x,s)	((x)->fp[0] = (s << 31))
-#define IEEEFP_32_NAN(x,sign)	((x)->fp[0] = 0x7fc00000 | (sign << 31))
-#define IEEEFP_32_INF(x,sign)	((x)->fp[0] = 0x7f800000 | (sign << 31))
 #define	IEEEFP_32_ISINF(x)	(((x)->fp[0] & 0x7fffffff) == 0x7f800000)
 #define	IEEEFP_32_ISZERO(x)	(((x)->fp[0] & 0x7fffffff) == 0)
 #define	IEEEFP_32_ISNAN(x)	(((x)->fp[0] & 0x7fffffff) == 0x7fc00000)
-#define IEEEFP_32_BIAS	127
 
 static int
 ieee32_classify(SFP sfp)
@@ -235,21 +227,11 @@ FPI fpi_binary32 = {
 #endif
 
 #ifdef USE_IEEEFP_64
-//static SF ieee64_zero = { { { 0, 0, 0 } } };
-#define IEEEFP_64_ZERO(x,s)	((x)->fp[0] = 0, (x)->fp[1] = (s << 31))
-#define IEEEFP_64_NAN(x,sign)	\
-	((x)->fp[0] = 0, (x)->fp[1] = 0x7ff80000 | (sign << 31))
-#define IEEEFP_64_INF(x,sign)	\
-	((x)->fp[0] = 0, (x)->fp[1] = 0x7ff00000 | (sign << 31))
-#define	IEEEFP_64_NEG(x)	(x)->fp[1] ^= 0x80000000
 #define	IEEEFP_64_ISINF(x) ((((x)->fp[1] & 0x7fffffff) == 0x7ff00000) && \
 	    (x)->fp[0] == 0)
-#define	IEEEFP_64_ISINFNAN(x) (((x)->fp[1] & 0x7ff00000) == 0x7ff00000)
 #define	IEEEFP_64_ISZERO(x) ((((x)->fp[1] & 0x7fffffff) == 0) && (x)->fp[0] == 0)
 #define	IEEEFP_64_ISNAN(x) ((((x)->fp[1] & 0x7fffffff) == 0x7ff80000) && \
 	    (x)->fp[0] == 0)
-#define IEEEFP_64_BIAS	1023
-#define	IEEEFP_64_MAXMINT	2048+64+16 /* exponent + subnormal + guard */
 
 static int
 ieee64_classify(SFP sfp)
@@ -339,30 +321,13 @@ FPI fpi_binary64 = {
 #endif
 
 #ifdef USE_IEEEFP_X80
-#define IEEEFP_X80_NAN(x,s)	\
-	((x)->fp[0] = 0, (x)->fp[1] = 0xc0000000, (x)->fp[2] = 0x7fff | ((s) << 15))
-#define IEEEFP_X80_INF(x,s)	\
-	((x)->fp[0] = 0, (x)->fp[1] = 0x80000000, (x)->fp[2] = 0x7fff | ((s) << 15))
-#define IEEEFP_X80_ZERO(x,s)	\
-	((x)->fp[0] = (x)->fp[1] = 0, (x)->fp[2] = (s << 15))
 #define	IEEEFP_X80_NEG(x)	(x)->fp[2] ^= 0x8000
 #define	IEEEFP_X80_ISINF(x) ((((x)->fp[2] & 0x7fff) == 0x7fff) && \
 	((x)->fp[1] == 0x80000000) && (x)->fp[0] == 0)
-#define	IEEEFP_X80_ISINFNAN(x) (((x)->fp[2] & 0x7fff) == 0x7fff)
 #define	IEEEFP_X80_ISZERO(x) ((((x)->fp[2] & 0x7fff) == 0) && \
 	((x)->fp[1] | (x)->fp[0]) == 0)
 #define	IEEEFP_X80_ISNAN(x) ((((x)->fp[2] & 0x7fff) == 0x7fff) && \
 	(((x)->fp[1] != 0x80000000) || (x)->fp[0] == 0))
-#define IEEEFP_X80_BIAS	16383
-#define	IEEEFP_X80_MAXMINT	32768+64+16 /* exponent + subnormal + guard */
-#define IEEEFP_X80_MAKE(x, sign, exp, mant)	\
-	((x)->fp[0] = mant >> 1, (x)->fp[1] = (mant >> 33) | \
-	    (exp ? (1 << 31) : 0), \
-	    (x)->fp[2] = (exp & 0x7fff) | (sign << 15))
-#define IEEEFP_X80_MAKE2(x, sign, exp, mant)	\
-	((x)->fp[0] = mant[0], (x)->fp[1] = mant[1], \
-	    (x)->fp[2] = (exp & 0x7fff) | (sign << 15))
-
 
 static int
 ieeex80_classify(SFP sfp)
@@ -469,45 +434,7 @@ FPI fpi_binaryx80 = {
 #define FPI_DOUBLE	C(DBL_PREFIX,_FPI)
 #define FPI_LDOUBLE	C(LDBL_PREFIX,_FPI)
 
-#define	LDOUBLE_NAN	C(LDBL_PREFIX,_NAN)
-#define	LDOUBLE_INF	C(LDBL_PREFIX,_INF)
-#define	LDOUBLE_ZERO	C(LDBL_PREFIX,_ZERO)
 #define	LDOUBLE_NEG	C(LDBL_PREFIX,_NEG)
-#define	LDOUBLE_ISINF	C(LDBL_PREFIX,_ISINF)
-#define	LDOUBLE_ISNAN	C(LDBL_PREFIX,_ISNAN)
-#define	LDOUBLE_ISINFNAN	C(LDBL_PREFIX,_ISINFNAN)
-#define	LDOUBLE_ISZERO	C(LDBL_PREFIX,_ISZERO)
-#define	LDOUBLE_BIAS	C(LDBL_PREFIX,_BIAS)
-#define	LDOUBLE_MAKE	C(LDBL_PREFIX,_MAKE)
-#define	LDOUBLE_MAKE2	C(LDBL_PREFIX,_MAKE2)
-#define	LDOUBLE_MAXMINT	C(LDBL_PREFIX,_MAXMINT)
-#define	LDOUBLE_SIGN	C(LDBL_PREFIX,_SIGN)
-
-#define	DOUBLE_NAN	C(DBL_PREFIX,_NAN)
-#define	DOUBLE_INF	C(DBL_PREFIX,_INF)
-#define	DOUBLE_ZERO	C(DBL_PREFIX,_ZERO)
-#define	DOUBLE_NEG	C(DBL_PREFIX,_NEG)
-#define	DOUBLE_ISINF	C(DBL_PREFIX,_ISINF)
-#define	DOUBLE_ISNAN	C(DBL_PREFIX,_ISNAN)
-#define	DOUBLE_ISZERO	C(DBL_PREFIX,_ISZERO)
-#define	DOUBLE_BIAS	C(DBL_PREFIX,_BIAS)
-#define	DOUBLE_TOOLARGE	C(DBL_PREFIX,_TOOLARGE)
-#define	DOUBLE_TOOSMALL	C(DBL_PREFIX,_TOOSMALL)
-#define	DOUBLE_MAKE	C(DBL_PREFIX,_MAKE)
-#define	DOUBLE_MAXMINT	C(DBL_PREFIX,_MAXMINT)
-
-#define	FLOAT_NAN	C(FLT_PREFIX,_NAN)
-#define	FLOAT_INF	C(FLT_PREFIX,_INF)
-#define	FLOAT_ZERO	C(FLT_PREFIX,_ZERO)
-#define	FLOAT_NEG	C(FLT_PREFIX,_NEG)
-#define	FLOAT_ISINF	C(FLT_PREFIX,_ISINF)
-#define	FLOAT_ISNAN	C(FLT_PREFIX,_ISNAN)
-#define	FLOAT_ISZERO	C(FLT_PREFIX,_ISZERO)
-#define	FLOAT_BIAS	C(FLT_PREFIX,_BIAS)
-#define	FLOAT_TOOLARGE	C(FLT_PREFIX,_TOOLARGE)
-#define	FLOAT_TOOSMALL	C(FLT_PREFIX,_TOOSMALL)
-#define	FLOAT_MAKE	C(FLT_PREFIX,_MAKE)
-
 
 FPI * fpis[3] = {
 	&FPI_FLOAT,
@@ -524,30 +451,6 @@ FPI * fpis[3] = {
  * QNAN:	Exponent all 1, mantissa MSB 1 (indeterminate)
  * SNAN:	Exponent all 1, mantissa MSB 0 (invalid)
  */
-
-#define	LX(x,n)	((uint64_t)(x)->fp[n] << n*32)
-
-#ifdef USE_IEEEFP_X80
-/*
- * Get long double mantissa without hidden bit.
- * Hidden bit is expected to be at position 65.
- */
-static uint64_t
-ldouble_mant(SFP sfp)
-{
-	uint64_t rv;
-
-	rv = (LX(sfp,0) | LX(sfp,1)) << 1; /* XXX */
-	return rv;
-}
-
-#define	ldouble_exp(x)	((x)->fp[2] & 0x7FFF)
-#define	ldouble_sign(x)	(((x)->fp[2] >> 15) & 1)
-#elif defined(USE_IEEEFP_64)
-#define	ldouble_mant double_mant
-#define	ldouble_exp double_exp
-#define	ldouble_sign double_sign
-#endif
 
 /*
  * Create correct floating point values for f.
@@ -641,15 +544,6 @@ grsround(MINT *m, FPI *f)
 		}
 	}
 }
-
-
-#define	double_mant(x)	(((uint64_t)(x)->fp[1] << 44) | ((uint64_t)(x)->fp[0] << 12))
-#define	double_exp(x)	(((x)->fp[1] >> 20) & 0x7fff)
-#define	double_sign(x)	(((x)->fp[1] >> 31) & 1)
-
-#define	float_mant(x)	((uint64_t)((x)->fp[0] & 0x7fffff) << 41)
-#define	float_exp(x)	(((x)->fp[0] >> 23) & 0xff)
-#define	float_sign(x)	(((x)->fp[0] >> 31) & 1)
 
 /*
  * Return highest set bit in a.  
@@ -1010,142 +904,91 @@ soft_isz(SFP sfp)
 	return r;
 }
 
+#define	SFLEFTLESS	1	
+#define	SFLEFTEQ	2	
+#define	SFLEFTGTR	3
+
 /*
- * Do classification as in C99 7.12.3, for internal use.
- * No subnormal yet.
+ * compare classes if both not normal.
+ * classes here are: SOFT_INFINITE, SOFT_ZERO, SOFT_NORMAL.
  */
-int
-soft_classify(SFP sfp, TWORD t)
-{
-	int rv = 0;
-
-	switch (t) {
-	case FLOAT:
-		if (FLOAT_ISINF(sfp))
-			rv = SOFT_INFINITE;
-		else if (FLOAT_ISNAN(sfp))
-			rv = SOFT_NAN;
-		else if (FLOAT_ISZERO(sfp))
-			rv = SOFT_ZERO;
-		else
-			rv = SOFT_NORMAL;
-		break;
-
-	case DOUBLE:	
-		if (DOUBLE_ISINF(sfp))
-			rv = SOFT_INFINITE;
-		else if (DOUBLE_ISNAN(sfp))
-			rv = SOFT_NAN;
-		else if (DOUBLE_ISZERO(sfp))
-			rv = SOFT_ZERO;
-		else
-			rv = SOFT_NORMAL;
-		break;
-
-	case LDOUBLE:
-		if (LDOUBLE_ISINF(sfp))
-			rv = SOFT_INFINITE;
-		else if (LDOUBLE_ISNAN(sfp))
-			rv = SOFT_NAN;
-		else if (LDOUBLE_ISZERO(sfp))
-			rv = SOFT_ZERO;
-		else
-			rv = SOFT_NORMAL;
-		break;
-	}
-	return rv;
-}
-
 static int
-soft_cmp_eq(SFP x1, SFP x2)
+soft_clcmp(int c1, int c2, int s1, int s2)
 {
-	int s1, s2, e1, e2;
-	uint64_t m1, m2;
+	if (c1 == SOFT_INFINITE && c2 == SOFT_INFINITE)
+		return s1 == s2 ? SFLEFTEQ : s1 ? SFLEFTLESS : SFLEFTGTR;
+	if (c1 == SOFT_ZERO && c2 == SOFT_ZERO)
+		return SFLEFTEQ;
 
-	s1 = ldouble_sign(x1);
-	s2 = ldouble_sign(x2);
-	e1 = ldouble_exp(x1);
-	e2 = ldouble_exp(x2);
-	m1 = ldouble_mant(x1);
-	m2 = ldouble_mant(x2);
+	if (c1 == SOFT_INFINITE)
+		return s1 ? SFLEFTLESS : SFLEFTGTR;
 
-	if (e1 == 0 && e2 == 0 && m1 == 0 && m2 == 0)
-		return 1; /* special case: +0 == -0 (discard sign) */
-	if (s1 != s2)
-		return 0;
-	if (e1 == e2 && m1 == m2)
-		return 1;
+	if (c1 == SOFT_ZERO)
+		return s1 ? SFLEFTLESS : SFLEFTGTR;
+
+	if (c1 == SOFT_NORMAL) {
+		if (c2 == SOFT_INFINITE)
+			return s2 ? SFLEFTGTR : SFLEFTLESS;
+		return s1 ? SFLEFTLESS : SFLEFTGTR;
+
+	}
 	return 0;
-}
-
-/*
- * Is x1 greater/less than x2?
- */
-static int
-soft_cmp_gl(SFP x1, SFP x2, int isless)
-{
-	uint64_t mant1, mant2;
-	int s2, rv;
-
-	/* Both zero -> not greater */
-	if (LDOUBLE_ISZERO(x1) && LDOUBLE_ISZERO(x2))
-		return 0;
-
-	/* one negative -> return x2 sign */
-	if (ldouble_sign(x1) + (s2 = ldouble_sign(x2)) == 1)
-		return isless ? !s2 : s2;
-
-	/* check exponent */
-	if (ldouble_exp(x1) > ldouble_exp(x2)) {
-		rv = isless ? 0 : 1;
-	} else if (ldouble_exp(x1) < ldouble_exp(x2)) {
-		rv = isless ? 1 : 0;
-	} else {
-
-		/* exponent equal, check mantissa */
-		mant1 = ldouble_mant(x1);
-		mant2 = ldouble_mant(x2);
-		if (mant1 == mant2)
-			return 0; /* same number */
-		if (mant1 > mant2) {
-			rv = isless ? 0 : 1;
-		} else /* if (mant1 < mant2) */
-			rv = isless ? 1 : 0;
-	}
-
-	/* if both negative, invert rv */
-	if (s2)
-		rv ^= 1;
-	return rv;
 }
 
 int
 soft_cmp(SFP v1p, SFP v2p, int v)
 {
-	int rv = 0;
+	MINT m1, m2;
+	int c1, c2, s1, s2, e1, e2;
+	int xrv, yrv, i;
 
-	if (LDOUBLE_ISNAN(v1p) || LDOUBLE_ISNAN(v2p))
-		return 0; /* never equal */
+	MINTDECL(m1);
+	MINTDECL(m2);
 
-	switch (v) {
-	case GT:
-	case LT:
-		rv = soft_cmp_gl(v1p, v2p, v == LT);
-		break;
-	case GE:
-	case LE:
-		if ((rv = soft_cmp_eq(v1p, v2p)))
-			break;
-		rv = soft_cmp_gl(v1p, v2p, v == LE);
-		break;
-	case EQ:
-		rv = soft_cmp_eq(v1p, v2p);
-		break;
-	case NE:
-		rv = !soft_cmp_eq(v1p, v2p);
-		break;
+	c1 = LDBLPTR->unmake(v1p, &s1, &e1, &m1);
+	c2 = LDBLPTR->unmake(v2p, &s2, &e2, &m2);
+
+	if (c1 != SOFT_NORMAL || c2 != SOFT_NORMAL) {
+		if (c1 == SOFT_NAN || c2 == SOFT_NAN)
+			return 0; /* never anything */
+		xrv = soft_clcmp(c1, c2, s1, s2);
+	} else {
+		/* both are NORMAL */
+//printf("s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2);
+		if (s1 > s2) {
+			xrv = SFLEFTLESS;
+		} else if (s1 < s2) {
+			xrv = SFLEFTGTR;
+		} else if (e1 > e2) {
+			xrv = SFLEFTGTR;
+		} else if (e1 < e2) {
+			xrv = SFLEFTLESS;
+		} else {
+			for (i = m1.len-1; i >= 0; i--) {
+				if (m1.val[i] > m2.val[i]) {
+					xrv = s1 ? SFLEFTLESS : SFLEFTGTR;
+					break;
+				} else if (m1.val[i] < m2.val[i]) {
+					xrv = s1 ? SFLEFTGTR : SFLEFTLESS;
+					break;
+				}
+			}
+			if (i < 0)
+				xrv = SFLEFTEQ;
+		}
 	}
-	return rv;
+
+	yrv = 0;
+	switch (v) {
+	case GT: yrv = xrv == SFLEFTGTR; break;
+	case LT: yrv = xrv == SFLEFTLESS; break;
+	case GE: yrv = xrv == SFLEFTGTR || xrv == SFLEFTEQ; break;
+	case LE: yrv = xrv == SFLEFTLESS || xrv == SFLEFTEQ; break;
+	case EQ: yrv = xrv == SFLEFTEQ; break;
+	case NE: yrv = xrv != SFLEFTEQ; break;
+	}
+
+	return yrv;
 }
 
 static void
