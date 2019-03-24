@@ -130,8 +130,6 @@ void soft_mul(SFP, SFP, TWORD);
 void soft_div(SFP, SFP, TWORD);
 int soft_cmp(SF*, SF*, int);
 int soft_isz(SF*);
-CONSZ soft_signbit(SF sf);
-int soft_isnan(SF sf);
 void soft_huge_val(SFP);
 void soft_nan(SFP, char *);
 uint32_t *soft_toush(SFP, TWORD, int *);
