@@ -767,35 +767,45 @@ soft_fp2fp(SFP sfp, TWORD t)
 CONSZ
 soft_fp2int(SFP sfp, TWORD t)
 {
-	uint64_t mant;
-	int exp;
+	U_CONSZ rv;
+	MINT m;
+	int c, s, e;
 
-	if (soft_classify(sfp, LDOUBLE) != SOFT_NORMAL)
+	MINTDECL(m);
+
+	c = LDBLPTR->unmake(sfp, &s, &e, &m);
+	if (c != SOFT_NORMAL)
 		return 0;
-	
-	exp = ldouble_exp(sfp) - LDOUBLE_BIAS - 64 + 1;
-	mant = ldouble_mant(sfp);
-	mant = (mant >> 1) | (1LL << 63);
-	while (exp > 0)
-		mant <<= 1, exp--;
-	while (exp < 0)
-		mant >>= 1, exp++;
 
-	if (ldouble_sign(sfp))
-		mant = -(int64_t)mant;
+	rv = m.val[0];
+	if (m.len > 1)
+		rv |= ((CONSZ)m.val[1] << 16);
+	if (m.len > 2)
+		rv |= ((CONSZ)m.val[2] << 32);
+	if (m.len > 3)
+		rv |= ((CONSZ)m.val[3] << 48);
+
+	e = e - LDBLPTR->nbits + 1;
+	while (e > 0)
+		rv <<= 1, e--;
+	while (e < 0)
+		rv >>= 1, e++;
+	if (s)
+		rv = -rv;
+
 #ifdef DEBUGFP
 	{ uint64_t u = (uint64_t)sfp->debugfp;
-	  int64_t s = (int64_t)sfp->debugfp;
+	  int64_t ss = (int64_t)sfp->debugfp;
 		if (ISUNSIGNED(t)) {
-			if (u != mant)
+			if (u != (U_CONSZ)rv)
 				fpwarn("soft_fp2int:u", 0.0, sfp->debugfp);
 		} else {
-			if (s != (int64_t)mant)
+			if (ss != (int64_t)rv)
 				fpwarn("soft_fp2int:s", 0.0, sfp->debugfp);
 		}
 	}
 #endif
-	return mant;
+	return rv;
 }
 
 
