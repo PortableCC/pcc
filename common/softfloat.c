@@ -65,7 +65,8 @@ typedef struct FPI {
 	int (*classify)(SFP sfp);
 } FPI;
 
-extern FPI * fpis[3];	/* FLOAT, DOUBLE, LDOUBLE, respectively */
+FPI *fpis[3] = DEFAULT_FPI_DEFS; /* FLOAT, DOUBLE, LDOUBLE, respectively */
+
 #define	LDBLPTR	fpis[SF_LDOUBLE]
 
 #define MKSF(t)		((t)-FLOAT)
@@ -106,7 +107,6 @@ static int mknormal(FPI *, int *e, MINT *m);
  */
 
 #ifdef FDFLOAT
-#define FFLOAT_FPI	fpi_ffloat
 FPI fpi_ffloat = { 
 	.nbits = FFLOAT_MANT_DIG,  
 	.storage = 32,
@@ -115,7 +115,6 @@ FPI fpi_ffloat = {
 	.expadj = 0,
 };
 
-#define DFLOAT_FPI	fpi_dfloat
 FPI fpi_dfloat = { 
 	.nbits = DFLOAT_MANT_DIG,  
 	.storage = 32,
@@ -209,7 +208,6 @@ ieee32_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	return v;
 }
 
-#define IEEEFP_32_FPI	fpi_binary32
 FPI fpi_binary32 = { 
 	.nbits = IEEEFP_32_MANT_DIG,  
 	.storage = 32,
@@ -303,7 +301,6 @@ ieee64_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 	SD(("ieee64_make3: fp %08x %08x\n", sfp->fp[1], sfp->fp[0]));
 }
 
-#define IEEEFP_64_FPI	fpi_binary64
 FPI fpi_binary64 = {
 	.nbits = IEEEFP_64_MANT_DIG,
 	.storage = 64,
@@ -408,7 +405,6 @@ ieeex80_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	return v;
 }
 
-#define IEEEFP_X80_FPI	fpi_binaryx80
 /* IEEE double extended in its usual form, for example Intel 387 */
 FPI fpi_binaryx80 = {
 	.nbits = IEEEFP_X80_MANT_DIG,
@@ -435,12 +431,6 @@ FPI fpi_binaryx80 = {
 #define FPI_LDOUBLE	C(LDBL_PREFIX,_FPI)
 
 #define	LDOUBLE_NEG	C(LDBL_PREFIX,_NEG)
-
-FPI * fpis[3] = {
-	&FPI_FLOAT,
-	&FPI_DOUBLE,
-	&FPI_LDOUBLE
-};
 
 
 /*
