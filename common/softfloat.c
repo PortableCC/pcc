@@ -44,6 +44,7 @@ int sfdebug;
 #define	SD(x)	if (sfdebug) printf x
 #else
 #define SD(x)
+#define sfp2ld(x) (x)->debugfp
 #endif
 
 /*
@@ -66,7 +67,6 @@ typedef struct FPI {
 } FPI;
 
 FPI *fpis[3] = DEFAULT_FPI_DEFS; /* FLOAT, DOUBLE, LDOUBLE, respectively */
-
 #define	LDBLPTR	fpis[SF_LDOUBLE]
 
 #define MKSF(t)		((t)-FLOAT)
@@ -107,20 +107,140 @@ static int mknormal(FPI *, int *e, MINT *m);
  */
 
 #ifdef FDFLOAT
+static void
+ffloat_make(SFP sfp, int typ, int sign, int exp, MINT *m)
+{
+	sfp->fp[0] = (sign << 15);
+
+	SD(("ffloat_make: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	   sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	if (typ == SOFT_NORMAL)
+		typ = mknormal(&fpi_ffloat, &exp, m);
+
+	SD(("ffloat_make2: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	    sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	switch (typ) {
+	case SOFT_ZERO:
+		break;
+	case SOFT_INFINITE:
+		sfp->fp[0] |= 0xffff7fff; /* highest possible number */
+		break;
+	case SOFT_NAN:
+		sfp->fp[0] |= 0x00008000; /* signal */
+		break;
+	case SOFT_NORMAL:
+		exp += (fpi_ffloat.bias-1);
+		sfp->fp[0] |= (exp & 0xff) << 7;
+		sfp->fp[0] += m->val[1] + ((uint32_t)m->val[0] << 16);
+		break;
+	case SOFT_SUBNORMAL:
+		break; /* no subnormal */
+	}
+	SD(("ffloat_make3: fp %08x\n", sfp->fp[0]));
+	
+}
+
+static int
+ffloat_unmake(SFP sfp, int *sign, int *exp, MINT *m)
+{
+	*sign = (sfp->fp[0] >> 15) & 1;
+	*exp = ((sfp->fp[0] >> 7) & 0xff) - fpi_ffloat.bias;
+	minit(m, sfp->fp[0] >> 16);
+	m->val[1] = (sfp->fp[0] & 0x7f) | (1 << 7);
+	m->len = 2;
+	return (sfp->fp[0] == 0xffff7fff ? SOFT_INFINITE : SOFT_NORMAL);
+}
+
 FPI fpi_ffloat = { 
 	.nbits = FFLOAT_MANT_DIG,  
 	.storage = 32,
         .bias = 128,
-	.maxexp = FFLOAT_MAX_EXP,
+	.minexp = FFLOAT_MIN_EXP-1,
+	.maxexp = FFLOAT_MAX_EXP-1,
 	.expadj = 0,
+
+	.make = ffloat_make,
+	.unmake = ffloat_unmake,
 };
+
+static int
+dfloat_classify(SFP sfp)
+{
+	uint32_t val = sfp->fp[0] & 0xffff7fff;
+
+	if (val == 0xffff7fff && sfp->fp[1] == 0xffffffff)
+		return SOFT_INFINITE;
+	if ((val & 0x00007f80) == 0)
+		return SOFT_ZERO;
+	return SOFT_NORMAL;
+}
+
+static void
+dfloat_make(SFP sfp, int typ, int sign, int exp, MINT *m)
+{
+	sfp->fp[0] = (sign << 15);
+
+	SD(("dfloat_make: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	   sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	if (typ == SOFT_NORMAL)
+		typ = mknormal(&fpi_dfloat, &exp, m);
+
+	SD(("dfloat_make2: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	    sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	switch (typ) {
+	case SOFT_ZERO:
+		sfp->fp[0] = 0;
+		break;
+	case SOFT_INFINITE:
+		sfp->fp[0] |= 0xffff7fff; /* highest possible number */
+		sfp->fp[1] = 0xffffffff; /* highest possible number */
+		break;
+	case SOFT_NAN:
+		sfp->fp[0] |= 0x00008000; /* signal */
+		sfp->fp[1] = 0;
+		break;
+	case SOFT_NORMAL:
+		exp += (fpi_dfloat.bias-1);
+		sfp->fp[0] |= (exp & 0xff) << 7;
+		sfp->fp[0] += m->val[3] + ((uint32_t)m->val[2] << 16);
+		sfp->fp[1] = m->val[1] + ((uint32_t)m->val[0] << 16);
+		break;
+	case SOFT_SUBNORMAL:
+		break; /* no subnormal */
+	}
+	SD(("dfloat_make3: fp %08x %08x\n", sfp->fp[0], sfp->fp[1]));
+	
+}
+
+static int
+dfloat_unmake(SFP sfp, int *sign, int *exp, MINT *m)
+{
+	int t = dfloat_classify(sfp);
+
+	SD(("dfloat_unmake1: fp %08x %08x\n", sfp->fp[0], sfp->fp[1]));
+	*sign = (sfp->fp[0] >> 15) & 1;
+	*exp = ((sfp->fp[0] >> 7) & 0xff) - fpi_dfloat.bias;
+	minit(m, sfp->fp[1] >> 16);
+	m->val[1] = sfp->fp[1];
+	m->val[2] = (sfp->fp[0] >> 16);
+	m->val[3] = (sfp->fp[0] & 0x7f) | (1 << 7);
+	m->len = 4;
+	SD(("dfloat_unmake2: typ %s sign %d exp %d M 0x%04x%04x %04x%04x\n",
+	    sftyp[t], *sign, *exp, m->val[3], m->val[2], m->val[1], m->val[0]));
+	return t;
+}
 
 FPI fpi_dfloat = { 
 	.nbits = DFLOAT_MANT_DIG,  
-	.storage = 32,
+	.storage = 64,
         .bias = 128,
-	.maxexp = DFLOAT_MAX_EXP,
+	.minexp = DFLOAT_MIN_EXP-1,
+	.maxexp = DFLOAT_MAX_EXP-1,
 	.expadj = 0,
+
+	.make = dfloat_make,
+	.unmake = dfloat_unmake,
+	.classify = dfloat_classify,
 };
 #endif
 
@@ -431,7 +551,6 @@ FPI fpi_binaryx80 = {
 #define FPI_LDOUBLE	C(LDBL_PREFIX,_FPI)
 
 #define	LDOUBLE_NEG	C(LDBL_PREFIX,_NEG)
-
 
 /*
  * IEEE specials:
@@ -751,8 +870,8 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 	LDBLPTR->make(&rv, c1, s1, ediff > 0 ? e1 : e2, &a);
 
 #ifdef DEBUGFP
-	if (x1p->debugfp + x2p->debugfp != rv.debugfp)
-		fpwarn("soft_plus", rv.debugfp, x1p->debugfp + x2p->debugfp);
+	if (sfp2ld(x1p) + sfp2ld(x2p) != sfp2ld(&rv))
+		fpwarn("soft_plus", sfp2ld(&rv), sfp2ld(x1p) + sfp2ld(x2p));
 #endif
 	*x1p = rv;
 }
@@ -1263,16 +1382,16 @@ strtosf(SFP sfp, char *str, TWORD tw)
 	MINTDECL(m);
 
 	rv = str2num(str, &e, &m, fpis[/*MKSF(tw)*/ 2]);
-	SD(("strtosf: rv %d, expt %d, m[0] %04x, bits[1] %04x\n",
-	    rv, e, m.val[0], m.val[1]));
+	SD(("strtosf: rv %d, expt %d, m %04x%04x, %04x%04x\n",
+	    rv, e, m.val[3], m.val[2], m.val[1], m.val[0]));
 
 	LDBLPTR->make(sfp, rv, 0, e, &m);
 
 #ifdef DEBUGFP
 	{
 		long double ld = strtold(str, NULL);
-		if (ld != sfp->debugfp)
-			fpwarn("strtosf", sfp->debugfp, ld);
+		if (ld != sfp2ld(sfp))
+			fpwarn("strtosf", sfp2ld(sfp), ld);
 	}
 #endif
 }
@@ -1330,8 +1449,8 @@ uint32_t * soft_toush(SFP sfp, TWORD t, int *nbits)
 
 #ifdef DEBUGFP
 	{ float ldf; double ldd; long double ldt;
-	ldt = (t == FLOAT ? (float)sfp->debugfp :
-	    t == DOUBLE ? (double)sfp->debugfp : (long double)sfp->debugfp);
+	ldt = (t == FLOAT ? (float)sfp2ld(sfp) :
+	    t == DOUBLE ? (double)sfp2ld(sfp) : (long double)sfp2ld(sfp));
 	ldf = ldt;
 	ldd = ldt;
 	if (t == FLOAT && memcmp(&ldf, &sf.debugfp, sizeof(float)))
