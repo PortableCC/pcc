@@ -438,7 +438,6 @@ FPI fpi_binary64 = {
 #endif
 
 #ifdef USE_IEEEFP_X80
-#define	IEEEFP_X80_NEG(x)	(x)->fp[2] ^= 0x8000
 #define	IEEEFP_X80_ISINF(x) ((((x)->fp[2] & 0x7fff) == 0x7fff) && \
 	((x)->fp[1] == 0x80000000) && (x)->fp[0] == 0)
 #define	IEEEFP_X80_ISZERO(x) ((((x)->fp[2] & 0x7fff) == 0) && \
@@ -549,8 +548,6 @@ FPI fpi_binaryx80 = {
 #define FPI_FLOAT	C(FLT_PREFIX,_FPI)
 #define FPI_DOUBLE	C(DBL_PREFIX,_FPI)
 #define FPI_LDOUBLE	C(LDBL_PREFIX,_FPI)
-
-#define	LDOUBLE_NEG	C(LDBL_PREFIX,_NEG)
 
 /*
  * IEEE specials:
@@ -822,7 +819,13 @@ soft_fp2int(SFP sfp, TWORD t)
 void
 soft_neg(SFP sfp)
 {
-	LDOUBLE_NEG(sfp);
+	MINT m;
+	int c, s, e;
+
+	MINTDECL(m);
+	c = LDBLPTR->unmake(sfp, &s, &e, &m);
+	s = !s;
+	LDBLPTR->make(sfp, c, s, e, &m);
 }
 
 void
@@ -879,7 +882,7 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 void
 soft_minus(SFP x1, SFP x2, TWORD t)
 {
-	LDOUBLE_NEG(x2);
+	soft_neg(x2);
 	return soft_plus(x1, x2, t);
 }
 
