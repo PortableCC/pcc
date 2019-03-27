@@ -309,3 +309,4 @@ extern int mcmodel;
 #define DBL_PREFIX      IEEEFP_64
 #define USE_IEEEFP_X80
 #define LDBL_PREFIX     IEEEFP_X80
+#define DEFAULT_FPI_DEFS { &fpi_binary32, &fpi_binary64, &fpi_binaryx80 }
