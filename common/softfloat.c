@@ -922,13 +922,13 @@ soft_mul(SFP x1p, SFP x2p, TWORD t)
 	} else {
 		mult(&m1, &m2, &a);
 		ee = topbit(&a) - (2 * (LDBLPTR->nbits-1));
-		e1 += (e2 + ee);
+		e1 += (e2 + ee) -1 + LDBLPTR->expadj;
 		s1 = s1 != s2;
 	}
 	LDBLPTR->make(&rv, c1, s1, e1, &a);
 #ifdef DEBUGFP
-	if (x1p->debugfp * x2p->debugfp != rv.debugfp)
-		fpwarn("soft_mul", rv.debugfp, x1p->debugfp * x2p->debugfp);
+	if (sfp2ld(x1p) * sfp2ld(x2p) != sfp2ld(&rv))
+		fpwarn("soft_mul", sfp2ld(&rv), sfp2ld(x1p) * sfp2ld(x2p));
 #endif
         *x1p = rv;
 }
@@ -984,15 +984,16 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 
 		grsround(&f, LDBLPTR);
 		s1 = s1 != s2;
-		e1 = (e1 - e2 + sh);
+		e1 = (e1 - e2 + sh) + 1 - LDBLPTR->expadj;
 	}
 	SD(("soft_div2: c1 %d s1 %d e1 %d\n", c1, s1, e1));
 	LDBLPTR->make(&rv, c1, s1, e1, &f);
 
 #ifdef DEBUGFP
-	{ long double ldd = x1p->debugfp / x2p->debugfp;
-	if (memcmp(&ldd, &rv.debugfp, SZLD))
-		fpwarn("soft_div", rv.debugfp, ldd);
+	{ long double ldd = sfp2ld(x1p) / sfp2ld(x2p);
+	  long double sp = sfp2ld(&rv);
+	if (memcmp(&ldd, &sp, SZLD))
+		fpwarn("soft_div", sfp2ld(&rv), ldd);
 	}
 #endif
 	*x1p = rv;
