@@ -782,7 +782,7 @@ fsrch(const usch *fn, int idx, struct incs *w)
 		if (i > idx)
 			w = incdir[i];
 		for (; w; w = w->next) {
-			int len = strlen((char *)w->dir) + strlen((char *)fn) + 2; /* '/' + \0 */
+			size_t len = strlen((char *)w->dir) + strlen((char *)fn) + 2; /* '/' + \0 */
 			char *f = xmalloc(len);
 			snprintf(f, len, "%s/%s", w->dir, fn);
 			if (pushfile((usch *)f, fn, i, w->next) == 0)
