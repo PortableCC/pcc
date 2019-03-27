@@ -256,6 +256,7 @@ static int compile_input(char *input, char *output);
 static int assemble_input(char *input, char *output);
 static int run_linker(void);
 static int strlist_exec(struct strlist *l);
+static char *select_linker(char *);
 
 char *cat(const char *, const char *);
 char *setsuf(char *, char);
@@ -625,6 +626,12 @@ main(int argc, char *argv[])
 			} else if (match(u, "stack-protector") ||
 			    match(u, "stack-protector-all")) {
 				sspflag = j ? 0 : 1;
+			} else if (match(u, "use-ld=")) {
+				/* ignore nonsense -fno-use-ld=* command */
+				if (j)
+					break;
+				u += 7;
+				ld = select_linker(u);
 			}
 			/* silently ignore the rest */
 			break;
@@ -1394,6 +1401,28 @@ run_linker(void)
 	strlist_free(&linker_flags);
 	return retval;
 }
+
+static char *
+select_linker(char *name)
+{
+	static char ld_name[8];
+ 
+	/* Short names first.  */
+	if (strcmp(name, "bfd") == 0 ||
+	    strcmp(name, "gold") == 0 ||
+	    strcmp(name, "lld") == 0) {
+		snprintf(ld_name, sizeof ld_name, "ld.%s", name);
+		return ld_name;
+	}
+ 
+	/* Must be absolute path otherwise.  */
+	if (name[0] != '/')
+		return LINKER;
+ 
+	return name;
+}
+
+
 
 static char *cxxt[] = { "cc", "cp", "cxx", "cpp", "CPP", "c++", "C" };
 int
