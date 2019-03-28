@@ -340,8 +340,6 @@ FPI fpi_binary32 = {
 	.unmake = ieee32_unmake,
 	.classify = ieee32_classify,
 };
-#else
-#error need float definition
 #endif
 
 #ifdef USE_IEEEFP_64
@@ -433,8 +431,6 @@ FPI fpi_binary64 = {
 	.unmake = ieee64_unmake,
 	.classify = ieee64_classify,
 };      
-#else
-#error need double definition
 #endif
 
 #ifdef USE_IEEEFP_X80
