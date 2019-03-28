@@ -33,6 +33,7 @@
 #define	CPPADD	{ "-D__BSD2_11__", "-DBSD2_11", NULL }
 
 /* host-dependent */
+#define CRT0		"/lib/crt0.o"
 #define CRTBEGIN	0
 #define CRTEND		0
 #define CRTI		0
@@ -44,8 +45,21 @@
 
 #if defined(mach_pdp11)
 #define	CPPMDADD { "-D__pdp11__", "-Dpdp11", NULL, }
+#define DEFLIBS { "-lc", 0 }
 #elif defined(mach_nova)
 #define	CPPMDADD { "-D__nova__", "-Dnova", NULL, }
 #else
 #error defines for arch missing
 #endif
+
+#define PCC_EARLY_AS_ARGS		\
+	strlist_append(&args, "-V");	\
+	strlist_append(&args, "-u");
+
+#define	NO_AS_V
+#define NO_LD_D
+
+#define PCC_SETUP_LD_ARGS				\
+	strlist_append(&early_linker_flags, "-X");
+#define STARTLABEL      "start"
+
