@@ -1320,9 +1320,9 @@ assemble_input(char *input, char *output)
 	PCC_EARLY_AS_ARGS
 #endif
 	strlist_append_list(&args, &assembler_flags);
-	strlist_append(&args, input);
 	strlist_append(&args, "-o");
 	strlist_append(&args, output);
+	strlist_append(&args, input);
 	strlist_prepend(&args,
 	    find_file(as, &progdirs, X_OK));
 #ifdef PCC_LATE_AS_ARGS
@@ -1965,7 +1965,7 @@ struct flgcheck asflgcheck[] = {
 #if defined(os_darwin)
 	{ &Bstatic, 1, "-static" },
 #endif
-#if !defined(USE_YASM)
+#if !defined(USE_YASM) && !defined(NO_AS_V)
 	{ &vflag, 1, "-v" },
 #endif
 #if defined(os_openbsd) && defined(mach_mips64)
