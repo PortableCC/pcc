@@ -626,13 +626,8 @@ findops(NODE *p, int cookie)
 
 	sh = -1;
 
-#ifdef mach_pdp11
-	if (cookie == FORCC && p->n_op != AND)	/* XXX - fix */
-		cookie = INREGS;
-#else
 	if (cookie == FORCC)
 		cookie = INREGS;
-#endif
 
 	sh = shswitch(sh, p->n_left, qq->lshape, cookie,
 	    qq->rewrite & RLEFT, gol);
