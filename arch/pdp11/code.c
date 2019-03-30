@@ -156,6 +156,8 @@ ejobcode(int flag)
 void
 bjobcode(void)
 {
+	/* ".word" is not printed out for pdp11 as */
+	astypnames[INT] = astypnames[UNSIGNED] = "";
 }
 
 /*

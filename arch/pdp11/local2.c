@@ -590,11 +590,13 @@ fixops(NODE *p, void *arg)
 		p->n_right = mkunode(UMINUS, p->n_right, 0, p->n_right->n_type);
 		p->n_op = LS;
 		break;
+#if 0
 	case EQ:
 	case NE: /* Hack not to clear bits if FORCC */
 		if (p->n_left->n_op == AND)
 			fixops(p->n_left, 0); /* Convert an extra time */
 		break;
+#endif
 	}
 }
 

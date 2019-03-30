@@ -128,6 +128,8 @@ typedef long long OFFSZ;
 #define STOSTARG(p)
 
 #define	FINDMOPS	/* pdp11 has instructions that modifies memory */
+#define	MYDOTFILE
+#define	printdotfile(x)
 
 #define szty(t) ((t) == DOUBLE || (t) == LONGLONG || (t) == ULONGLONG ? 4 : \
 	(t) == FLOAT || (t) == LONG || (t) == ULONG ? 2 : 1)
