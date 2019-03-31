@@ -44,11 +44,11 @@ setseg(int seg, char *name)
 {
 	switch (seg) {
 	case PROG: name = ".text"; break;
+	case STRNG:
+	case RDATA:
 	case DATA:
 	case LDATA: name = ".data"; break;
 	case UDATA: break;
-	case STRNG:
-	case RDATA: name = ".rodata"; break;
 	default:
 		cerror("setseg");
 	}

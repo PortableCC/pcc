@@ -136,6 +136,7 @@ clocal(NODE *p)
 	return(p);
 }
 
+#define IALLOC(sz)      (isinlining ? permalloc(sz) : tmpalloc(sz))
 void
 myp2tree(NODE *p)
 {
@@ -144,7 +145,7 @@ myp2tree(NODE *p)
 	if (p->n_op != FCON)
 		return;
 
-	sp = tmpalloc(sizeof(struct symtab));
+	sp = IALLOC(sizeof(struct symtab));
 	sp->sclass = STATIC;
 	sp->sap = 0;
 	sp->slevel = 1; /* fake numeric label */
@@ -152,6 +153,7 @@ myp2tree(NODE *p)
 	sp->sflags = 0;
 	sp->stype = p->n_type;
 	sp->squal = (CON >> TSHIFT);
+	sp->sname = NULL;
 
 	locctr(DATA, sp);
 	defloc(sp);
