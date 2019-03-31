@@ -219,6 +219,8 @@ lcomp(NODE *p)
 void
 zzzcode(NODE *p, int c)
 {
+	struct attr *ap;
+
 	switch (c) {
 	case 'A': /* print out - if not first arg */
 		if (spcoff || (p->n_type == FLOAT || p->n_type == DOUBLE))
@@ -262,6 +264,13 @@ zzzcode(NODE *p, int c)
 	case 'H': /* arg with post-inc */
 		expand(p->n_left->n_left, FOREFF, "mov	AL,ZA(sp)\n");
 		expand(p->n_left->n_left, FOREFF, "inc	AL\n");
+		break;
+
+	case 'I': /* struct assign. Left in R0, right R1, counter R2. */
+		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		printf("mov	$%o,r2\n", (ap->iarg(0)+1) >> 1);
+		printf("1: mov	(r1)+,(r0)+\n");
+		printf("sob	r2,1b\n");
 		break;
 
 	case 'Q': /* struct assignment, no rv */

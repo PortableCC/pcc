@@ -201,6 +201,10 @@ nspecial(struct optab *q)
 			static struct rspecial s[] = {
 			   { NLEFT, R0 }, { NRIGHT, R1 }, { NRES, R0 }, { 0 } };
 			return s;
+		} else if (q->visit == INAREG) {
+			static struct rspecial s[] = {
+			    { NRES, R1 }, { 0 } };
+			return s;
 		} else if (q->visit == INBREG) {
 			static struct rspecial s[] = { { NRES, R01 }, { 0 } };
 			return s;
@@ -211,6 +215,14 @@ nspecial(struct optab *q)
 		if (q->lshape == SAREG) {
 			static struct rspecial s[] = {
 			    { NLEFT, R1 }, { NRES, R01 }, { 0 } };
+			return s;
+		}
+		break;
+	case STASG: {
+			static struct rspecial s[] = {
+			    { NLEFT, R0 }, { NRIGHT, R1 }, 
+			    { NEVER, R2 }, { 0 }
+			};
 			return s;
 		}
 		break;
