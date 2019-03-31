@@ -378,7 +378,7 @@ zbits(OFFSZ off, int fsz)
 	}
 #endif
 	if (fsz >= SZCHAR) {
-		printf(PRTPREF "%s %d\n", asspace, fsz/SZCHAR);
+		printf(PRTPREF "%s " CONFMT "\n", asspace, (CONSZ)(fsz/SZCHAR));
 		fsz -= (fsz/SZCHAR) * SZCHAR;
 	}
 	if (fsz) {
