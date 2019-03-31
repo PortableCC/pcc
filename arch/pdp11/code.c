@@ -156,8 +156,10 @@ ejobcode(int flag)
 void
 bjobcode(void)
 {
+	extern char *asspace;
 	/* ".word" is not printed out for pdp11 as */
 	astypnames[INT] = astypnames[UNSIGNED] = "";
+	asspace = ".=.+"; /* advance counter, not .space */
 }
 
 /*

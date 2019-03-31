@@ -98,7 +98,7 @@ typedef	long long CONSZ;
 typedef	unsigned long long U_CONSZ;
 typedef long long OFFSZ;
 
-#define CONFMT	"%lld"		/* format for printing constants */
+#define CONFMT	"%llo"		/* format for printing constants */
 #define LABFMT	"L%d"		/* format for printing labels */
 #ifdef LANG_F77
 #define BLANKCOMMON "_BLNK_"
