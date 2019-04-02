@@ -90,21 +90,28 @@ defloc(struct symtab *sp)
 }
 
 /*
- * code for the end of a function
- * deals with struct return here
+ * Code for the end of a function. Deals with struct return here.
+ * On pdp11 we use a static bounce-buffer for struct return, 
+ * which address is returned in r0.
  */
 void
 efcode(void)
 {
+	struct symtab *sp;
 	NODE *p, *q;
 
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
 		return;
-	/* Create struct assignment */
-	q = block(OREG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
-	q->n_rval = R5;
-	slval(q, 8); /* return buffer offset */
-	q = buildtree(UMUL, q, NIL);
+	/* Handcraft a static buffer */
+	sp = getsymtab("007", SSTMT);
+	sp->stype = DECREF(cftnsp->stype);
+	sp->sdf = cftnsp->sdf;
+	sp->sap = cftnsp->sap;
+	sp->sclass = STATIC;
+	sp->soffset = getlab();
+	sp->slevel = 1;
+	defzero(sp);
+	q = nametree(sp);
 	p = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
 	p = buildtree(UMUL, p, NIL);
 	p = buildtree(ASSIGN, q, p);
@@ -121,12 +128,6 @@ bfcode(struct symtab **sp, int cnt)
 	struct symtab *sp2;
 	NODE *n;
 	int i;
-
-	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
-		/* Function returns struct, adjust arg offset */
-		for (i = 0; i < cnt; i++) 
-			sp[i]->soffset += SZPOINT(INT);
-	}
 
 	if (xtemps == 0)
 		return;

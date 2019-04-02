@@ -57,6 +57,13 @@ struct optab table[] = {
 		0,	RLEFT,
 		"movb	AL,AL\n", },
 
+/* convert char to uchar; zero-extend byte */
+{ SCONV,	INAREG,
+	SAREG,	TCHAR,
+	SAREG,	TUCHAR,
+		0,	RLEFT,
+		"bic	$177400,AL\n", },
+
 /* convert char to int or unsigned.  Already so in regs */
 { SCONV,	INAREG,
 	SAREG,	TCHAR,
@@ -71,9 +78,17 @@ struct optab table[] = {
 		NAREG|NASL,	RESC1,
 		"movb	AL,A1\n", },
 
-/* convert uchar to (u)int */
+/* convert uchar to (u)int in reg */
+/* Nothing to do since reg is already large enough */
 { SCONV,	INAREG,
-	SAREG|SOREG|SCON|SNAME,	TUCHAR,
+	SAREG,	TUCHAR,
+	SAREG,	TINT|TUNSIGNED,
+		NAREG,	RESC1,
+		"", },
+
+/* convert uchar to (u)int from mem */
+{ SCONV,	INAREG,
+	SOREG|SNAME,	TUCHAR,
 	SAREG,	TINT|TUNSIGNED,
 		NAREG,	RESC1,
 		"clr	A1\nbisb	AL,A1\n", },
@@ -284,6 +299,24 @@ struct optab table[] = {
 		NAREG|NASL,	RESC1,	/* should be 0 */
 		"jsr	pc,(AL)\n", },
 
+{ STCALL,	INAREG,
+	SCON|SOREG|SNAME,	TANY,
+	SANY,	TANY,
+		NAREG|NASL,	RESC1,
+		"jsr	pc,*AL\nZC", },
+
+{ STCALL,	FOREFF,
+	SCON|SOREG|SNAME,	TANY,
+	SANY,	TANY,
+		0,	0,
+		"jsr	pc,*AL\nZC", },
+
+{ USTCALL,	INAREG,
+	SCON|SOREG|SNAME,	TANY,
+	SANY,	TANY,
+		NAREG|NASL,	RESC1,
+		"jsr	pc,*AL\n", },
+
 /*
  * The next rules handle all binop-style operators.
  */
@@ -313,6 +346,13 @@ struct optab table[] = {
 	SBREG|SNAME|SOREG|SCON,	TLONG,
 		0,	RLEFT,
 		"add	AR,AL\nadd	UR,UL\nadc	AL\n", },
+
+/* Integer to pointer addition */
+{ PLUS,		INAREG,
+	SCON,	TPOINT|TWORD,
+	SAREG,	TINT|TUNSIGNED,
+		NAREG|NASR,	RESC1,
+		"add	CL(AR),A1\n", },
 
 /* Add to reg left and reclaim reg */
 { PLUS,		INAREG|FOREFF|FORCC,
@@ -953,6 +993,13 @@ struct optab table[] = {
 	SANY,		TANY,
 		0,	RNULL,
 		"movf	AL,ZA(sp)\n", },
+
+{ STARG,	FOREFF,
+	SAREG,	TPTRTO|TSTRUCT,
+	SANY,	TSTRUCT,
+		NSPECIAL,	0,
+		"ZJ", },
+
 
 # define DF(x) FORREW,SANY,TANY,SANY,TANY,REWRITE,x,""
 

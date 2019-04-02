@@ -226,6 +226,14 @@ nspecial(struct optab *q)
 			return s;
 		}
 		break;
+	case STARG: {
+			static struct rspecial s[] = {
+			    { NEVER, R0 }, { NLEFT, R1 }, 
+			    { NEVER, R2 }, { 0 }
+			};
+			return s;
+		}
+		break;
 	} 
 	comperr("nspecial entry %d", q - table);
 	return 0; /* XXX gcc */

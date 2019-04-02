@@ -220,6 +220,7 @@ void
 zzzcode(NODE *p, int c)
 {
 	struct attr *ap;
+	int o;
 
 	switch (c) {
 	case 'A': /* print out - if not first arg */
@@ -250,7 +251,7 @@ zzzcode(NODE *p, int c)
 		break;
 
 	case 'E': /* long move */
-		rmove(p->n_right->n_reg, p->n_left->n_reg, p->n_type);
+		rmove(regno(p->n_right), regno(p->n_left), p->n_type);
 		break;
 
 	case 'F': /* long comparision */
@@ -271,6 +272,17 @@ zzzcode(NODE *p, int c)
 		printf("mov	$%o,r2\n", (ap->iarg(0)+1) >> 1);
 		printf("1: mov	(r1)+,(r0)+\n");
 		printf("sob	r2,1b\n");
+		break;
+
+	case 'J': /* struct argument */
+		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		o = (ap->iarg(0) + 1) & ~1;
+		printf("sub	$%o,sp\n", spcoff == 0 ? o-2 : o);
+		printf("mov	sp,r0\n");
+		printf("mov	$%o,r2\n", o >> 1);
+		printf("1: mov	(r1)+,(r0)+\n");
+		printf("sob	r2,1b\n");
+		spcoff += argsiz(p);
 		break;
 
 	case 'Q': /* struct assignment, no rv */
@@ -393,7 +405,6 @@ conput(FILE *fp, NODE *p)
 
 	switch (p->n_op) {
 	case ICON:
-		printf("$");
 		if (p->n_name[0] != '\0') {
 			fprintf(fp, "%s", p->n_name);
 			if (val)
@@ -482,6 +493,7 @@ adrput(FILE *io, NODE *p)
 		return;
 	case ICON:
 		/* addressable value of the constant */
+		printf("$");
 		conput(io, p);
 		return;
 
@@ -685,7 +697,7 @@ rmove(int s, int d, TWORD t)
 	} else if (t == LONG || t == ULONG) {
 		/* avoid trashing double regs */
 		if (d > s)
-			printf("mov     r%c,r%c\nmov    r%c,r%c\n",
+			printf("mov	r%c,r%c\nmov	r%c,r%c\n",
 			    rnames[s][2],rnames[d][2],
 			    rnames[s][1],rnames[d][1]);
 		else
