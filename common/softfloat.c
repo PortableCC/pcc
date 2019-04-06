@@ -314,7 +314,7 @@ ieee32_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 static int
 ieee32_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 {
-	int v = ieee32_classify(sfp);
+	int t, v = ieee32_classify(sfp);
 
 	*sign = (sfp->fp[0] >> 31) & 1;
 	*exp = ((sfp->fp[0] >> 23) & 0xff) - fpi_binary32.bias;
@@ -323,6 +323,9 @@ ieee32_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	m->len = 2;
 	if (v == SOFT_SUBNORMAL) {
 		v = SOFT_NORMAL;
+		chomp(m);
+		t = topbit(m);
+		*exp = fpi_binary32.minexp - (fpi_binary32.nbits - t) + 1;
 	} else if (v == SOFT_NORMAL)
 		m->val[1] |= (1 << 7);
 	return v;
@@ -368,17 +371,22 @@ ieee64_classify(SFP sfp)
 static int
 ieee64_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 {
-	int v = ieee64_classify(sfp);
+	int t, v = ieee64_classify(sfp);
 
 	*sign = (sfp->fp[1] >> 31) & 1;
 	*exp = ((sfp->fp[1] >> 20) & 0x7ff) - fpi_binary64.bias;
 	minit(m, sfp->fp[0]);
 	m->val[1] = (sfp->fp[0] >> 16);
 	m->val[2] = sfp->fp[1];
-	m->val[3] = ((sfp->fp[1] >> 16) & 0x0f) | (1 << 4);
+	m->val[3] = ((sfp->fp[1] >> 16) & 0x0f);
 	m->len = 4;
-	if (v == SOFT_SUBNORMAL)
+	if (v == SOFT_SUBNORMAL) {
 		v = SOFT_NORMAL;
+		chomp(m);
+		t = topbit(m);
+		*exp = fpi_binary64.minexp - (fpi_binary64.nbits - t) + 1;
+	} else if (v == SOFT_NORMAL)
+		m->val[3] |= (1 << 4);
 	return v;
 }
 
@@ -503,9 +511,10 @@ ieeex80_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 static int
 ieeex80_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 {
-	int v = ieeex80_classify(sfp);
+	int t, v = ieeex80_classify(sfp);
 
-	SD(("ieeex80_unmake: %04x %08x %08x\n", sfp->fp[2], sfp->fp[1], sfp->fp[0]));
+	SD(("ieeex80_unmake: %s %04x %08x %08x\n", 
+	    sftyp[v], sfp->fp[2], sfp->fp[1], sfp->fp[0]));
 	*sign = (sfp->fp[2] >> 15) & 1;
 	*exp = (sfp->fp[2] & 0x7fff) - fpi_binaryx80.bias;
 	minit(m, sfp->fp[0]);
@@ -513,9 +522,13 @@ ieeex80_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	m->val[2] = sfp->fp[1];
 	m->val[3] = (sfp->fp[1] >> 16);
 	m->len = 4;
-	if (v == SOFT_SUBNORMAL)
+	if (v == SOFT_SUBNORMAL) {
 		v = SOFT_NORMAL;
-	SD(("ieeex80_unmake: sign %d exp %d m %04x%04x %04x%04x\n",
+		chomp(m);
+		t = topbit(m);
+		*exp = fpi_binaryx80.minexp - (fpi_binaryx80.nbits - t) + 1;
+	}
+	SD(("ieeex80_unmake2: sign %d exp %d m %04x%04x %04x%04x\n",
 	    *sign, *exp, m->val[3], m->val[2], m->val[1], m->val[0]));
 	return v;
 }
@@ -1156,7 +1169,7 @@ mesanity(MINT *m, char *s)
 	}
 	for (i = 0; s[i] >= '0' && s[i] <= '9'; i++)
 		;
-	if (i > 4)
+	if (i > 5)
 		return (neg ? SOFT_ZERO : SOFT_INFINITE);
 	return 0;
 }
@@ -1270,10 +1283,15 @@ hexbig(char *str, MINT *mmant, MINT *mexp)
 			if ((ch = mesanity(mmant, str)))
 				return ch;
 			exp2 += atoi(str);
-			if (exp2 < 0)
+			if (exp2 < 0) {
+				if (exp2 < LDBLPTR->minexp - LDBLPTR->nbits)
+					return SOFT_ZERO;
 				mshl(mexp, -exp2);
-			else
+			} else {
+				if (exp2 > LDBLPTR->maxexp)
+					return SOFT_INFINITE;
 				mshl(mmant, exp2);
+			}
 			return SOFT_NORMAL;
 
 		default:
