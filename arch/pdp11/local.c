@@ -187,9 +187,9 @@ andable(NODE *p)
 int
 cisreg(TWORD t)
 {
-	if (t == FLOAT || t == DOUBLE || t == LDOUBLE ||
-	    t == LONGLONG || t == ULONGLONG)
-		return 0; /* not yet */
+//	if (t == FLOAT || t == DOUBLE || t == LDOUBLE ||
+//	    t == LONGLONG || t == ULONGLONG)
+//		return 0; /* not yet */
 	return 1;
 }
 
@@ -215,6 +215,7 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 	sp = block(REG, NIL, NIL, PTR+INT, t->n_df, t->n_ap);
 	slval(sp, 0);
 	sp->n_rval = STKREG;
+	sp = buildtree(PLUS, sp, bcon(1));
 	t->n_type = sp->n_type;
 	ecomp(buildtree(ASSIGN, t, sp)); /* Emit! */
 
@@ -338,6 +339,13 @@ ctype(TWORD type)
 		MODTYPE(type,DOUBLE);
 		break;
 
+	/* XXX remove as soon as 64-bit is added */
+	case LONGLONG:
+		MODTYPE(type,LONG);
+		break;
+	case ULONGLONG:
+		MODTYPE(type,ULONG);
+		break;
 	}
 	return (type);
 }
