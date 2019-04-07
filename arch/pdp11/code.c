@@ -92,7 +92,9 @@ defloc(struct symtab *sp)
 /*
  * Code for the end of a function. Deals with struct return here.
  * On pdp11 we use a static bounce-buffer for struct return, 
- * which address is returned in r0.
+ * which address is returned in r0.  But, since the struct assignment 
+ * will be called with FOREFF, it won't be saved, so we do it using
+ * inline asm instead.
  */
 void
 efcode(void)
@@ -102,6 +104,11 @@ efcode(void)
 
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
 		return;
+	p = block(XASM, bcon(0), bcon(0), INT, 0, 0);
+	p->n_left->n_type = STRTY;
+	p->n_right->n_type = STRTY;
+	p->n_name = "mov r0,-(r5)";
+	ecomp(p);
 	/* Handcraft a static buffer */
 	sp = getsymtab("007", SSTMT);
 	sp->stype = DECREF(cftnsp->stype);
@@ -115,6 +122,11 @@ efcode(void)
 	p = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
 	p = buildtree(UMUL, p, NIL);
 	p = buildtree(ASSIGN, q, p);
+	ecomp(p);
+	p = block(XASM, bcon(0), bcon(0), INT, 0, 0);
+	p->n_left->n_type = STRTY;
+	p->n_right->n_type = STRTY;
+	p->n_name = "mov (r5)+,r0";
 	ecomp(p);
 }
 
