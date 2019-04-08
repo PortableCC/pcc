@@ -561,7 +561,7 @@ styp(void)
 	else if (strtype == 'u')
 		t = ctype(USHORT)+ARY;
 	else if (strtype == 'L')
-		t = WCHAR_TYPE+ARY;
+		t = ctype(WCHAR_TYPE)+ARY;
 	else
 		t = ctype(SZINT < 32 ? ULONG : UNSIGNED)+ARY;
 	return t;
