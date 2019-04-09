@@ -83,7 +83,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	TUCHAR,
 	SAREG,	TINT|TUNSIGNED,
-		NAREG,	RESC1,
+		0,	RLEFT,
 		"", },
 
 /* convert uchar to (u)int from mem */
@@ -103,9 +103,16 @@ struct optab table[] = {
 /* convert uchar to ulong */
 { SCONV,	INBREG,
 	SAREG,	TUCHAR,
-	SANY,	TULONG,
+	SANY,	TLONG|TULONG,
 		NBREG|NBSL,	RESC1,
 		"mov	AL,U1\nclr	A1\n", },
+
+/* (u)char -> float/double */
+{ SCONV,	INCREG,
+	SAREG,	TCHAR|TUCHAR,
+	SANY,	TFLOAT|TDOUBLE,
+		NCREG,	RESC1,
+		"movif	AL,A1\n", },
 
 /* convert (u)int to char */
 { SCONV,	INAREG,
@@ -200,13 +207,21 @@ struct optab table[] = {
 		NBREG|NBSL,	RESC1,
 		"", },
 
-/* long -> double */
+/* long -> float/double */
 { SCONV,	INCREG,
 	SBREG|SNAME|SOREG|SCON,	TLONG,
 	SANY,		TFLOAT|TDOUBLE,
 		NCREG|NCSL,	RESC1,
 		"mov	UL,-(sp)\nmov	AL,-(sp)\n"
 		"setl\nmovif	(sp)+,A1\nseti\n", },
+
+/* ulong -> float/double */
+{ SCONV,	INCREG,
+	SBREG|SNAME|SOREG|SCON,	TULONG,
+	SANY,		TFLOAT|TDOUBLE,
+		NCREG|NCSL,	RESC1,
+		"mov	UL,(sp)\nmov	AL,-(sp)\n"
+		"jsr	pc,ultof\ntst	(sp)+\n", },
 
 /* float/double -> (u)long XXX - correct? */
 { SCONV,	INBREG,
@@ -250,13 +265,13 @@ struct optab table[] = {
 	SCON,	TANY,
 	SCREG,	TFLOAT|TDOUBLE,
 		NCREG,	RESC1,
-		"jsr	pc,*CL\nZC", },
+		"jsr	pc,*AL\nZC", },
 
 { UCALL,	INCREG,
 	SCON,	TANY,
 	SCREG,	TFLOAT|TDOUBLE,
 		NCREG,	RESC1,
-		"jsr	pc,*CL\n", },
+		"jsr	pc,*AL\n", },
 
 { CALL,		FOREFF,
 	SCON|SNAME|SOREG,	TANY,
@@ -368,10 +383,10 @@ struct optab table[] = {
 
 /* Integer to pointer addition */
 { PLUS,		INAREG,
-	SCON,	TPOINT|TWORD,
+	SAREG,	TPOINT|TWORD,
 	SAREG,	TINT|TUNSIGNED,
-		NAREG|NASR,	RESC1,
-		"add	CL(AR),A1\n", },
+		0,	RLEFT,
+		"add	AR,AL\n", },
 
 /* Add to reg left and reclaim reg */
 { PLUS,		INAREG|FOREFF|FORCC,
@@ -477,10 +492,16 @@ struct optab table[] = {
 		"asl	AL\n", },
 
 { LS,	INAREG|FOREFF,
-	SAREG,	TWORD,
+	SAREG,	TINT|TCHAR|TUNSIGNED|TUCHAR,
 	ANYSH,	TWORD,
 		0,	RLEFT,
 		"ash	AR,AL\n", },
+
+{ RS,	INAREG|FOREFF,
+	SAREG,	TUNSIGNED|TUCHAR,
+	SAREG|SCON,	TWORD,
+		NSPECIAL,	RLEFT,
+		"clr	r0\nashc	AR,AL\n", },
 
 /*
  * The next rules takes care of assignments. "=".
@@ -652,10 +673,10 @@ struct optab table[] = {
 
 /* need extra move to be sure N flag is correct for sxt */
 { DIV,	INAREG,
-	ANYSH,		TINT|TPOINT,
-	ANYSH,		TINT|TPOINT,
+	SAREG,				TINT|TPOINT,
+	SAREG|SNAME|SCON|SOREG,		TINT|TPOINT,
 		NSPECIAL,	RDEST,
-		"mov	AL,r1\nsxt	r0\ndiv	AR,r0\n", },
+		"tst	r1\nsxt	r0\ndiv	AR,r0\n", },
 
 /* udiv uses args in registers */
 { DIV,	INAREG,
@@ -731,16 +752,16 @@ struct optab table[] = {
 		"movb	AR,A1\n", },
 
 { UMUL,	INCREG,
-	SANY,	TPOINT|TWORD,
+	SANY,	TANY,
 	SOREG,	TDOUBLE,
 		NCREG,	RESC1,
 		"movf	AR,A1\n", },
 
 { UMUL,	INCREG,
-	SANY,	TPOINT|TWORD,
+	SANY,	TANY,
 	SOREG,	TFLOAT,
 		NCREG,	RESC1,
-		"movif	AR,A1\n", },
+		"movof	AR,A1\n", },
 
 /*
  * Logical/branching operators
@@ -874,6 +895,12 @@ struct optab table[] = {
 	SANY,	TANY,
 		0,	RNOP,
 		"jbr	LL\n", },
+
+{ GOTO, 	FOREFF,
+	SAREG,	TANY,
+	SANY,	TANY,
+		0,	RNOP,
+		"jmp	*AL\n", },
 
 /*
  * Convert LTYPE to reg.
