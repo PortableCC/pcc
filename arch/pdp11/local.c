@@ -55,6 +55,7 @@ clocal(NODE *p)
 	register struct symtab *q;
 	register NODE *r, *l;
 	register int o;
+	TWORD m;
 
 #ifdef PCC_DEBUG
 	if (xdebug) {
@@ -112,7 +113,58 @@ clocal(NODE *p)
 		break;
 
 	case SCONV:
+		if (p->n_left->n_op == COMOP)
+			break;	/* may propagate wrong type later */
 		l = p->n_left;
+
+		if (p->n_type == l->n_type) {
+			p1nfree(p);
+			return l;
+		}
+
+		if ((p->n_type & TMASK) == 0 && (l->n_type & TMASK) == 0 &&
+		    tsize(p->n_type, p->n_df, p->n_ap) ==
+		    tsize(l->n_type, l->n_df, l->n_ap)) {
+			if (p->n_type != FLOAT && p->n_type != DOUBLE &&
+			    l->n_type != FLOAT && l->n_type != DOUBLE &&
+			    l->n_type != LDOUBLE && p->n_type != LDOUBLE) {
+				if (l->n_op == NAME || l->n_op == UMUL ||
+				    l->n_op == TEMP) {
+					l->n_type = p->n_type;
+					p1nfree(p);
+					return l;
+				}
+			}
+		}
+
+		if (DEUNSIGN(p->n_type) == INT && DEUNSIGN(l->n_type) == INT &&
+		    coptype(l->n_op) == BITYPE && l->n_op != COMOP &&
+		    l->n_op != QUEST && l->n_op != ASSIGN && l->n_op != RS) {
+			l->n_type = p->n_type;
+			p1nfree(p);
+			return l;
+		}
+
+		o = l->n_op;
+		m = p->n_type;
+		if (o == ICON) {
+			/*
+			 * Can only end up here if o is an address,
+			 * and in that case the only compile-time conversion
+			 * possible is to int.
+			 */
+
+			if (l->n_sp == 0) {
+				p->n_type = UNSIGNED;
+				concast(l, m);
+			} else if (m != INT && m != UNSIGNED)
+				break;
+			l->n_type = m;
+			l->n_ap = 0;
+			p1nfree(p);
+			return l;
+		}
+
 		if (p->n_type != UCHAR || l->n_type != CHAR ||
 		    l->n_op != UMUL || (l->n_left->n_op != TEMP))
 			break;
