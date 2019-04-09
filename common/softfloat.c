@@ -140,7 +140,6 @@ ffloat_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 		break; /* no subnormal */
 	}
 	SD(("ffloat_make3: fp %08x\n", sfp->fp[0]));
-	
 }
 
 static int
@@ -744,7 +743,7 @@ soft_int2fp(SFP rv, CONSZ l, TWORD f, TWORD t)
 	m.val[3] = l >> 48;
 	m.len = 4;
 
-	e = topbit(&m);
+	e = topbit(&m) + 1 - LDBLPTR->expadj;
 
 	LDBLPTR->make(rv, c, s, e, &m);
 	if (t == FLOAT || t == DOUBLE)
@@ -812,7 +811,7 @@ soft_fp2int(SFP sfp, TWORD t)
 	if (m.len > 3)
 		rv |= ((CONSZ)m.val[3] << 48);
 
-	e = e - LDBLPTR->nbits + 1;
+	e = e - LDBLPTR->nbits + LDBLPTR->expadj;
 	while (e > 0)
 		rv <<= 1, e--;
 	while (e < 0)
