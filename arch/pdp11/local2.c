@@ -146,14 +146,12 @@ tlen(p) NODE *p;
 static void
 twolcomp(NODE *p)
 {
-	int o = p->n_op;
+	int u;
 	int s = getlab2();
 	int e = p->n_label;
 	int cb1, cb2;
 
-	if (o >= ULE)
-		o -= (ULE-LE);
-	switch (o) {
+	switch (u = p->n_op) {
 	case NE:
 		cb1 = 0;
 		cb2 = NE;
@@ -164,11 +162,19 @@ twolcomp(NODE *p)
 		break;
 	case LE:
 	case LT:
+		u += (ULE-LE);
+		/* FALLTHROUGH */
+	case ULE:
+	case ULT:
 		cb1 = GT;
 		cb2 = LT;
 		break;
 	case GE:
 	case GT:
+		u += (ULE-LE);
+		/* FALLTHROUGH */
+	case UGE:
+	case UGT:
 		cb1 = LT;
 		cb2 = GT;
 		break;
@@ -177,12 +183,12 @@ twolcomp(NODE *p)
 		cb1 = cb2 = 0; /* XXX gcc */
 	}
 	if (p->n_op >= ULE)
-		cb1 += 2, cb2 += 2;
-	expand(p, 0, "cmp	AR,AL\n");
+		cb1 += 4, cb2 += 4;
+	expand(p, 0, "cmp	AL,AR\n");
 	if (cb1) cbgen(cb1, s);
 	if (cb2) cbgen(cb2, e);
-        expand(p, 0, "cmp	UR,UL\n");
-        cbgen(p->n_op, e);
+        expand(p, 0, "cmp	UL,UR\n");
+        cbgen(u, e);
         deflab(s);
 }
 
@@ -231,7 +237,7 @@ zzzcode(NODE *p, int c)
 
 	case 'B': /* arg is pointer to block */
 		expand(p->n_left, FOREFF, "mov	AL,ZA(sp)\n");
-		expand(p->n_left, FOREFF, "sub	CR,(sp)\n");
+		expand(p->n_left, FOREFF, "sub	AR,(sp)\n");
 		break;
 		
 	case 'C': /* subtract stack after call */
@@ -589,6 +595,7 @@ static void
 fixops(NODE *p, void *arg)
 {
 	static int fltwritten;
+	NODE *r;
 
 	if (!fltwritten && (p->n_type == FLOAT || p->n_type == DOUBLE)) {
 		printf(".globl	fltused\n");
@@ -608,7 +615,13 @@ fixops(NODE *p, void *arg)
 			p->n_right = mkunode(COMPL, p->n_right, 0, p->n_type);
 		break;
 	case RS:
-		p->n_right = mkunode(UMINUS, p->n_right, 0, p->n_right->n_type);
+		r = p->n_right;
+		if (r->n_op == ICON)
+			setlval(r, -getlval(r));
+		else
+			p->n_right = mkunode(UMINUS, r, 0, r->n_type);
+		if (p->n_type == UNSIGNED || p->n_type == UCHAR)
+			break;
 		p->n_op = LS;
 		break;
 #if 0
