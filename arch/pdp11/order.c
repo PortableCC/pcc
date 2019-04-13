@@ -71,8 +71,10 @@ offstar(NODE *p, int shape)
 	if (isreg(p))
 		return; /* Is already OREG */
 
-	if (p->n_op == UMUL)
-		p = p->n_left; /* double indexed umul */
+	if (p->n_op == UMUL) {
+		if (p->n_type < PTR+LONG || p->n_type > PTR+ULONGLONG)
+			p = p->n_left; /* double indexed umul */
+	}
 
 	if (inctree(p)) /* Do post-inc conversion */
 		return;
@@ -111,6 +113,8 @@ myormake(NODE *p)
 	}
 	if (q->n_op != OREG)
 		return;
+	if (p->n_type >= LONG && p->n_type <= ULONGLONG)
+		return;
 	p->n_op = OREG;
 	setlval(p, getlval(q));
 	p->n_rval = R2PACK(q->n_rval, 0, 0);
@@ -123,7 +127,6 @@ myormake(NODE *p)
 int
 shumul(NODE *p, int shape)
 {
-
 	if (x2debug)
 		printf("shumul(%p)\n", p);
 
