@@ -261,6 +261,18 @@ struct optab table[] = {
 		NBREG|NBSL,	RESC1,
 		"jsr	pc,*CL\n", },
 
+{ CALL,		INBREG,
+	SAREG,	TANY,
+	SBREG,	TLONG|TULONG,
+		NBREG|NBSL,	RESC1,
+		"jsr	pc,(AL)\nZC", },
+
+{ UCALL,	INBREG,
+	SAREG,	TANY,
+	SBREG,	TLONG|TULONG,
+		NBREG|NBSL,	RESC1,
+		"jsr	pc,(AL)\n", },
+
 { CALL,		INCREG,
 	SCON,	TANY,
 	SCREG,	TFLOAT|TDOUBLE,
@@ -327,16 +339,22 @@ struct optab table[] = {
 		NAREG|NASL,	RESC1,
 		"jsr	pc,*AL\nZC", },
 
+{ USTCALL,	INAREG,
+	SCON|SOREG|SNAME,	TANY,
+	SANY,	TANY,
+		NAREG|NASL,	RESC1,
+		"jsr	pc,*AL\n", },
+
 { STCALL,	FOREFF,
 	SCON|SOREG|SNAME,	TANY,
 	SANY,	TANY,
 		0,	0,
 		"jsr	pc,*AL\nZC", },
 
-{ USTCALL,	INAREG,
+{ USTCALL,	FOREFF,
 	SCON|SOREG|SNAME,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,
+		0,	0,
 		"jsr	pc,*AL\n", },
 
 { STCALL,	INAREG,
@@ -501,7 +519,7 @@ struct optab table[] = {
 	SAREG,	TUNSIGNED|TUCHAR,
 	SAREG|SCON,	TWORD,
 		NSPECIAL,	RLEFT,
-		"clr	r0\nashc	AR,AL\n", },
+		"clr	r0\nashc	AR,r0\n", },
 
 /*
  * The next rules takes care of assignments. "=".
@@ -737,31 +755,31 @@ struct optab table[] = {
 	SANY,	TPOINT|TWORD,
 	SOREG,	TLONG|TULONG,
 		NBREG,	RESC1, /* |NBSL - may overwrite index reg */
-		"mov	AR,A1\nmov	UR,U1\n", },
+		"mov	AL,A1\nmov	UL,U1\n", },
 
 { UMUL,	INAREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TPOINT|TWORD,
 		NAREG|NASL,	RESC1,
-		"mov	AR,A1\n", },
+		"mov	AL,A1\n", },
 
 { UMUL,	INAREG,
 	SANY,	TANY,
 	SOREG,	TCHAR|TUCHAR,
 		NAREG|NASL,	RESC1,
-		"movb	AR,A1\n", },
+		"movb	AL,A1\n", },
 
 { UMUL,	INCREG,
 	SANY,	TANY,
 	SOREG,	TDOUBLE,
 		NCREG,	RESC1,
-		"movf	AR,A1\n", },
+		"movf	AL,A1\n", },
 
 { UMUL,	INCREG,
 	SANY,	TANY,
 	SOREG,	TFLOAT,
 		NCREG,	RESC1,
-		"movof	AR,A1\n", },
+		"movof	AL,A1\n", },
 
 /*
  * Logical/branching operators
@@ -797,10 +815,10 @@ struct optab table[] = {
 		"cmpf	AL,AR\ncfcc\n", },
 
 { OPLOG,	FORCC,
-	SAREG|SOREG|SNAME|SCON,	TCHAR|TUCHAR,
-	SAREG|SOREG|SNAME|SCON,	TCHAR|TUCHAR,
+	SAREG|SCON,	TCHAR|TUCHAR,
+	SAREG|SCON,	TCHAR|TUCHAR,
 		0, 	RESCC,
-		"cmpb	AL,AR\n", },
+		"cmp	AL,AR\n", },
 
 #if 0
 { OPLOG,	FORCC,
