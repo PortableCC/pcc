@@ -135,6 +135,9 @@ static struct symtab *csym;
 
 #ifdef PCC_DEBUG
 static void prtstk(struct instk *in);
+#define	ID(x) if (idebug) printf x
+#else
+#define ID(x)
 #endif
 
 /*
@@ -399,16 +402,11 @@ beginit(struct symtab *sp)
 	struct initctx *ict;
 	struct instk *is = &pbase;
 
-#ifdef PCC_DEBUG
-	if (idebug)
-		printf("beginit(%p), sclass %s\n", sp, scnames(sp->sclass));
-#endif
+	ID(("beginit(%p), sclass %s\n", sp, scnames(sp->sclass)));
 
 	if (pstk) {
-#ifdef PCC_DEBUG
-		if (idebug)
-			printf("beginit: saving ctx pstk %p\n", pstk);
-#endif
+		ID(("beginit: saving ctx pstk %p\n", pstk));
+
 		/* save old context */
 		ict = tmpalloc(sizeof(struct initctx));
 		ict->prev = inilnk;
@@ -448,6 +446,7 @@ beginit(struct symtab *sp)
 	doing_init++;
 	if (sp->sclass == STATIC || sp->sclass == EXTDEF)
 		statinit++;
+	ID(("beginit(%p) end\n", sp));
 }
 
 /*
@@ -675,9 +674,9 @@ scalinit(NODE *p)
 	NODE *q;
 	int fsz;
 
+	ID(("scalinit(%p)\n", p));
 #ifdef PCC_DEBUG
 	if (idebug > 2) {
-		printf("scalinit(%p)\n", p);
 		fwalk(p, eprint, 0);
 		prtstk(pstk);
 	}
@@ -741,11 +740,7 @@ scalinit(NODE *p)
 		q->n_sp->sflags |= SASG;
 
 	stkpop();
-#ifdef PCC_DEBUG
-	if (idebug > 2) {
-		printf("scalinit e(%p)\n", q);
-	}
-#endif
+	ID(("scalinit end(%p)\n", q));
 	return woff;
 }
 
@@ -821,10 +816,7 @@ endinit(int seg)
 	int fsz;
 	OFFSZ lastoff, tbit;
 
-#ifdef PCC_DEBUG
-	if (idebug)
-		printf("endinit()\n");
-#endif
+	ID(("endinit()\n"));
 
 	/* Calculate total block size */
 	if (ISARY(csym->stype) && csym->sdf->ddim == NOOFFSET) {
@@ -902,6 +894,7 @@ endinit(int seg)
 	if (csym->sclass == STATIC || csym->sclass == EXTDEF)
 		statinit--;
 	endictx();
+	ID(("endinit() end\n"));
 }
 
 void
@@ -982,6 +975,10 @@ irbrace(void)
 	}
 }
 
+/*
+ * Search for next element given.  If anon structs, must return each 
+ * anon struct to make offset calculation happy.
+ */
 static struct symtab *
 felem(struct symtab *sp, char *n)
 {
@@ -990,7 +987,7 @@ felem(struct symtab *sp, char *n)
 	for (; sp; sp = sp->snext) {
 		if (sp->sname[0] == '*') {
 			if ((rs = felem(strattr(sp->sap)->amlist, n)) != NULL)
-				return rs;
+				return sp;
 		} else if (sp->sname == n)
 			return sp;
 	}
@@ -1004,12 +1001,10 @@ static void
 mkstack(NODE *p)
 {
 
+	ID(("mkstack: %p\n", p));
 #ifdef PCC_DEBUG
-	if (idebug) {
-		printf("mkstack: %p\n", p);
-		if (idebug > 1 && p)
-			fwalk(p, eprint, 0);
-	}
+	if (idebug > 1 && p)
+		fwalk(p, eprint, 0);
 #endif
 
 	if (p == NULL)
@@ -1027,6 +1022,7 @@ mkstack(NODE *p)
 		break;
 
 	case NAME:
+		ID(("mkstack name %s\n", (char *)p->n_sp));
 		if (pstk->in_lnk) {
 			pstk->in_lnk = felem(pstk->in_lnk, (char *)p->n_sp);
 			if (pstk->in_lnk == NULL)
@@ -1040,7 +1036,7 @@ mkstack(NODE *p)
 	}
 	nfree(p);
 	stkpush();
-
+	ID(("mkstack end: %p\n", p));
 }
 
 /*
@@ -1051,6 +1047,7 @@ desinit(NODE *p)
 {
 	int op = p->n_op;
 
+	ID(("desinit beg %p\n", p));
 	if (pstk == NULL)
 		stkpush(); /* passed end of array */
 	while (pstk->in_prev && pstk->in_fl == 0)
@@ -1065,11 +1062,10 @@ desinit(NODE *p)
 	if (op == NAME || op == LB)
 		pstk = pstk->in_prev;
 
+	ID(("desinit end %p\n", p));
 #ifdef PCC_DEBUG
-	if (idebug > 1) {
-		printf("desinit e\n");
+	if (idebug > 1)
 		prtstk(pstk);
-	}
 #endif
 }
 
