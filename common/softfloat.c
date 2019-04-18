@@ -194,7 +194,7 @@ dfloat_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 	    sftyp[typ], sign, exp, m->val[3], m->val[2], m->val[1], m->val[0]));
 	switch (typ) {
 	case SOFT_ZERO:
-		sfp->fp[0] = 0;
+		sfp->fp[0] = sfp->fp[1] = 0;
 		break;
 	case SOFT_INFINITE:
 		sfp->fp[0] |= 0xffff7fff; /* highest possible number */
