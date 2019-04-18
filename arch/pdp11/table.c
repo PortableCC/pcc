@@ -93,10 +93,10 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"clr	A1\nbisb	AL,A1\n", },
 
-/* convert char to long */
+/* convert char to (u)long */
 { SCONV,	INBREG,
 	SAREG|SOREG|SCON|SNAME,	TCHAR,
-	SANY,	TLONG,
+	SANY,	TULONG|TLONG,
 		NBREG,	RESC1,
 		"movb	AL,U1\nsxt	A1\n", },
 
@@ -135,6 +135,13 @@ struct optab table[] = {
 		0,	RLEFT,
 		"", },
 
+/* convert pointer to char */
+{ SCONV,	INAREG,
+	SAREG,	TPOINT,
+	SANY,	TCHAR,
+		0,	RLEFT,
+		"movb	AL,AL\n", },
+
 /* convert pointer to (u)int */
 { SCONV,	INAREG,
 	SAREG,	TPOINT,
@@ -151,7 +158,7 @@ struct optab table[] = {
 
 /* int -> (u)long. XXX - only in r0 and r1 */
 { SCONV,	INBREG,
-	SAREG,	TINT,
+	SAREG,	TINT|TPOINT,
 	SANY,	TLONG|TULONG,
 		NSPECIAL|NBREG|NBSL,	RESC1,
 		"tst	AL\nsxt	r0\n", },
@@ -249,17 +256,41 @@ struct optab table[] = {
 /*
  * Subroutine calls.
  */
+{ CALL,		INAREG,
+	SCON,	TANY,
+	SAREG,	TWORD|TPOINT|TCHAR|TUCHAR,
+		NAREG|NASL,	RESC1,
+		"jsr	pc,*AL\nZC", },
+
+{ UCALL,	INAREG,
+	SCON,	TANY,
+	SAREG,	TWORD|TPOINT|TCHAR|TUCHAR,
+		NAREG|NASL,	RESC1,
+		"jsr	pc,*AL\n", },
+
+{ CALL,		INAREG,
+	SAREG,	TANY,
+	SANY,	TANY,
+		NAREG|NASL,	RESC1,	/* should be 0 */
+		"jsr	pc,(AL)\nZC", },
+
+{ UCALL,	INAREG,
+	SAREG,	TANY,
+	SANY,	TANY,
+		NAREG|NASL,	RESC1,	/* should be 0 */
+		"jsr	pc,(AL)\n", },
+
 { CALL,		INBREG,
 	SCON,	TANY,
 	SBREG,	TLONG|TULONG,
 		NBREG|NBSL,	RESC1,
-		"jsr	pc,*CL\nZC", },
+		"jsr	pc,*AL\nZC", },
 
 { UCALL,	INBREG,
 	SCON,	TANY,
 	SBREG,	TLONG|TULONG,
 		NBREG|NBSL,	RESC1,
-		"jsr	pc,*CL\n", },
+		"jsr	pc,*AL\n", },
 
 { CALL,		INBREG,
 	SAREG,	TANY,
@@ -285,52 +316,40 @@ struct optab table[] = {
 		NCREG,	RESC1,
 		"jsr	pc,*AL\n", },
 
-{ CALL,		FOREFF,
-	SCON|SNAME|SOREG,	TANY,
-	SANY,	TANY,
-		0,	0,
-		"jsr	pc,*AL\nZC", },
-
-{ UCALL,	FOREFF,
-	SCON|SNAME|SOREG,	TANY,
-	SANY,	TANY,
-		0,	0,
-		"jsr	pc,*AL\n", },
-
-{ CALL,		INAREG,
-	SCON|SOREG|SNAME,	TANY,
-	SAREG,	TWORD|TPOINT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
-		"jsr	pc,*AL\nZC", },
-
-{ UCALL,	INAREG,
-	SCON|SOREG|SNAME,	TANY,
-	SAREG,	TWORD|TPOINT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
-		"jsr	pc,*AL\n", },
-
-{ CALL,		FOREFF,
+{ CALL,		INCREG,
 	SAREG,	TANY,
-	SANY,	TANY,
-		0,	0,
+	SCREG,	TFLOAT|TDOUBLE,
+		NCREG|NCSL,	RESC1,
 		"jsr	pc,(AL)\nZC", },
 
-{ UCALL,	FOREFF,
+{ UCALL,	INCREG,
 	SAREG,	TANY,
-	SANY,	TANY,
-		0,	0,
+	SCREG,	TFLOAT|TDOUBLE,
+		NCREG|NCSL,	RESC1,
 		"jsr	pc,(AL)\n", },
 
-{ CALL,		INAREG,
+{ CALL,		FOREFF,
+	SCON,	TANY,
+	SANY,	TANY,
+		0,	0,
+		"jsr	pc,*AL\nZC", },
+
+{ UCALL,	FOREFF,
+	SCON,	TANY,
+	SANY,	TANY,
+		0,	0,
+		"jsr	pc,*AL\n", },
+
+{ CALL,		FOREFF,
 	SAREG,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,	/* should be 0 */
+		0,	0,
 		"jsr	pc,(AL)\nZC", },
 
-{ UCALL,	INAREG,
+{ UCALL,	FOREFF,
 	SAREG,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,	/* should be 0 */
+		0,	0,
 		"jsr	pc,(AL)\n", },
 
 { STCALL,	INAREG,
@@ -520,6 +539,12 @@ struct optab table[] = {
 	SAREG|SCON,	TWORD,
 		NSPECIAL,	RLEFT,
 		"clr	r0\nashc	AR,r0\n", },
+
+{ RS,	INAREG|FOREFF,
+	SAREG,	TINT|TCHAR,
+	SAREG|SCON,	TWORD,
+		0,	RLEFT,
+		"ash	AR,AL\n", },
 
 /*
  * The next rules takes care of assignments. "=".
