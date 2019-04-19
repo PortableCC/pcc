@@ -30,6 +30,7 @@
 
 static int spcoff;
 static int argsiz(NODE *p);
+static void negcon(FILE *fp, int con);
 
 void
 deflab(int label)
@@ -226,6 +227,7 @@ void
 zzzcode(NODE *p, int c)
 {
 	struct attr *ap;
+	NODE *l;
 	int o;
 
 	switch (c) {
@@ -273,10 +275,27 @@ zzzcode(NODE *p, int c)
 		expand(p->n_left->n_left, FOREFF, "inc	AL\n");
 		break;
 
-	case 'I': /* struct assign. Left in R0, right R1, counter R2. */
+	case 'I': /* struct assign. Right in R0, left R1, counter R2. */
 		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		l = p->n_left;
+		if (l->n_op == OREG) {
+			int r = l->n_rval;
+			if (R2TEST(r)) {
+				l->n_rval = R2UPK1(r);
+				expand(p, FOREFF, "mov	AL,r1\n");
+				l->n_rval = r;
+			} else {
+				printf("mov	%s,r1\n", rnames[r]);
+				if (getlval(l)) {
+					printf("add	$");
+					negcon(stdout, getlval(l));
+					printf(",r1\n");
+				}
+			}
+		} else
+			printf("mov	$%s,r1\n", l->n_name);
 		printf("mov	$%o,r2\n", (ap->iarg(0)+1) >> 1);
-		printf("1: mov	(r1)+,(r0)+\n");
+		printf("1: mov	(r0)+,(r1)+\n");
 		printf("sob	r2,1b\n");
 		break;
 

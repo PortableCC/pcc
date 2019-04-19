@@ -50,6 +50,13 @@ struct optab table[] = {
 		0,	RLEFT,
 		"", },
 
+/* long -> ptr */
+{ PCONV,	INAREG,
+	SBREG|SOREG|SNAME,	TLONG|TULONG,
+	SAREG,			TPOINT,
+		NAREG|NASL,	RESC1,
+		"mov	UL,A1\n", },
+
 /* convert uchar to char; sign-extend byte */
 { SCONV,	INAREG,
 	SAREG,	TUCHAR,
@@ -683,12 +690,20 @@ struct optab table[] = {
 		0,	RDEST,
 		"movfo	AR,AL\n", },
 
+#if 0
 /* Struct assigns */
 { STASG,	FOREFF|INAREG,
 	SAREG,	TANY,
 	SAREG,	TPTRTO|TANY,
 		NSPECIAL,	RDEST,
 		"Fpush	r1\nZIFpop	r1\n", },
+#endif
+/* Struct assigns */
+{ STASG,	FOREFF|INAREG,
+	SOREG|SNAME,	TANY,
+	SAREG,		TPTRTO|TANY,
+		NSPECIAL,	RDEST,
+		"Fpush	r0\nZIFpop	r0\n", },
 
 /*
  * DIV/MOD/MUL 

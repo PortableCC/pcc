@@ -177,11 +177,13 @@ clocal(NODE *p)
 		p = nfree(p);
 		break;
 
+#if 0
 	case STASG: /* struct assignment, modify left */
 		l = p->n_left;
 		if (ISSOU(l->n_type))
 			p->n_left = buildtree(ADDROF, l, NIL);
 		break;
+#endif
 
 	case FORCE:
 		/* put return value in return reg */
