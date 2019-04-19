@@ -184,7 +184,8 @@ nspecial(struct optab *q)
 	switch (q->op) {
 	case MUL:
 		if (q->visit == INAREG) {
-			static struct rspecial s[] = { { NLEFT, R1 }, { 0 } };
+			static struct rspecial s[] = {
+			    { NLEFT, R1 }, { NRES, R1 }, { 0 } };
 			return s;
 		} else if (q->visit == INBREG) {
 			static struct rspecial s[] = { { NRES, R01 }, { 0 } };
