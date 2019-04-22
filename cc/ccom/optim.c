@@ -288,6 +288,7 @@ again:	o = p->n_op;
 			    strmemb(q->n_right->n_ap)) {
 				p = zapleft(p);
 				p = zapleft(p);
+				break;
 			}
 		}
 		/* FALLTHROUGH */
