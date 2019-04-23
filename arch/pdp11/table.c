@@ -800,8 +800,8 @@ struct optab table[] = {
 
 /* need extra move to be sure N flag is correct for sxt */
 { MOD,	INAREG,
-	ANYSH,		TINT|TPOINT,
-	ANYSH,		TINT|TPOINT,
+	SAREG,		TINT|TPOINT,
+	SAREG,		TINT|TPOINT,
 		NSPECIAL,	RDEST,
 		"mov	AL,r1\nsxt	r0\ndiv	AR,r0\n", },
 
