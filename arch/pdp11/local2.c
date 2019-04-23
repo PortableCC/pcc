@@ -624,7 +624,13 @@ fixops(NODE *p, void *arg)
 	case AND:
 		if (p->n_right->n_op == ICON) {
 			CONSZ val = getlval(p->n_right);
-			val = ((~val) & 0177777);
+			TWORD t = p->n_right->n_type;
+			if (t == LONGLONG || t == ULONGLONG)
+				val = ~val;
+			else if (t == LONG || t == ULONG)
+				val = ((~val) & 0xffffffff);
+			else
+				val = ((~val) & 0177777);
 			setlval(p->n_right, val);
 		} else if (p->n_right->n_op == COMPL) {
 			NODE *q = p->n_right->n_left;
