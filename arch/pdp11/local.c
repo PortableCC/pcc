@@ -307,10 +307,10 @@ instring(struct symtab *sp)
 		for (cnt = 0; *s != 0; ) {
 			if (cnt++ == 0)
 				printf(".byte ");
-			if (*s++ == '\\')
+			if (*s == '\\')
 				val = esccon(&s);
 			else
-				val = s[-1];
+				val = *s++;
 			printf("%o", val & 0377);
 			if (cnt > 15) {
 				cnt = 0;
