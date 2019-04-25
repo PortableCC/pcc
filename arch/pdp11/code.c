@@ -84,6 +84,7 @@ defloc(struct symtab *sp)
 		printf("	.globl %s\n", n);
 	if (sp->slevel == 0) {
 		printf("%s:\n", n);
+		printf("~~%s:\n", n+1);
 	} else {
 		printf(LABFMT ":\n", sp->soffset);
 	}
