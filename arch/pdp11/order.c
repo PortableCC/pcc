@@ -188,7 +188,8 @@ nspecial(struct optab *q)
 			    { NLEFT, R1 }, { NRES, R1 }, { 0 } };
 			return s;
 		} else if (q->visit == INBREG) {
-			static struct rspecial s[] = { { NRES, R01 }, { 0 } };
+			static struct rspecial s[] = {
+			    { NEVER, R0 }, { NEVER, R1 },{ NRES, R01 }, { 0 } };
 			return s;
 		}
 		break;
@@ -205,7 +206,8 @@ nspecial(struct optab *q)
 			    { 0 } };
 			return s;
 		} else if (q->visit == INBREG) {
-			static struct rspecial s[] = { { NRES, R01 }, { 0 } };
+			static struct rspecial s[] = {
+			    { NEVER, R0 }, { NEVER, R1 },{ NRES, R01 }, { 0 } };
 			return s;
 		}
 		break;
@@ -222,7 +224,8 @@ nspecial(struct optab *q)
 			    { 0 } };
 			return s;
 		} else if (q->visit == INBREG) {
-			static struct rspecial s[] = { { NRES, R01 }, { 0 } };
+			static struct rspecial s[] = {
+			    { NEVER, R0 }, { NEVER, R1 },{ NRES, R01 }, { 0 } };
 			return s;
 		}
 		break;
