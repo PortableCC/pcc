@@ -193,36 +193,6 @@ twolcomp(NODE *p)
         deflab(s);
 }
 
-
-/*
- * Generate compare code for long instructions when right node is 0.
- */
-static void
-lcomp(NODE *p)
-{
-	switch (p->n_op) {
-	case EQ:
-		expand(p, FORCC, "tst	AL\n");
-		printf("jne	1f\n");
-		expand(p, FORCC, "tst	UL\n");
-		cbgen(EQ, p->n_label);
-		printf("1:\n");
-		break;
-	case NE:
-		expand(p, FORCC, "tst	AL\n");
-		cbgen(NE, p->n_label);
-		expand(p, FORCC, "tst	UL\n");
-		cbgen(NE, p->n_label);
-		break;
-	case GE:
-		expand(p, FORCC, "tst	AL\n");
-		cbgen(GE, p->n_label);
-		break;
-	default:
-		comperr("lcomp %p", p);
-	} 
-}
-
 void
 zzzcode(NODE *p, int c)
 {
@@ -252,10 +222,6 @@ zzzcode(NODE *p, int c)
 			printf("cmp	(sp)+,(sp)+\n");
 		else if (p->n_qual > 2)
 			printf("add	$%o,sp\n", (int)p->n_qual);
-		break;
-
-	case 'D': /* long comparisions */
-		lcomp(p);
 		break;
 
 	case 'E': /* long move */
@@ -310,30 +276,6 @@ zzzcode(NODE *p, int c)
 		spcoff += argsiz(p);
 		break;
 
-	case 'Q': /* struct assignment, no rv */
-		printf("mov	$%o,", attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0)/2);
-		expand(p, INAREG, "A1\n");
-		printf("1:\n");
-		expand(p, INAREG, "mov	(AR)+,(AL)+\n");
-		expand(p, INAREG, "dec	A1\n");
-		printf("jne	1b\n");
-		break;
-
-	case 'R': /* struct assignment with rv */
-		printf("mov	$%o,", attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0)/2);
-		expand(p, INAREG, "A1\n");
-		expand(p, INAREG, "mov	AR,A2\n");
-		printf("1:\n");
-		expand(p, INAREG, "mov	(A2)+,(AL)+\n");
-		expand(p, INAREG, "dec	A1\n");
-		printf("jne	1b\n");
-		break;
-
-	case '1': /* lower part of double regs */
-		p = getlr(p, '1');
-		printf("r%c", rnames[p->n_rval][1]);
-		break;
-
 	default:
 		comperr("zzzcode %c", c);
 	}
@@ -379,34 +321,6 @@ int
 shtemp(NODE *p)
 {
 	return 0;
-#if 0
-	int r;
-
-	if (p->n_op == STARG )
-		p = p->n_left;
-
-	switch (p->n_op) {
-	case REG:
-		return (!istreg(p->n_rval));
-
-	case OREG:
-		r = p->n_rval;
-		if (R2TEST(r)) {
-			if (istreg(R2UPK1(r)))
-				return(0);
-			r = R2UPK2(r);
-		}
-		return (!istreg(r));
-
-	case UMUL:
-		p = p->n_left;
-		return (p->n_op != UMUL && shtemp(p));
-	}
-
-	if (optype(p->n_op) != LTYPE)
-		return(0);
-	return(1);
-#endif
 }
 
 static void
