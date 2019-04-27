@@ -193,11 +193,36 @@ twolcomp(NODE *p)
         deflab(s);
 }
 
+/*
+ * print out a 32-bit constant as arg.
+ */
+static void
+lconarg(NODE *p)
+{
+	CONSZ c = getlval(p);
+	char *m = spcoff ? "-" : "";
+
+	spcoff += 4;
+
+	if (c == 0) {
+		printf("clr	%s(sp)\nclr	-(sp)\n", m);
+	} else if (c >= 0 && c < 65536) {
+		printf("mov	$%llo,%s(sp)\nclr	-(sp)\n", c, m);
+	} else if (c >= -32768 && c < 32768) {
+		printf("mov	$%llo,%s(sp)\nsxt	-(sp)\n",
+		    c & 0177777, m);
+	} else {
+		printf("mov	$%llo,%s(sp)\nmov	$%llo,-(sp)\n",
+		    c & 0177777, m, (c >> 16) & 0177777);
+	}
+}
+
 void
 zzzcode(NODE *p, int c)
 {
 	struct attr *ap;
 	NODE *l;
+	char *s;
 	int o;
 
 	switch (c) {
@@ -222,6 +247,10 @@ zzzcode(NODE *p, int c)
 			printf("cmp	(sp)+,(sp)+\n");
 		else if (p->n_qual > 2)
 			printf("add	$%o,sp\n", (int)p->n_qual);
+		break;
+
+	case 'D': /* long constant as arg */
+		lconarg(p->n_left);
 		break;
 
 	case 'E': /* long move */
@@ -274,6 +303,22 @@ zzzcode(NODE *p, int c)
 		printf("1: mov	(r1)+,(r0)+\n");
 		printf("sob	r2,1b\n");
 		spcoff += argsiz(p);
+		break;
+
+	case 'K': /* long long mul/div */
+		o = spcoff++;
+		if (p->n_right->n_op == ICON) {
+			lconarg(p->n_right);
+		} else
+			expand(p, FOREFF, "mov	UR,-(sp)\nmov	AR,-(sp)\n");
+		if (p->n_left->n_op == ICON) {
+			lconarg(p->n_left);
+		} else
+			expand(p, FOREFF, "mov	UL,-(sp)\nmov	AL,-(sp)\n");
+		s = p->n_op == MUL ? "lmul" :
+		    p->n_type == ULONG ? "uldiv" : "ldiv";
+		printf("jsr	pc,%s\nadd	$10,sp\n", s);
+		spcoff = o;
 		break;
 
 	default:
