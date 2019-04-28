@@ -429,14 +429,12 @@ if (bitsz == 64) {
 	/* used by register allocator */
 	fprintf(fc, "int regK[] = { 0, %d, %d, %d, %d, %d, %d, %d };\n",
 	    areg, breg, creg, dreg, ereg, freg, greg);
+	fprintf(fc, "int clregs[] = { 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x };\n",
+	    (1 << areg)-1, (1 << breg)-1, (1 << creg)-1,
+	    (1 << dreg)-1, (1 << ereg)-1, (1 << freg)-1, (1 << greg)-1);
+
 	fprintf(fc, "int\nclassmask(int class)\n{\n");
-	fprintf(fc, "\tif(class == CLASSA) return 0x%x;\n", (1 << areg)-1);
-	fprintf(fc, "\tif(class == CLASSB) return 0x%x;\n", (1 << breg)-1);
-	fprintf(fc, "\tif(class == CLASSC) return 0x%x;\n", (1 << creg)-1);
-	fprintf(fc, "\tif(class == CLASSD) return 0x%x;\n", (1 << dreg)-1);
-	fprintf(fc, "\tif(class == CLASSE) return 0x%x;\n", (1 << ereg)-1);
-	fprintf(fc, "\tif(class == CLASSF) return 0x%x;\n", (1 << freg)-1);
-	fprintf(fc, "\treturn 0x%x;\n}\n", (1 << greg)-1);
+	fprintf(fc, "\treturn clregs[class-1];\n}\n");
 
 	fprintf(fh, "int interferes(int reg1, int reg2);\n");
 	nelem = (MAXREGS+bitsz-1)/bitsz;
