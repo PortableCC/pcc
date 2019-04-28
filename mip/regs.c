@@ -1485,7 +1485,8 @@ deldead(NODE *p, bittype *lvar)
 		q = p->n_right;
 		*p = *q;
 		nfree(q);
-		rv = 1;
+		deldead(p, lvar);
+		return 1;
 	}
 	ty = optype(p->n_op);
 	if (ty != LTYPE)
