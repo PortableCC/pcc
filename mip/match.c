@@ -596,7 +596,8 @@ findops(NODE *p, int cookie)
 
 		/* Help register assignment after SSA by preferring */
 		/* 2-op insns instead of 3-ops */
-		if (xssa && (q->rewrite & RLEFT) == 0 && shl == SRDIR)
+		if (xssa && (q->rewrite & RLEFT) == 0 &&
+		    (q->lshape & (INREGS)) && shl == SRDIR)
 			shl = SRREG;
 
 #ifdef NEWNEED
@@ -949,6 +950,7 @@ findumul(NODE *p, int cookie)
 	F2DEBUG(("findumul: node %p (%s)\n", p, prcook(1 << sh)));
 	p->n_su = MKIDX(ixp[i], 0);
 	SCLASS(p->n_su, sh);
+	F2WALK(p);
 	return sh;
 }
 
