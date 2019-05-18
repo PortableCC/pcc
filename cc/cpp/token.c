@@ -1203,7 +1203,10 @@ savln(void)
 			unch(c);
 			break;
 		}
-		putob(ob, c);
+		if (c == '\'' || c == '\"')
+			faststr(c, ob);
+		else
+			putob(ob, c);
 	}
 	ob->buf[ob->cptr] = 0;
 	return ob;

@@ -657,16 +657,13 @@ addidir(char *idir, struct incs **ww)
 void
 line(void)
 {
-	extern int instr;
 	struct iobuf *ib, *ob;
 	usch *inp;
 	int n, ln, oidx;
 
 	oidx = ifiles->idx;
-	instr = 1;
 	ob = savln();
 	ob->cptr = 0;
-	instr = 0;
 	exparg(1, ob, ib = getobuf(BNORMAL), NULL);
 	inp = ib->buf;
 
