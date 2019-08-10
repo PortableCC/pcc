@@ -451,6 +451,11 @@ struct flt {
 typedef struct flt FLT;	
 #define	sfallo()		stmtalloc(sizeof(struct softfloat))
 
+struct lexint {
+	CONSZ val;
+	TWORD t;
+};
+
 /*
  * Only allowed to do float evaluation if either doing
  * static (compile-time) initialization or FP_CONTRACT is YES.

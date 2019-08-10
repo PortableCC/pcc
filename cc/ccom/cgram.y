@@ -257,6 +257,7 @@ struct savbc {
 	char *strp;
 	struct bks *bkp;
 	struct flt flt;
+	struct lexint li;
 	struct genlist *g;
 }
 
@@ -286,7 +287,7 @@ struct savbc {
 
 %type <type>	C_TYPE C_QUALIFIER C_CLASS C_FUNSPEC
 
-%type <nodep>   C_ICON
+%type <li>   C_ICON
 
 %type <flt>	C_FCON 
 
@@ -1236,7 +1237,7 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 			$3 = block(NAME, NULL, NULL, ENUNSIGN(INTPTR), 0, 0);
 			$$ = biop(CAST, $3, $$);
 		}
-		|  C_ICON { $$ = $1; }
+		|  C_ICON { $$ = bdty(ICON, &($1)); }
 		|  C_FCON { $$ = bdty(FCON, &($1)); }
 		|  svstr { $$ = bdty(STRING, $1, styp()); }
 		|  '(' e ')' { $$=$2; }
@@ -1296,6 +1297,7 @@ mkty(TWORD t, union dimfun *d, struct attr *sue)
 P1ND *
 bdty(int op, ...)
 {
+	struct lexint *li;
 	FLT *f2;
 	CONSZ c;
 	va_list ap;
@@ -1317,6 +1319,12 @@ bdty(int op, ...)
 		q->n_scon = sfallo();
 		*q->n_scon = f2->sf;
 		q->n_type = f2->t;
+		break;
+
+	case ICON:
+		li = va_arg(ap, struct lexint *);
+		slval(q, li->val);
+		q->n_type = li->t;
 		break;
 
 	case CALL:

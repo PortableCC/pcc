@@ -54,9 +54,9 @@ US			(L|u|U|u8)
 
 #define	bdebug flexbdebug
 
-static P1ND *cvtdig(int radix);
-static P1ND *charcon(void);
-static P1ND *wcharcon(void);
+static void cvtdig(int radix);
+static void charcon(void);
+static void wcharcon(void);
 static void control(int);
 static void pragma(void);
 static int dotfile;
@@ -122,12 +122,12 @@ extern void yyset_lineno (int);
 			}
 		}
 
-0[xX]{H}+{IS}?		{ yylval.nodep = cvtdig(16); return(C_ICON); }
-0{D}+{IS}?		{ yylval.nodep = cvtdig(8); return(C_ICON); }
-0[bB]{B}+{IS}?		{ yylval.nodep = cvtdig(2); return(C_ICON); }
-{D}+{IS}?		{ yylval.nodep = cvtdig(10); return(C_ICON); }
-{UC}'(\\.|[^\\'])*'	{ yylval.nodep = wcharcon(); return(C_ICON); }
-'(\\.|[^\\'])*'		{ yylval.nodep = charcon(); return(C_ICON); }
+0[xX]{H}+{IS}?		{ cvtdig(16); return(C_ICON); }
+0{D}+{IS}?		{ cvtdig(8); return(C_ICON); }
+0[bB]{B}+{IS}?		{ cvtdig(2); return(C_ICON); }
+{D}+{IS}?		{ cvtdig(10); return(C_ICON); }
+{UC}'(\\.|[^\\'])*'	{ wcharcon(); return(C_ICON); }
+'(\\.|[^\\'])*'		{ charcon(); return(C_ICON); }
 
 {D}+{E}{FS}?		{ yylval.flt = floatcon(yytext); return(C_FCON); }
 {D}*"."{D}+({E})?{FS}?	{ yylval.flt = floatcon(yytext); return(C_FCON); }
@@ -368,10 +368,9 @@ floatcon(char *s)
 	return fhexcon(s);
 }
 
-P1ND *
+void
 cvtdig(int radix)
 {
-	P1ND *p;
 	TWORD ntype;
 	unsigned long long v;
 	char *ch = yytext;
@@ -410,11 +409,8 @@ cvtdig(int radix)
 
 	switch (ntype) {
 	case DOUBLE: /* special case */
-		p = block(FCON, NULL, NULL, IMAG, 0, 0);
-		p->n_scon = sfallo();
-		FLOAT_INT2FP(p->n_scon, v, ULONGLONG);
-		FLOAT_FP2FP(p->n_scon, DOUBLE);
-		return p;
+		yylval.flt = fhexcon(ch);
+		return;
 
 	case INT:
 	case LONG:
@@ -453,11 +449,8 @@ cvtdig(int radix)
 		break;	
 	}	
 
-	ntype = ctype(ntype);
-	p = xbcon(v, NULL, ntype);
-	ASGLVAL(p->n_slval, v);
-
-	return p;
+	yylval.li.val = v;
+	yylval.li.t = ctype(ntype);
 }
 
 /*
@@ -535,7 +528,7 @@ esccon(char **sptr)
  * Convert (one) character constant to an int.
  * Handle as unsigned except if only one character and char is signed.
  */
-P1ND *
+void
 charcon(void)
 {
 	unsigned int val = 0, i = 0;
@@ -558,13 +551,14 @@ charcon(void)
 	else if (i > 1)
 		werror("too many characters in character constant");
 
-	return bcon(val);
+	yylval.li.val = val;
+	yylval.li.t = INT;
 }
 
 /*
  * Convert a wide-character constant to an unsigned int
  */
-P1ND *
+void
 wcharcon(void)
 {
 	unsigned int val = 0, i = 0;
@@ -591,7 +585,8 @@ wcharcon(void)
 	else if (i > 1)
 		werror("too many characters in wide-character constant");
 
-	return xbcon(val, NULL, ctype(UNSIGNED));
+	yylval.li.val = val;
+	yylval.li.t = ctype(UNSIGNED);
 }
 
 #ifndef MYDOTFILE

@@ -1459,7 +1459,8 @@ oconvert(register P1ND *p)
 	case MINUS:
 		p->n_type = INTPTR;
 		p->n_ap = NULL;
-		return(clocal(VBLOCK(p, bpsize(p->n_left), INT, 0, 0)));
+		p = (clocal(VBLOCK(p, bpsize(p->n_left), INT, 0, 0)));
+		return( p );
 		}
 
 	cerror( "illegal oconvert: %d", p->n_op );
