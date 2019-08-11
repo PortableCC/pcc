@@ -40,12 +40,12 @@
 #endif
 
 #ifdef SFDEBUG
-int sfdebug;
+int sfdebug=1;
 #define	SD(x)	if (sfdebug) printf x
 #else
 #define SD(x)
-#define sfp2ld(x) (x)->debugfp
 #endif
+#define sfp2ld(x) (x)->debugfp
 
 /*
  * Description of a floating point format.
@@ -1063,7 +1063,7 @@ soft_clcmp(int c1, int c2, int s1, int s2)
 		return s1 ? SFLEFTLESS : SFLEFTGTR;
 
 	if (c1 == SOFT_ZERO)
-		return s1 ? SFLEFTLESS : SFLEFTGTR;
+		return s1 ? SFLEFTGTR : SFLEFTLESS;
 
 	if (c1 == SOFT_NORMAL) {
 		if (c2 == SOFT_INFINITE)
@@ -1086,6 +1086,9 @@ soft_cmp(SFP v1p, SFP v2p, int v)
 
 	c1 = LDBLPTR->unmake(v1p, &s1, &e1, &m1);
 	c2 = LDBLPTR->unmake(v2p, &s2, &e2, &m2);
+
+	SD(("soft_cmp: v1 %s v1s %d v2 %s v2s %d\n",
+            sftyp[c1], s1, sftyp[c2], s2));
 
 	if (c1 != SOFT_NORMAL || c2 != SOFT_NORMAL) {
 		if (c1 == SOFT_NAN || c2 == SOFT_NAN)
@@ -1117,6 +1120,7 @@ soft_cmp(SFP v1p, SFP v2p, int v)
 	}
 
 	yrv = 0;
+	SD(("soft_cmp2: xrv %d\n", xrv));
 	switch (v) {
 	case GT: yrv = xrv == SFLEFTGTR; break;
 	case LT: yrv = xrv == SFLEFTLESS; break;
