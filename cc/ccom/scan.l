@@ -129,12 +129,12 @@ extern void yyset_lineno (int);
 {UC}'(\\.|[^\\'])*'	{ wcharcon(); return(C_ICON); }
 '(\\.|[^\\'])*'		{ charcon(); return(C_ICON); }
 
-{D}+{E}{FS}?		{ yylval.flt = floatcon(yytext); return(C_FCON); }
-{D}*"."{D}+({E})?{FS}?	{ yylval.flt = floatcon(yytext); return(C_FCON); }
-{D}+"."{D}*({E})?{FS}?	{ yylval.flt = floatcon(yytext); return(C_FCON); }
-0[xX]{H}*"."{H}+{P}{FS}? { yylval.flt = fhexcon(yytext); return(C_FCON); }
-0[xX]{H}+"."{P}{FS}?	{ yylval.flt = fhexcon(yytext); return(C_FCON); }
-0[xX]{H}+{P}{FS}?	{ yylval.flt = fhexcon(yytext); return(C_FCON); }
+{D}+{E}{FS}?		{ floatcon(yytext); return(C_FCON); }
+{D}*"."{D}+({E})?{FS}?	{ floatcon(yytext); return(C_FCON); }
+{D}+"."{D}*({E})?{FS}?	{ floatcon(yytext); return(C_FCON); }
+0[xX]{H}*"."{H}+{P}{FS}? { floatcon(yytext); return(C_FCON); }
+0[xX]{H}+"."{P}{FS}?	{ floatcon(yytext); return(C_FCON); }
+0[xX]{H}+{P}{FS}?	{ floatcon(yytext); return(C_FCON); }
 
 {US}?\"(\\.|[^\\"])*\"	{ yylval.strp = yytext; return C_STRING; }
 
@@ -352,20 +352,11 @@ endtyp(char *s)
 	return tw;
 }
 
-FLT
-fhexcon(char *s)
-{
-	FLT flt;
-
-	flt.t = ctype(endtyp(s));
-	strtosf(&flt.sf, s, flt.t);
-	return flt;
-}
-
-FLT
+void
 floatcon(char *s)
 {
-	return fhexcon(s);
+	yylval.flt.t = ctype(endtyp(s));
+	strtosf(&yylval.flt.sf, s, yylval.flt.t);
 }
 
 void
@@ -409,7 +400,7 @@ cvtdig(int radix)
 
 	switch (ntype) {
 	case DOUBLE: /* special case */
-		yylval.flt = fhexcon(ch);
+		floatcon(ch);
 		return;
 
 	case INT:
