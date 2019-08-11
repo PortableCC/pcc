@@ -167,7 +167,6 @@ buildtree(int o, P1ND *l, P1ND *r)
 	int opty, n;
 	struct symtab *sp = NULL; /* XXX gcc */
 	P1ND *lr, *ll;
-	int evalflt = CAN_EVAL_FLOAT();
 
 #ifdef PCC_DEBUG
 	if (bdebug) {
@@ -205,7 +204,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 		}
 	} else if (o == NOT && l->n_op == FCON) {
 		l = clocal(block(SCONV, l, NULL, INT, 0, 0));
-	} else if( o == UMINUS && l->n_op == FCON && evalflt){
+	} else if( o == UMINUS && l->n_op == FCON){
 			FLOAT_NEG(l->n_scon);
 			return(l);
 
@@ -275,7 +274,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 		}
 	} else if (opty == BITYPE && (l->n_op == FCON || l->n_op == ICON) &&
 	    (r->n_op == FCON || r->n_op == ICON) && (o == PLUS || o == MINUS ||
-	    o == MUL || o == DIV || (o >= EQ && o <= GT) ) && evalflt) {
+	    o == MUL || o == DIV || (o >= EQ && o <= GT) )) {
 		/* at least one side is FCON */
 
 #ifndef CC_DIV_0
@@ -803,7 +802,6 @@ int
 concast(P1ND *p, TWORD t)
 {
 	extern short sztable[];
-	int evalflt = CAN_EVAL_FLOAT();
 	CONSZ val;
 
 	if (p->n_op != ICON && p->n_op != FCON) /* only constants */
@@ -835,15 +833,11 @@ concast(P1ND *p, TWORD t)
 					slval(p, glval(p) | ~TYPMSK(sztable[t]));
 			}
 		} else if (t <= LDOUBLE) {
-			if (!evalflt)
-				return 0;
 			p->n_op = FCON;
 			p->n_scon = sfallo();
 			FLOAT_INT2FP(p->n_scon, val, p->n_type);
 		}
 	} else { /* p->n_op == FCON */
-		if (!evalflt)
-			return 0;
 		if (t == BOOL) {
 			p->n_op = ICON;
 			slval(p, !FLOAT_ISZERO(p->n_scon));
