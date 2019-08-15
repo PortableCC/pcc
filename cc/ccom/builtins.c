@@ -608,7 +608,7 @@ builtin_ce(const struct bitable *bt, P1ND *a)
 		uerror("bad %s arg", bt->name);
 	if (nncon(a->n_left->n_left) == 0)
 		uerror("arg not constant");
-	if (glval(a)) {
+	if (glval(a->n_left->n_left)) {
 		p = a->n_left->n_right;
 		a->n_left->n_op = UMUL; /* for p1tfree() */
 		p1walkf(a->n_right, putinlbl, 0);
