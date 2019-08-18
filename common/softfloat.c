@@ -39,8 +39,9 @@
 #define assert(e) (!(e)?cerror("assertion failed " #e " at softfloat:%d",__LINE__):(void)0)
 #endif
 
+#undef SFDEBUG
 #ifdef SFDEBUG
-int sfdebug=0;
+int sfdebug=1;
 #define	SD(x)	if (sfdebug) printf x
 #else
 #define SD(x)
@@ -867,12 +868,13 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 
 	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
 	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
-	SD(("soft_plus: s1 %d s2 %d e1 %d e2 %d\n", s1, s2, e1, e2));
+	SD(("soft_plus: c1 %s c2 %s s1 %d s2 %d e1 %d e2 %d\n", 
+	    sftyp[c1], sftyp[c2], s1, s2, e1, e2));
 
 	ediff = e1 - e2;
 	if (c1 == SOFT_INFINITE && c2 == SOFT_INFINITE) {
 		if (s1 != s2)
-			c1 = SOFT_NAN;
+			c1 = SOFT_NAN, s1 ^= s2;
 	} else if (c1 == SOFT_NAN || c1 == SOFT_INFINITE) {
 		;
 	} else if (c2 == SOFT_NAN || c2 == SOFT_INFINITE) {
@@ -899,8 +901,11 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 	LDBLPTR->make(&rv, c1, s1, ediff > 0 ? e1 : e2, &a);
 
 #ifdef DEBUGFP
-	if (sfp2ld(x1p) + sfp2ld(x2p) != sfp2ld(&rv))
-		fpwarn("soft_plus", sfp2ld(&rv), sfp2ld(x1p) + sfp2ld(x2p));
+	{ long double ldd = sfp2ld(x1p) + sfp2ld(x2p);
+	  long double sp = sfp2ld(&rv);
+	if (memcmp(&ldd, &sp, SZLD))
+	  fpwarn("soft_plus", sfp2ld(&rv), ldd);
+	}
 #endif
 	*x1p = rv;
 }
@@ -912,6 +917,11 @@ soft_minus(SFP x1, SFP x2, TWORD t)
 	return soft_plus(x1, x2, t);
 }
 
+#if defined(mach_i386) || defined(mach_amd64)
+#define	MULSIGN	1	/* 0 * INF == -NAN on x87 */
+#else
+#define	MULSIGN 0
+#endif
 /*
  * Multiply two softfloats.
  */
@@ -938,10 +948,10 @@ soft_mul(SFP x1p, SFP x2p, TWORD t)
 		s1 = s1 == s2;
 	} else if (c1 == SOFT_INFINITE && c2 == SOFT_ZERO) {
 		c1 = SOFT_NAN;
-		s1 = 0;
+		s1 = MULSIGN;
 	} else if (c2 == SOFT_INFINITE && c1 == SOFT_ZERO) {
 		c1 = SOFT_NAN;
-		s1 = 0;
+		s1 = MULSIGN;
 	} else if (c1 == SOFT_INFINITE || c2 == SOFT_INFINITE) {
 		c1 = SOFT_INFINITE;
 		s1 = s1 == s2;
@@ -953,8 +963,11 @@ soft_mul(SFP x1p, SFP x2p, TWORD t)
 	}
 	LDBLPTR->make(&rv, c1, s1, e1, &a);
 #ifdef DEBUGFP
-	if (sfp2ld(x1p) * sfp2ld(x2p) != sfp2ld(&rv))
-		fpwarn("soft_mul", sfp2ld(&rv), sfp2ld(x1p) * sfp2ld(x2p));
+	{ long double ldd = sfp2ld(x1p) * sfp2ld(x2p);
+	  long double sp = sfp2ld(&rv);
+	if (memcmp(&ldd, &sp, SZLD))
+	  fpwarn("soft_mul", sfp2ld(&rv), ldd);
+	}
 #endif
         *x1p = rv;
 }
@@ -1364,6 +1377,8 @@ str2num(char *str, int *exp, MINT *m, struct FPI *fpi)
 		if (topbit(m) == fpi->nbits) {
 			mshr(m, 1, 0);
 			scale--;
+			if (sub)
+				sub = 0;
 		}
 
 		if (sub)
