@@ -1139,6 +1139,8 @@ asginit(NODE *p)
 				pstk->in_fl = 1; /* simulate ilbrace */
 
 			strcvt(p);
+			if (pstk->in_df->ddim == NOOFFSET)
+				asginit(bcon(0));
 			if (g == 0)
 				irbrace(); /* will fill with zeroes */
 			return;
