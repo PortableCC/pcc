@@ -531,27 +531,24 @@ fastnum(int ch, struct iobuf *ob)
 {
 	int c2;
 
-	if ((spechr[ch] & C_DIGIT) == 0) {
-		/* not digit, dot */
+	if (ch == '.') { /* not digit, dot */
 		putob(ob, ch);
 		ch = qcchar();
 	}
 	for (;;) {
 		putob(ob, ch);
 		if ((ch = qcchar()) == 0)
-			return 0;
-		if ((c2 = (ch & 0337)) == 'E' || c2 == 'P') {
-			if ((c2 = qcchar()) != '-' && c2 != '+') {
-				if (c2 > 0)
-					unch(c2);
-				break;
-			}
-			putob(ob, ch);
-			ch = c2;
-		} else if (ch == '.' || (spechr[ch] & C_ID)) {
-			continue;
-		} else
 			break;
+		if ((spechr[ch] & C_ID) == 0 && ch != '.')
+			break;
+		if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
+			if ((c2 = qcchar()) == '-' || c2 == '+') {
+				putob(ob, ch);
+				ch = c2;
+				continue;
+			}
+			unch(c2);
+		}
 	}
 	return ch;
 }
