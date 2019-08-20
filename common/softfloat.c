@@ -887,6 +887,11 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 			*x1p = *x2p;
 			return; /* result x2 */
 		}
+		if ((d = topbit(&m1)) < LDBLPTR->nbits-1)
+			mshl(&m1, LDBLPTR->nbits-1 - d);
+		if ((d = topbit(&m2)) < LDBLPTR->nbits-1)
+			mshl(&m2, LDBLPTR->nbits-1 - d);
+
 		if (e1 > e2)
 			mshl(&m1, ediff), mtop = LDBLPTR->nbits-1+ediff;
 		else
