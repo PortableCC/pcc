@@ -1815,6 +1815,9 @@ static char *fpflags[] = {
 #ifdef TARGET_FLT_EVAL_METHOD
 	"-D__FLT_EVAL_METHOD__=" MKS(TARGET_FLT_EVAL_METHOD),
 #endif
+#ifdef mach_i386
+	"-D__STDC_IEC_559__",
+#endif
 #ifdef FLT_PREFIX
 	"-D__FLT_RADIX__=" MKS(C(FLT_PREFIX,_RADIX)),
 	"-D__FLT_DIG__=" MKS(C(FLT_PREFIX,_DIG)),
@@ -1826,6 +1829,8 @@ static char *fpflags[] = {
 	"-D__FLT_MIN_10_EXP__=" MKS(C(FLT_PREFIX,_MIN_10_EXP)),
 	"-D__FLT_MIN_EXP__=" MKS(C(FLT_PREFIX,_MIN_EXP)),
 	"-D__FLT_MIN__=" MKS(C(FLT_PREFIX,_MIN)),
+	"-D__FLT_HAS_SUBNORM__=" MKS(C(FLT_PREFIX,_HAS_SUBNORM)),
+	"-D__FLT_TRUE_MIN__=" MKS(C(FLT_PREFIX,_TRUE_MIN)),
 #endif
 #ifdef DBL_PREFIX
 	"-D__DBL_DIG__=" MKS(C(DBL_PREFIX,_DIG)),
@@ -1837,6 +1842,8 @@ static char *fpflags[] = {
 	"-D__DBL_MIN_10_EXP__=" MKS(C(DBL_PREFIX,_MIN_10_EXP)),
 	"-D__DBL_MIN_EXP__=" MKS(C(DBL_PREFIX,_MIN_EXP)),
 	"-D__DBL_MIN__=" MKS(C(DBL_PREFIX,_MIN)),
+	"-D__DBL_HAS_SUBNORM__=" MKS(C(DBL_PREFIX,_HAS_SUBNORM)),
+	"-D__DBL_TRUE_MIN__=" MKS(C(DBL_PREFIX,_TRUE_MIN)),
 #endif
 #ifdef LDBL_PREFIX
 	"-D__LDBL_DIG__=" MKS(C(LDBL_PREFIX,_DIG)),
@@ -1848,6 +1855,8 @@ static char *fpflags[] = {
 	"-D__LDBL_MIN_10_EXP__=" MKS(C(LDBL_PREFIX,_MIN_10_EXP)),
 	"-D__LDBL_MIN_EXP__=" MKS(C(LDBL_PREFIX,_MIN_EXP)),
 	"-D__LDBL_MIN__=" MKS(C(LDBL_PREFIX,_MIN)),
+	"-D__LDBL_HAS_SUBNORM__=" MKS(C(LDBL_PREFIX,_HAS_SUBNORM)),
+	"-D__LDBL_TRUE_MIN__=" MKS(C(LDBL_PREFIX,_TRUE_MIN)),
 #endif
 	NULL
 };
@@ -1899,12 +1908,12 @@ setup_cpp_flags(void)
 #ifdef STDINC_MA
 	strlist_append(&sysincdirs, "=" STDINC_MA);
 #endif
-	strlist_append(&sysincdirs, "=" STDINC);
 #ifdef PCCINCDIR
 	if (cxxflag)
 		strlist_append(&sysincdirs, "=" PCCINCDIR "/c++");
 	strlist_append(&sysincdirs, "=" PCCINCDIR);
 #endif
+	strlist_append(&sysincdirs, "=" STDINC);
 }
 
 struct flgcheck ccomflgcheck[] = {
