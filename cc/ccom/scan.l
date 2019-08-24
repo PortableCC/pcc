@@ -335,7 +335,7 @@ kwdecode(struct symtab *s)
 static TWORD
 endtyp(char *s)
 {
-	TWORD tw = LDOUBLE;
+	TWORD tw = DOUBLE;
 
 	for (; *s; s++)
 		;
@@ -343,9 +343,9 @@ endtyp(char *s)
 	if (*s == 'i' || *s == 'I')
 		tw += (FIMAG-FLOAT), s--;
 	if (*s == 'f' || *s == 'F')
-		tw-=2, s--;
+		tw--, s--;
 	else if (*s == 'l' || *s == 'L')
-		s--;
+		tw++,s--;
 	if ((*s == 'i' || *s == 'I') && ISFTY(tw))
 		tw += (FIMAG-FLOAT), s--;
 /* XXX complain */
