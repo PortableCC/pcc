@@ -41,7 +41,7 @@
 
 #undef SFDEBUG
 #ifdef SFDEBUG
-int sfdebug=1;
+int sfdebug=0;
 #define	SD(x)	if (sfdebug) printf x
 #else
 #define SD(x)
@@ -934,7 +934,7 @@ void
 soft_mul(SFP x1p, SFP x2p, TWORD t)
 {
 	MINT a, m1, m2;
-	int ee, c1, c2, s1, s2, e1, e2;
+	int ee, c1, c2, s1, s2, e1, e2, d;
 	SF rv;
 
 	MINTDECL(a);
@@ -961,6 +961,10 @@ soft_mul(SFP x1p, SFP x2p, TWORD t)
 		c1 = SOFT_INFINITE;
 		s1 = s1 == s2;
 	} else {
+		if ((d = topbit(&m1)) < LDBLPTR->nbits-1)
+			mshl(&m1, LDBLPTR->nbits-1 - d);
+		if ((d = topbit(&m2)) < LDBLPTR->nbits-1)
+			mshl(&m2, LDBLPTR->nbits-1 - d);
 		mult(&m1, &m2, &a);
 		ee = topbit(&a) - (2 * (LDBLPTR->nbits-1));
 		e1 += (e2 + ee) -1 + LDBLPTR->expadj;
@@ -981,7 +985,7 @@ void
 soft_div(SFP x1p, SFP x2p, TWORD t)
 {
 	MINT m1, m2, q, r, e, f;
-	int sh, c1, c2, s1, s2, e1, e2;
+	int sh, c1, c2, s1, s2, e1, e2, d;
 	SF rv;
 
 	MINTDECL(m1);
@@ -1005,14 +1009,18 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 			c1 = SOFT_INFINITE, s1 = s1 != s2;
 	} else if (c1 == SOFT_ZERO) {
 		if (c2 == SOFT_ZERO)
-			c1 = SOFT_NAN, s1 = s1 == s2;
+			c1 = SOFT_NAN, s1 = 1;
 		else
-			c1 = SOFT_ZERO, s1 = s1 == s2;
+			c1 = SOFT_ZERO, s1 = s1 != s2;
 	} else if (c2 == SOFT_ZERO) {
 		c1 = SOFT_INFINITE, s1 = s1 != s2;
 	} else if (c2 == SOFT_INFINITE) {
 		c1 = SOFT_ZERO, s1 = s1 == s2;
 	} else {
+		if ((d = topbit(&m1)) < LDBLPTR->nbits-1)
+			mshl(&m1, LDBLPTR->nbits-1 - d);
+		if ((d = topbit(&m2)) < LDBLPTR->nbits-1)
+			mshl(&m2, LDBLPTR->nbits-1 - d);
 		/* get quot and remainder of divided mantissa */
 		mshl(&m1, LDBLPTR->nbits);
 		mdiv(&m1, &m2, &q, &r);
@@ -1432,12 +1440,12 @@ strtosf(SFP sfp, char *str, TWORD tw)
 
 
 	LDBLPTR->make(sfp, rv, 0, e, &m);
-	soft_fp2fp(sfp, tw);
+//	soft_fp2fp(sfp, tw);
 
 #ifdef DEBUGFP
 	{
 		long double ld = strtold(str, NULL);
-		ld = tw == DOUBLE ? (double)ld : tw == FLOAT ? (float)ld : ld;
+//		ld = tw == DOUBLE ? (double)ld : tw == FLOAT ? (float)ld : ld;
 		if (ld != sfp2ld(sfp))
 			fpwarn("strtosf", sfp2ld(sfp), ld);
 	}
