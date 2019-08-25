@@ -39,7 +39,7 @@
 #define assert(e) (!(e)?cerror("assertion failed " #e " at softfloat:%d",__LINE__):(void)0)
 #endif
 
-#undef SFDEBUG
+#define SFDEBUG
 #ifdef SFDEBUG
 int sfdebug=0;
 #define	SD(x)	if (sfdebug) printf x
@@ -1290,7 +1290,7 @@ static int
 hexbig(char *str, MINT *mmant, MINT *mexp)
 {
 	int exp2 = 0, gotdot = 0;
-	int ch;
+	int ch, e3 = 0;
 
 	while ((ch = *str++)) {
 		switch (ch) {
@@ -1304,7 +1304,7 @@ hexbig(char *str, MINT *mmant, MINT *mexp)
 			mshl(mmant, 4);
 			mmant->val[0] |= (ch - '0');
 			if (gotdot)
-				exp2 -= 4;
+				e3 -= 4;
 			continue;
 	
 		case '.':
@@ -1315,9 +1315,9 @@ hexbig(char *str, MINT *mmant, MINT *mexp)
 		case 'P':
 			if (MINTZ(mmant))
 				return SOFT_ZERO;
-			exp2 += atoi(str);
+			exp2 = atoi(str) + e3;
 			if (exp2 < 0) {
-				if (exp2 < LDBLPTR->minexp - LDBLPTR->nbits)
+				if (exp2 < LDBLPTR->minexp - LDBLPTR->nbits + e3)
 					return SOFT_ZERO;
 				mshl(mexp, -exp2);
 			} else if (exp2 > 0) {
