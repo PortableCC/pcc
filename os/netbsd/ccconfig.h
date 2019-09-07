@@ -43,9 +43,11 @@
 #define CRTEND_T	"crtend.o"
 #define RCRT0		"crt0.o"
 
+#ifdef notdef	/* NetBSD needs libpcc now */
 #define DEFLIBS		{ "-lc", NULL }
 #define DEFPROFLIBS	{ "-lc_p", NULL }
 #define DEFCXXLIBS	{ "-lp++", "-lc", NULL }
+#endif
 
 #if defined(mach_amd64)
 #define CPPMDADD \
