@@ -112,12 +112,13 @@ struct rstack {
 } *rpole;
 
 /*
- * Linked list for parameter (and struct elements) declaration.
+ * Array for parameter declarations.
  */
-static struct params {
-	struct params *prev;
-	struct symtab *sym;
-} *lparam;
+#define	ARGSZ	16
+static int maxastore = ARGSZ;
+static struct symtab *argstore[ARGSZ];
+static struct symtab **argptr = argstore;
+
 static int nparams;
 
 /* defines used for getting things off of the initialization stack */
@@ -134,7 +135,6 @@ static void evalidx(struct symtab *p);
 int isdyn(struct symtab *p);
 void inforce(OFFSZ n);
 void vfdalign(int n);
-static void ssave(struct symtab *);
 #ifdef PCC_DEBUG
 static void alprint(union arglist *al, int in);
 #endif
@@ -531,17 +531,6 @@ done:
 #endif
 }
 
-void
-ssave(struct symtab *sym)
-{
-	struct params *p;
-
-	p = tmpalloc(sizeof(struct params));
-	p->prev = lparam;
-	p->sym = sym;
-	lparam = p;
-}
-
 /*
  * end of function
  */
@@ -577,8 +566,6 @@ ftnend(void)
 	if (nerrors == 0) {
 		if (savbc != NULL)
 			cerror("bcsave error");
-		if (lparam != NULL)
-			cerror("parameter reset error");
 		if (swpole != NULL)
 			cerror("switch error");
 	}
@@ -605,7 +592,6 @@ ftnend(void)
 	}
 #endif
 	savbc = NULL;
-	lparam = NULL;
 	cftnsp = NULL;
 	maxautooff = autooff = AUTOINIT;
 	reached = 1;
@@ -626,27 +612,22 @@ dclargs(void)
 {
 	union dimfun *df;
 	union arglist *al;
-	struct params *a;
-	struct symtab *p, **parr = NULL; /* XXX gcc */
+	struct symtab *p; /* XXX gcc */
 	int i;
 
 	/*
 	 * Deal with fun(void) properly.
 	 */
-	if (nparams == 1 && lparam->sym && lparam->sym->stype == VOID)
+	if (nparams == 1 && argptr[0]->stype == VOID)
 		goto done;
 
 	/*
 	 * Generate a list for bfcode().
 	 * Parameters were pushed in reverse order.
 	 */
-	if (nparams != 0)
-		parr = FUNALLO(sizeof(struct symtab *) * nparams);
 
-	if (nparams)
-	    for (a = lparam, i = 0; a != NULL; a = a->prev) {
-		p = a->sym;
-		parr[i++] = p;
+	for (i = 0; i < nparams; i++) {
+		p = argptr[i];
 		if (p == NULL) {
 			uerror("parameter %d name missing", i);
 			p = &nulsym; /* empty symtab */
@@ -656,6 +637,8 @@ dclargs(void)
 		if (ISARY(p->stype)) {
 			p->stype += (PTR-ARY);
 			p->sdf++;
+		} else if (p->stype == FLOAT && oldstyle) {
+			p->stype = DOUBLE;
 		} else if (ISFTN(p->stype)) {
 			werror("function declared as argument");
 			p->stype = INCREF(p->stype);
@@ -673,14 +656,14 @@ dclargs(void)
 
 		alb = al2 = FUNALLO(sizeof(union arglist) * nparams * 3 + 1);
 		for (i = 0; i < nparams; i++) {
-			TWORD type = parr[i]->stype;
+			TWORD type = argptr[i]->stype;
 			(al2++)->type = type;
 			if (ISSOU(BTYPE(type)))
-				(al2++)->sap = parr[i]->sap;
+				(al2++)->sap = argptr[i]->sap;
 			while (!ISFTN(type) && !ISARY(type) && type > BTMASK)
 				type = DECREF(type);
 			if (type > BTMASK)
-				(al2++)->df = parr[i]->sdf;
+				(al2++)->df = argptr[i]->sdf;
 		}
 		al2->type = TNULL;
 		intcompare = 1;
@@ -695,8 +678,8 @@ dclargs(void)
 		/* Must recalculate offset for oldstyle args here */
 		argoff = ARGINIT;
 		for (i = 0; i < nparams; i++) {
-			parr[i]->soffset = NOOFFSET;
-			oalloc(parr[i], &argoff);
+			argptr[i]->soffset = NOOFFSET;
+			oalloc(argptr[i], &argoff);
 		}
 	}
 
@@ -704,19 +687,17 @@ done:	autooff = AUTOINIT;
 
 	plabel(prolab); /* after prolog, used in optimization */
 	retlab = getlab();
-	bfcode(parr, nparams);
+	bfcode(argptr, nparams);
 	if (fun_inline && (xinline
 #ifdef GCC_COMPAT
  || attr_find(cftnsp->sap, GCC_ATYP_ALW_INL)
 #endif
 		))
-		inline_args(parr, nparams);
-	FUNFREE(parr);
+		inline_args(argptr, nparams);
 	plabel(getlab()); /* used when spilling */
 	if (parlink)
 		ecomp(parlink);
 	parlink = NIL;
-	lparam = NULL;
 	nparams = 0;
 	symclear(1);	/* In case of function pointer args */
 }
@@ -1113,53 +1094,21 @@ yyaccpt(void)
 	ftnend();
 }
 
+
 /*
- * p is top of type list given to tymerge later.
- * Find correct CALL node and declare parameters from there.
+ * Save argument symtab entry pointers in an array for later use in dclargs.
  */
 void
-ftnarg(NODE *p)
+argsave(P1ND *p)
 {
-	NODE *q;
-
-#ifdef PCC_DEBUG
-	if (ddebug > 2)
-		printf("ftnarg(%p)\n", p);
-#endif
-	/*
-	 * Push argument symtab entries onto param stack in reverse order,
-	 * due to the nature of the stack it will be reclaimed correct.
-	 */
-	for (; p->n_op != NAME; p = p->n_left) {
-		if (p->n_op == UCALL && p->n_left->n_op == NAME)
-			return;	/* Nothing to enter */
-		if (p->n_op == CALL && p->n_left->n_op == NAME)
-			break;
+	if (p->n_op == ELLIPSIS || p->n_type == VOID)
+		return;
+	if (nparams == maxastore) {
+		argptr = memcpy(tmpalloc(maxastore*2 * sizeof(struct symtab *)),
+		    argptr, maxastore * sizeof(struct symtab *));
+		maxastore*=2;
 	}
-
-	p = p->n_right;
-	while (p->n_op == CM) {
-		q = p->n_right;
-		if (q->n_op != ELLIPSIS) {
-			ssave(q->n_sp);
-			nparams++;
-#ifdef PCC_DEBUG
-			if (ddebug > 2)
-				printf("	saving sym %s (%p) from (%p)\n",
-				    q->n_sp->sname, q->n_sp, q);
-#endif
-		}
-		p = p->n_left;
-	}
-	ssave(p->n_sp);
-	if (p->n_type != VOID)
-		nparams++;
-
-#ifdef PCC_DEBUG
-	if (ddebug > 2)
-		printf("	saving sym %s (%p) from (%p)\n",
-		    nparams ? p->n_sp->sname : "<noname>", p->n_sp, p);
-#endif
+	argptr[nparams++] = p->n_sp;
 }
 
 /*

@@ -1833,7 +1833,7 @@ fundef(P1ND *tp, P1ND *p)
 		argoff = ARGINIT;
 		if (oldstyle == 0)
 			q->n_right = listfw(q->n_right, funargs);
-		ftnarg(q);
+		p1listf(q->n_right, argsave);
 		blevel = 0;
 	}
 
@@ -1926,11 +1926,6 @@ olddecl(P1ND *p, P1ND *a)
 	s->stype = p->n_type;
 	s->sdf = p->n_df;
 	s->sap = p->n_ap;
-	if (ISARY(s->stype)) {
-		s->stype += (PTR-ARY);
-		s->sdf++;
-	} else if (s->stype == FLOAT)
-		s->stype = DOUBLE;
 	if (a)
 		attr_add(s->sap, gcc_attr_wrapper(a));
 	p1nfree(p);
