@@ -318,7 +318,7 @@ void inline_ref(struct symtab *);
 void inline_prtout(void);
 void inline_args(struct symtab **, int);
 P1ND *inlinetree(struct symtab *, P1ND *, P1ND *);
-void ftnarg(P1ND *);
+void argsave(P1ND *p);
 struct rstack *bstruct(char *, int, P1ND *);
 void moedef(char *);
 void beginit(struct symtab *);
