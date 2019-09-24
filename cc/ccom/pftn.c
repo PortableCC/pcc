@@ -123,6 +123,7 @@ static int nparams;
 
 /* defines used for getting things off of the initialization stack */
 
+#define	MAXDF		12	/* 5.2.4.1 */
 NODE *arrstk[10];
 int arrstkp;
 static int intcompare;
@@ -2043,14 +2044,14 @@ arglist(NODE *n)
 	return al;
 }
 
+static int numdfs;
+
 static void
-tylkadd(union dimfun dim, struct tylnk **tylkp, int *ntdim)
+tylkadd(union dimfun dim, union dimfun *df)
 {
-	(*tylkp)->next = tmpalloc(sizeof(struct tylnk));
-	*tylkp = (*tylkp)->next;
-	(*tylkp)->next = NULL;
-	(*tylkp)->df = dim;
-	(*ntdim)++;
+	df[numdfs++] = dim;
+	if (numdfs == MAXDF)
+		uerror("too many dimensions (C11 5.2.4.1)");
 }
 
 /*
@@ -2059,7 +2060,7 @@ tylkadd(union dimfun dim, struct tylnk **tylkp, int *ntdim)
  * the type is build top down, the dimensions bottom up
  */
 static void
-tyreduce(NODE *p, struct tylnk **tylkp, int *ntdim)
+tyreduce(NODE *p, union dimfun *df)
 {
 	union dimfun dim;
 	NODE *r = NULL;
@@ -2098,17 +2099,21 @@ tyreduce(NODE *p, struct tylnk **tylkp, int *ntdim)
 #endif
 		}
 		break;
+	case UMUL:
+		break;
+	default:
+		cerror("bad node %d\n", o);
 	}
 
 	p->n_left->n_type = t;
 	p->n_left->n_qual = INCQAL(q) | p->n_left->n_qual;
-	tyreduce(p->n_left, tylkp, ntdim);
+	tyreduce(p->n_left, df);
 
 	if (o == LB || o == UCALL || o == CALL)
-		tylkadd(dim, tylkp, ntdim);
+		tylkadd(dim, df);
 	if (o == RB) {
 		dim.ddim = -1;
-		tylkadd(dim, tylkp, ntdim);
+		tylkadd(dim, df);
 		arrstk[arrstkp++] = r;
 	}
 
@@ -2129,10 +2134,8 @@ tymerge(NODE *typ, NODE *idp)
 {
 	TWORD t;
 	NODE *p;
+	union dimfun dfs[MAXDF];
 	union dimfun *j;
-	struct tylnk *base, tylnk, *tylkp;
-	struct attr *bap;
-	int ntdim, i;
 
 #ifdef PCC_DEBUG
 	if (ddebug > 2) {
@@ -2145,33 +2148,26 @@ tymerge(NODE *typ, NODE *idp)
 	if (typ->n_op != TYPE)
 		cerror("tymerge: arg 1");
 
-	bap = typ->n_ap;
-
 	idp->n_type = typ->n_type;
 	idp->n_qual |= typ->n_qual;
 
-	tylkp = &tylnk;
-	tylkp->next = NULL;
-	ntdim = 0;
+	numdfs = 0;
 
-	tyreduce(idp, &tylkp, &ntdim);
+	tyreduce(idp, dfs);
 
 	for (t = typ->n_type, j = typ->n_df; t&TMASK; t = DECREF(t))
 		if (ISARY(t) || ISFTN(t))
-			tylkadd(*j++, &tylkp, &ntdim);
+			tylkadd(*j++, dfs);
 
-	if (ntdim) {
-		union dimfun *a = permalloc(sizeof(union dimfun) * ntdim);
-		dimfuncnt += ntdim;
-		for (i = 0, base = tylnk.next; base; base = base->next, i++)
-			a[i] = base->df;
-		idp->n_df = a;
+	dimfuncnt += numdfs;
+	if (numdfs) {
+		union dimfun *a = permalloc(sizeof(union dimfun) * numdfs);
+		idp->n_df = memcpy(a, dfs, sizeof(union dimfun) * numdfs);
 	} else
 		idp->n_df = NULL;
 
 	/* now idp is a single node: fix up type */
-	if ((t = ctype(idp->n_type)) != idp->n_type)
-		idp->n_type = t;
+	idp->n_type = ctype(idp->n_type);
 	
 	if (idp->n_op != NAME) {
 		for (p = idp->n_left; p->n_op != NAME; p = nfree(p))
@@ -2179,14 +2175,9 @@ tymerge(NODE *typ, NODE *idp)
 		nfree(p);
 		idp->n_op = NAME;
 	}
+
 	/* carefully not destroy any type attributes */
-	if (idp->n_ap != NULL) {
-		struct attr *ap = idp->n_ap;
-		while (ap->next)
-			ap = ap->next;
-		ap->next = bap;
-	} else
-		idp->n_ap = bap;
+	idp->n_ap = attr_add(typ->n_ap, idp->n_ap);
 
 	return(idp);
 }
