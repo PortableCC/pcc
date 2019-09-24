@@ -125,14 +125,12 @@ static int nparams;
 
 #define	MAXDF		12	/* 5.2.4.1 */
 NODE *arrstk[10];
-int arrstkp;
 static int intcompare;
 NODE *parlink;
 
 void fixtype(NODE *p, int class);
 int fixclass(int class, TWORD type);
 static void dynalloc(struct symtab *p, int *poff);
-static void evalidx(struct symtab *p);
 int isdyn(struct symtab *p);
 void inforce(OFFSZ n);
 void vfdalign(int n);
@@ -436,9 +434,6 @@ defid2(NODE *q, int class, char *astr)
 	/* Do not save param info for old-style functions */
 	if (ISFTN(type) && oldstyle)
 		p->sdf->dfun = NULL;
-
-	if (arrstkp)
-		evalidx(p);
 
 	/* allocate offsets */
 	if (class&FIELD) {
@@ -1387,38 +1382,6 @@ edelay(NODE *p)
 }
 
 /*
- * Traverse through the array args, evaluate them and put the 
- * resulting temp numbers in the dim fields.
- */
-static void
-evalidx(struct symtab *sp)
-{
-	union dimfun *df;
-	NODE *p;
-	TWORD t;
-	int astkp = 0;
-
-	if (arrstk[0] == NIL)
-		astkp++; /* for parameter arrays */
-
-	if (isdyn(sp))
-		sp->sflags |= SDYNARRAY;
-
-	df = sp->sdf;
-	for (t = sp->stype; t > BTMASK; t = DECREF(t)) {
-		if (!ISARY(t))
-			continue;
-		if (df->ddim == -1) {
-			p = tempnode(0, INT, 0, 0);
-			df->ddim = -regno(p);
-			edelay(buildtree(ASSIGN, p, arrstk[astkp++]));
-		}
-		df++;
-	}
-	arrstkp = 0;
-}
-
-/*
  * Return 1 if dynamic array, 0 otherwise.
  */
 int
@@ -2112,10 +2075,13 @@ tyreduce(NODE *p, union dimfun *df)
 	if (o == LB || o == UCALL || o == CALL)
 		tylkadd(dim, df);
 	if (o == RB) {
-		dim.ddim = -1;
+		P1ND *qq = tempnode(0, INT, 0, 0);
+		dim.ddim = -regno(qq);
 		tylkadd(dim, df);
-		arrstk[arrstkp++] = r;
+		edelay(buildtree(ASSIGN, qq, r));
 	}
+	if (p->n_op == LB || p->n_op == CALL)
+		p->n_op = RB;
 
 	p->n_sp = p->n_left->n_sp;
 	p->n_type = p->n_left->n_type;
@@ -2133,7 +2099,6 @@ NODE *
 tymerge(NODE *typ, NODE *idp)
 {
 	TWORD t;
-	NODE *p;
 	union dimfun dfs[MAXDF];
 	union dimfun *j;
 
@@ -2169,12 +2134,9 @@ tymerge(NODE *typ, NODE *idp)
 	/* now idp is a single node: fix up type */
 	idp->n_type = ctype(idp->n_type);
 	
-	if (idp->n_op != NAME) {
-		for (p = idp->n_left; p->n_op != NAME; p = nfree(p))
-			;
-		nfree(p);
-		idp->n_op = NAME;
-	}
+	if (idp->n_op != NAME)
+		p1tfree(idp->n_left);
+	idp->n_op = NAME;
 
 	/* carefully not destroy any type attributes */
 	idp->n_ap = attr_add(typ->n_ap, idp->n_ap);

@@ -1923,12 +1923,9 @@ tempnode(int nr, TWORD type, union dimfun *df, struct attr *ap)
 P1ND *
 doszof(P1ND *p)
 {
-	extern P1ND *arrstk[10];
-	extern int arrstkp;
 	union dimfun *df;
 	TWORD ty;
 	P1ND *rv, *q;
-	int astkp;
 
 	if (p->n_op == FLD)
 		uerror("can't apply sizeof to bit-field");
@@ -1940,15 +1937,11 @@ doszof(P1ND *p)
 	rv = bcon(1);
 	df = p->n_df;
 	ty = p->n_type;
-	astkp = 0;
 	while (ISARY(ty)) {
 		if (df->ddim == NOOFFSET)
 			uerror("sizeof of incomplete type");
 		if (df->ddim < 0) {
-			if (arrstkp)
-				q = arrstk[astkp++];
-			else
-				q = tempnode(-df->ddim, INT, 0, 0);
+			q = tempnode(-df->ddim, INT, 0, 0);
 		} else
 			q = bcon(df->ddim);
 		rv = buildtree(MUL, rv, q);
@@ -1958,7 +1951,6 @@ doszof(P1ND *p)
 	rv = buildtree(MUL, rv, 
 	    xbcon(tsize(ty, p->n_df, p->n_ap)/SZCHAR, NULL, INTPTR));
 	p1tfree(p);
-	arrstkp = 0; /* XXX - may this fail? */
 	return rv;
 }
 
@@ -3302,7 +3294,6 @@ cdope(int op)
 	case STRING:
 	case QUALIFIER:
 	case CLASS:
-	case RB:
 	case ELLIPSIS:
 	case TYPE:
 	case ALIGN:
@@ -3323,6 +3314,7 @@ cdope(int op)
 	case ATTRIB:
 	case LABEL:
 	case UPLUS:
+	case RB:
 		return UTYPE;
 	case ANDAND:
 	case OROR:
