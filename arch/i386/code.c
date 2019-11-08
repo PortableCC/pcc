@@ -236,8 +236,7 @@ bfcode(struct symtab **sp, int cnt)
                 p = block(XASM, p, bcon(0), INT, 0, 0);
 
 #if defined(MACHOABI)
-                if ((name = cftnsp->soname) == NULL)
-                        name = cftnsp->sname;
+		name = getexname(cftnsp);
                 if (snprintf(str, STL, "call L%s$pb\nL%s$pb:\n\tpopl %%0\n",
                     name, name) >= STL)
                         cerror("bfcode");
@@ -383,8 +382,7 @@ bfcode(struct symtab **sp, int cnt)
                 /*
                  * mangle name in symbol table as a callee.
                  */
-                if ((name = cftnsp->soname) == NULL)
-                        name = exname(cftnsp->sname);
+		name = getexname(cftnsp);
                 snprintf(buf, 256, "%s@%d", name, argstacksize);
                 cftnsp->soname = addname(buf);
 #endif
