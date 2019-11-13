@@ -355,3 +355,4 @@ P1ND *mips64_builtin_va_copy(const struct bitable *, P1ND *a);
 #define DBL_PREFIX      IEEEFP_64
 #define LDBL_PREFIX     IEEEFP_64
 
+#define DEFAULT_FPI_DEFS { &fpi_binary32, &fpi_binary64, &fpi_binary64 }
