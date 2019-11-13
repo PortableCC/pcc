@@ -241,8 +241,10 @@ clocal(NODE *p)
 			case LDOUBLE:
 			case DOUBLE:
 			case FLOAT:
+#if 0
 				l->n_op = FCON;
 				((FLT *)l->n_dcon)->fp = val;
+#endif
 				break;
 			default:
 				cerror("unknown type %d", l->n_type);
@@ -254,6 +256,7 @@ clocal(NODE *p)
 			nfree(p);
 			return l;
 		} else if (p->n_op == FCON) {
+#if 0
 			slval(l, ((FLT *)l->n_dcon)->fp);
 			l->n_sp = NULL;
 			l->n_op = ICON;
@@ -261,6 +264,8 @@ clocal(NODE *p)
 			l->n_ap = 0;
 			nfree(p);
 			return clocal(l);
+#endif
+			cerror("SCONV FCON");
 		}
 		if ((DEUNSIGN(p->n_type) == CHAR ||
 		    DEUNSIGN(p->n_type) == SHORT) &&
@@ -437,6 +442,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 		}
 		printf("\n");
 		break;
+#if 0
 	case LDOUBLE:
 	case DOUBLE:
 		u.d = (double)((FLT *)p->n_dcon)->fp;
@@ -455,6 +461,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 		u.f = (float)((FLT *)p->n_dcon)->fp;
 		printf("\t.word\t0x%x\n", u.i[0]);
 		break;
+#endif
 	default:
 		return 0;
 	}
