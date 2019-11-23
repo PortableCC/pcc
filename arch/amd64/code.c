@@ -569,6 +569,28 @@ bjobcode(void)
 	nfree(q);
 	nfree(p);
 
+#ifdef GCC_COMPAT
+	/*
+	 * gcc defines __float128 on amd64.  We handcraft a struct 
+	 * as a typedef of two long here to make glibc happy.
+	 */
+	static char *f128l, *f128h;
+
+	f128l = addname("f128l");
+	f128h = addname("f128h");
+	rp = bstruct(NULL, STNAME, NULL);
+	p = block(NAME, NIL, NIL, LONG, 0, 0);
+	soumemb(p, f128l, 0);
+	soumemb(p, f128h, 0);
+	nfree(p);
+	p = bdty(NAME, c = addname("__float128"));
+	p = tymerge(q = dclstruct(rp), p);
+	p->n_sp = lookup(c, 0);
+	defid(p, TYPEDEF);
+	nfree(q);
+	nfree(p);
+#endif
+
 	/* for the static varargs functions */
 #define	MKN(vn, rn) \
 	{ vn = addname(rn); sp = lookup(vn, SNORMAL); \
