@@ -154,9 +154,6 @@ int argstacksize;
 static P1ND *
 picext(P1ND *p)
 {
-#ifndef GCC_COMPAT
-	struct attr *ap;
-#endif
 
 #if defined(ELFABI)
 	P1ND *q, *r;
@@ -167,6 +164,7 @@ picext(P1ND *p)
 	name = getexname(p->n_sp);
 
 #ifdef GCC_COMPAT
+	struct attr *ap;
 	if ((ap = attr_find(p->n_sp->sap, GCC_ATYP_VISIBILITY)) &&
 	    strcmp(ap->sarg(0), "hidden") == 0) {
 		/* For hidden vars use GOTOFF */
