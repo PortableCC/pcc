@@ -74,12 +74,13 @@ int tflag;	/* traditional cpp syntax */
 int dflag;	/* debug printouts */
 static void prline(const usch *s);
 static void prrep(mvtyp);
+static usch *addname(usch *str);
 #define	DPRINT(x) if (dflag) printf x
 #else
 #define DPRINT(x)
 #endif
 #define	PUTOB(ob, ch) (ob->cptr == ob->bsz ? \
-	putob(ob, ch) : (void)(ob->buf[ob->cptr++] = ch))
+	putob(ob, ch) : (ob->buf[ob->cptr++] = ch))
 
 static int istty;
 int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
@@ -87,7 +88,7 @@ char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows;
 static usch utbuf[CPPBUF];
-struct iobuf pb = { utbuf, 0, CPPBUF, 0, 1, BUTBUF };
+struct iobuf pb /* = { utbuf, 0, CPPBUF, 0, 1, BUTBUF } */ ;
 static void macstr(const usch *s);
 #if LIBVMF
 struct vspace ibspc, macspc;
@@ -146,10 +147,6 @@ int	elslvl;
  * expanded identifier.
  */
 
-/* args for lookup() */
-#define	FIND	0
-#define	ENTER	1
-
 /*
  * No-replacement array.  If a macro is found and exists in this array
  * then no replacement shall occur.
@@ -165,13 +162,13 @@ static struct iobuf *readargs(struct iobuf *, struct symtab *, const usch **);
 static struct iobuf *exparg(int, struct iobuf *, struct iobuf *, struct blocker *);
 static struct iobuf *subarg(struct symtab *sp, const usch **args, int, struct blocker *);
 static void usage(void);
-static usch *xstrdup(const usch *str);
 static void addidir(char *idir, struct incs **ww);
 static void vsheap(struct iobuf *, const char *, va_list);
 static int skipws(struct iobuf *ib);
 static int getyp(usch *s);
 static void macsav(int ch);
 static void fstrstr(struct iobuf *ib, struct iobuf *ob);
+static usch *chkfile(const usch *n1, const usch *n2);
 
 int
 main(int argc, char **argv)
@@ -320,6 +317,24 @@ main(int argc, char **argv)
 	macptr[0] = xmalloc(CPPBUF);
 #endif
 
+	/* init output buffer */
+	pb.buf = utbuf;
+	pb.bsz = CPPBUF;
+	pb.inuse = 1;
+	pb.type = BUTBUF;
+
+#ifdef pdp11
+	/* set predefined symbols here (not from cc) */
+	bsheap(fb, "#define __BSD2_11__\n");
+	bsheap(fb, "#define BSD2_11\n");
+	bsheap(fb, "#define __pdp11__\n");
+	bsheap(fb, "#define pdp11\n");
+	bsheap(fb, "#define unix\n"); /* XXX go away */
+	addidir("/usr/include", &incdir[SYSINC]);
+	if (tflag == 0)
+		bsheap(fb, "#define __STDC__ 1\n");
+#endif
+
 	macsav(0);
 	filloc->valoff = linloc->valoff = pragloc->valoff =
 	    ctrloc->valoff = defloc->valoff = 1;
@@ -341,9 +356,9 @@ main(int argc, char **argv)
 			c = argv[0];
 		else
 			c++;
-		Mfile = (char *)xstrdup((usch *)c);
+		Mfile = (char *)addname((usch *)c);
 		if (MPflag)
-			MPfile = (char *)xstrdup((usch *)c);
+			MPfile = (char *)addname((usch *)c);
 		if (Mxfile)
 			Mfile = Mxfile;
 		if ((c = strrchr(Mfile, '.')) == NULL)
@@ -383,8 +398,7 @@ main(int argc, char **argv)
 	ifiles = NULL;
 	/* end initial defines */
 
-	if (pushfile(fn1, fn2, 0, NULL))
-		error("cannot open %s", argv[0]);
+	pushfile(fn1, fn2, 0, NULL);
 
 	if (Mflag == 0) {
 		if (skpows)
@@ -675,7 +689,7 @@ line(void)
 		n = n * 10 + *inp++ - '0';
 
 	/* Can only be decimal number here between 1-2147483647 */
-	if (n < 1 || n > 2147483647)
+	if (n < 1 || n > 2147483647L)
 		goto bad;
 
 	while (ISWSNL(*inp))
@@ -700,7 +714,7 @@ line(void)
 	ob->buf[--ob->cptr] = 0; /* remove trailing \" */
 
 	if (strcmp((char *)ifiles->fname, (char *)ob->buf+1))
-		ifiles->fname = xstrdup(ob->buf+1);
+		ifiles->fname = addname(ob->buf+1);
 
 	while (ISWSNL(*inp))
 		inp++;
@@ -749,8 +763,8 @@ fsrch_macos_framework(const usch *fn, const usch *dir)
 	if (s == NULL)
 		return 0;
 
-	nm = xstrdup(dir);
-	p = xstrdup(fn);
+	nm = addname(dir);
+	p = addname(fn);
 	*(p + len) = 0;
 
 	q = (usch *)strstr((const char *)nm, (const char *)p);
@@ -769,7 +783,7 @@ fsrch_macos_framework(const usch *fn, const usch *dir)
 	
 	ob = bsheap(NULL, "%s/Frameworks/%s.framework/Headers%s", nm, fn, s);
 	free(nm);
-	nm = xstrdup(ob->buf);
+	nm = addname(ob->buf);
 	bufree(ob);
 	if (pushfile(nm, fn, SYSINC, NULL) == 0)
 		return 1;
@@ -786,18 +800,17 @@ fsrch_macos_framework(const usch *fn, const usch *dir)
 static int
 fsrch(const usch *fn, int idx, struct incs *w)
 {
+	usch *res;
 	int i;
 
 	for (i = idx; i < 2; i++) {
 		if (i > idx)
 			w = incdir[i];
 		for (; w; w = w->next) {
-			size_t len = strlen((char *)w->dir) + strlen((char *)fn) + 2; /* '/' + \0 */
-			char *f = xmalloc(len);
-			snprintf(f, len, "%s/%s", w->dir, fn);
-			if (pushfile((usch *)f, fn, i, w->next) == 0)
+			if ((res = chkfile(fn, w->dir)) != NULL) {
+				pushfile(res, fn, i, w->next);
 				return 1;
-			free(f);
+			}
 		}
 	}
 
@@ -810,7 +823,7 @@ fsrch(const usch *fn, int idx, struct incs *w)
 		/*
 		 * Dig out org filename path and try to find.
 		 */
-		usch *p, *dir = xstrdup(ifiles->orgfn);
+		usch *p, *dir = addname(ifiles->orgfn);
 		if ((p = (usch *)strrchr((char *)dir, '/')) != NULL) {
 			p[1] = 0;
 			if (fsrch_macos_framework(fn, dir) == 1)
@@ -875,6 +888,26 @@ incfn(void)
 }
 
 /*
+ * concatenate n1 with n2 and see if the result is an accessible file.
+ * return a permanent version of the resulting name or NULL if nonexisting.
+ */
+static usch *
+chkfile(const usch *n1, const usch *n2)
+{
+	struct iobuf *ob;
+	usch *res = NULL;
+
+	if (n2 != NULL) {
+		ob = bsheap(NULL, "%s/%s", n2, n1);
+	} else
+		ob = strtobuf(n1, NULL);
+	if (access((char *)ob->buf, R_OK) == 0)
+		res = addname(ob->buf);
+	bufree(ob);
+	return res;
+}
+
+/*
  * Include a file. Include order:
  * - For <...> files, first search -I directories, then system directories.
  * - For "..." files, first search "current" dir, then as <...> files.
@@ -891,43 +924,38 @@ include(void)
 	if ((ob = incfn()) == NULL) /* get include file name in obuf */
 		error("bad #include");
 
-	fn = xstrdup(ob->buf) + 1;	/* Save on string heap? */
-	bufree(ob);
-	/* test absolute path first */
-	if (fn[0] == '/' && pushfile(fn, fn, 0, NULL) == 0)
-		goto okret;
-	if (fn[-1] == '\"') {
-		/* nope, failed, try to create a path for it */
-		if ((nm = (usch *)strrchr((char *)ifiles->orgfn, '/'))) {
-			ob = strtobuf((usch *)ifiles->orgfn, NULL);
-			ob->cptr = (int)(nm - ifiles->orgfn) + 1;
-			strtobuf(fn, ob);
-			nm = xstrdup(ob->buf);
-			bufree(ob);
-		} else
-			nm = xstrdup(fn);
-		if (pushfile(nm, nm, 0, NULL) == 0) {
-			free(fn-1);
+	if (ob->buf[1] == '/') {
+		 if ((fn = chkfile(&ob->buf[1], 0)) != NULL)
 			goto okret;
-		}
 	}
+	if (ob->buf[0] == '\"') {
+		if ((nm = (usch *)strrchr((char *)ifiles->orgfn, '/'))) {
+			*nm = 0;
+		 	fn = chkfile(&ob->buf[1], ifiles->orgfn);
+			*nm = '/';
+		} else 
+			fn = chkfile(&ob->buf[1], 0);
+		if (fn != NULL)
+			goto okret;
+	}
+	fn = addname(&ob->buf[1]);
+	bufree(ob);
 	if (fsrch(fn, 0, incdir[0]))
-		goto okret;
+		goto prt;
 
 	error("cannot find '%s'", fn);
 	/* error() do not return */
 
-okret:
-	if (nm)
-		free(nm);
-	prtline(1);
+okret:	bufree(ob);
+	pushfile(fn, fn, 0, NULL);
+prt:	prtline(1);
 }
 
 void
 include_next(void)
 {
 	struct iobuf *ob;
-	usch *nm;
+	usch *fn;
 
 	if (flslvl)
 		return;
@@ -935,11 +963,11 @@ include_next(void)
 	if ((ob = incfn()) == NULL) /* get include file name in obuf */
 		error("bad #include_next");
 
-	nm = xstrdup(ob->buf+1);
+	fn = addname(&ob->buf[1]);
 	bufree(ob);
+	if (fsrch(fn, ifiles->idx, ifiles->incs) == 0)
+		error("cannot find '%s'", &ob->buf[1]);
 
-	if (fsrch(nm, ifiles->idx, ifiles->incs) == 0)
-		error("cannot find '%s'", nm);
 	prtline(1);
 }
 
@@ -1054,7 +1082,7 @@ define(void)
 	if (np->valoff) {
 		redef = 1;
 	} else {
-		np->namep = xstrdup(dp);
+		np->namep = addname(dp);
 		redef = 0;
 	}
 
@@ -2507,8 +2535,13 @@ struct tree {
 };
 
 #define BITNO(x)		((x) & ~(LEFT_IS_LEAF|RIGHT_IS_LEAF))
+#ifdef pdp11
+#define LEFT_IS_LEAF		0x8000
+#define RIGHT_IS_LEAF		0x4000
+#else
 #define LEFT_IS_LEAF		0x80000000
 #define RIGHT_IS_LEAF		0x40000000
+#endif
 #define IS_LEFT_LEAF(x)		(((x) & LEFT_IS_LEAF) != 0)
 #define IS_RIGHT_LEAF(x)	(((x) & RIGHT_IS_LEAF) != 0)
 #define P_BIT(key, bit)		(key[bit >> 3] >> (bit & 7)) & 1
@@ -2678,14 +2711,23 @@ xrealloc(void *p, int sz)
 	return rv;
 }
 
+/*
+ *
+ */
 static usch *
-xstrdup(const usch *str)
+addname(usch *str)
 {
-	usch *rv;
+	static usch *nbase;
+	static int nsz;
+	int len = strlen((char *)str) + 1;
 
-	if ((rv = (usch *)strdup((const char *)str)) == NULL)
-		error("xstrdup: out of mem");
-	return rv;
+	if (nsz < len) {
+		nbase = xmalloc(CPPBUF);
+		nsz = CPPBUF;
+	}
+	memcpy(nbase, str, len);
+	str = nbase;
+	nsz -= len;
+	nbase += len;
+	return str;
 }
-
-

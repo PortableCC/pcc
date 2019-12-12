@@ -350,8 +350,8 @@ ucn(int n)
 	while (n-- > 0) {
 		if ((ch = qcchar()) == 0 || (spechr[ch] & C_HEX) == 0) {
 			warning("invalid universal character name");
-			// XXX should actually unput the chars and return 0
-			unch(ch); // XXX eof
+			/* XXX should actually unput the chars and return 0 */
+			unch(ch); /* XXX eof */
 			break;
 		}
 		cp = cp * 16 + dig2num(ch);
@@ -877,9 +877,8 @@ yylex(void)
 /*
  * A new file included.
  * If ifiles == NULL, this is the first file and already opened (stdin).
- * Return 0 on success, -1 if file to be included is not found.
  */
-int
+void
 pushfile(const usch *file, const usch *fn, int idx, void *incs)
 {
 	struct includ ibuf;
@@ -891,7 +890,7 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 
 	if (file != NULL) {
 		if ((ic->infil = open((const char *)file, O_RDONLY)) < 0)
-			return -1;
+			error("pushfile: error open %s", file);
 		ic->orgfn = ic->fname = file;
 		if (++inclevel > MAX_INCLEVEL)
 			error("limit for nested includes exceeded");
@@ -938,7 +937,6 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 #endif
 	close(ic->infil);
 	bufree(ic->ib);
-	return 0;
 }
 
 /*
@@ -974,7 +972,7 @@ void
 cunput(int c)
 {
 #ifdef PCC_DEBUG
-//	if (dflag)printf(": '%c'(%d)\n", c > 31 ? c : ' ', c);
+/*	if (dflag)printf(": '%c'(%d)\n", c > 31 ? c : ' ', c); */
 #endif
 	unch(c);
 }

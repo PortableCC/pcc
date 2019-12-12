@@ -160,8 +160,8 @@ struct symtab {
 	mvtyp valoff;
 	const usch *file;
 	int line;
-	unsigned char type:4,	/* macro type */
-		      wraps:1;	/* macro wraps in buffer */
+	char type:4,	/* macro type */
+	      wraps:1;	/* macro wraps in buffer */
 	unsigned char narg;	/* # of args (if feasible) */
 };
 
@@ -199,7 +199,7 @@ void include(void);
 void include_next(void);
 void line(void);
 
-int pushfile(const usch *fname, const usch *fn, int idx, void *incs);
+void pushfile(const usch *fname, const usch *fn, int idx, void *incs);
 void prtline(int nl);
 int yylex(void);
 void cunput(int);
