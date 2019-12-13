@@ -168,7 +168,11 @@ inpbuf(int n)
 
 	if (ifiles->infil == -1)
 		return 0;
+#if LIBVMF
+	len = (int)read(ifiles->infil, ib->buf+PBMAX, BYTESPERSEG-PBMAX);
+#else
 	len = (int)read(ifiles->infil, ib->buf+PBMAX, CPPBUF-PBMAX);
+#endif
 	if (len == -1)
 		error("read error on file %s", ifiles->orgfn);
 	if (len > 0) {

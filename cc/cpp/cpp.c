@@ -80,7 +80,7 @@ static usch *addname(usch *str);
 #define DPRINT(x)
 #endif
 #define	PUTOB(ob, ch) (ob->cptr == ob->bsz ? \
-	putob(ob, ch) : (ob->buf[ob->cptr++] = ch))
+	(putob(ob, ch), 1) : (ob->buf[ob->cptr++] = ch))
 
 static int istty;
 int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
@@ -451,10 +451,24 @@ putob(struct iobuf *ob, int ch)
 	ob->buf[ob->cptr++] = ch;
 }
 
+static int niobs;
+static struct iobuf *iobs, *ioblnk;
+
 static struct iobuf *
 giob(int typ, const usch *bp, int bsz)
 {
-	struct iobuf *iob = xmalloc(sizeof(struct iobuf));
+	struct iobuf *iob;
+
+	if (ioblnk) {
+		iob = ioblnk;
+		ioblnk = (void *)iob->buf;
+	} else {
+		if (niobs == 0) {
+			iobs = xmalloc(CPPBUF);
+			niobs = CPPBUF/sizeof(*iob);
+		}
+		iob = &iobs[--niobs];
+	}
 
 	if (bp == NULL)
 		bp = xmalloc(bsz);
@@ -478,8 +492,8 @@ getobuf(int type)
 
 	switch (type) {
 	case BMAC:
-#if LIBVMF && 0
-		iob = giob(BINBUF, (usch *)vseg->s_cinfo, CPPBUF);
+#if LIBVMF
+		iob = giob(BMAC, (usch *)macvseg->s_cinfo, BYTESPERSEG);
 #else
 		iob = giob(BMAC, NULL, CPPBUF);
 #endif
@@ -491,7 +505,7 @@ getobuf(int type)
 		break;
 	case BINBUF:
 #if LIBVMF
-		iob = giob(BINBUF, (usch *)ifiles->vseg->s_cinfo, CPPBUF);
+		iob = giob(BINBUF, (usch *)ifiles->vseg->s_cinfo, BYTESPERSEG);
 #else
 		iob = giob(BINBUF, NULL, CPPBUF);
 #endif
@@ -630,7 +644,8 @@ bufree(struct iobuf *iob)
 		nbufused--;
 	if (iob->ro == 0)
 		free(iob->buf);
-	free(iob);
+	iob->buf = (void *)ioblnk;
+	ioblnk = iob;
 }
 
 static void
