@@ -1158,7 +1158,10 @@ define(void)
 	} else if (!ISWS(c))
 		goto bad;
 
-	Cflag = oCflag; /* Enable comments again */
+	if (tflag == 0)
+		Cflag = oCflag; /* Enable comments again */
+	else
+		Cflag = 1; /* need comments if -t */
 
 	begpos = macpos;
 	if (ISWS(c))
@@ -1221,20 +1224,29 @@ define(void)
 			break;
 
 		case CMNT:
-			macsav(c), c = cinput();
+			if (oCflag)
+				macsav(c);
+			c = cinput();
 			if (c == '/') {
 				do {
-					macsav(c), c = cinput();
+					if (oCflag)
+						macsav(c);
+					c = cinput();
 				} while (c && c != '\n');
 				if (c == 0)
 					goto bad;
 				continue;
 			} else {
-				macsav(c);
+				if (oCflag)
+					macsav(c);
 				for (;;) {
-					macsav(c = cinput());
+					c = cinput();
+					if (oCflag)
+						macsav(c);
 back:					if (c == '*') {
-						macsav(c = cinput());
+						c = cinput();
+						if (oCflag)
+							macsav(c);
 						if (c == '/')
 							break;
 						if (c == '*')
