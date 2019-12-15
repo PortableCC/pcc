@@ -1337,6 +1337,8 @@ back:					if (c == '*') {
 	/* remove trailing whitespace */
 	delews(begpos);
 
+	Cflag = oCflag; /* Enable comments again */
+
 	macsav(0);
 	if (vararg)
 		type = VARG;
