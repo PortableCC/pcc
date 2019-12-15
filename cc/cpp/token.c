@@ -1358,7 +1358,7 @@ again:		switch (ch) {
 				if (ch == '\\')
 					qcchar();
 				if (ch == '\n')
-					return;
+					break;
 			}
 			break;
 		case '\"':
