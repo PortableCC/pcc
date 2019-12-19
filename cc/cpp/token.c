@@ -870,6 +870,7 @@ yylex(void)
 			while (ISID(*yyinp))
 				yyinp++;
 			yynode.nd_val = 0;
+			yynode.op = NUMBER;
 			return NUMBER;
 		}
 		return ch;
@@ -969,7 +970,8 @@ prtline(int nl)
 		if (ifiles->idx == SYSINC)
 			strtobuf((usch *)" 3", &pb);
 		if (nl) strtobuf((usch *)"\n", &pb);
-	}
+	} else
+		putob(&pb, '\n');
 }
 
 void
@@ -1371,8 +1373,7 @@ again:		switch (ch) {
 					incmnt = 0;
 					break;
 				case '\n':
-					unch(ch);
-					/* FALLTHROUGH */
+					goto again;
 				case 0:
 					instr = 0;
 					return;
