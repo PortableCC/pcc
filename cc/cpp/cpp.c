@@ -2623,7 +2623,7 @@ lookup(const usch *key, int enterf)
 	const usch *k, *m;
 
 	/* Count full string length */
-	for (k = key, len = 0; ISID(*k) & C_ID; k++, len++)
+	for (k = key, len = 0; ISID(*k); k++, len++)
 		;
 
 	switch (numsyms) {
