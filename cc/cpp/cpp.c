@@ -39,12 +39,17 @@
  *		Create strings, concats args, recurses into exparg.
  */
 
+#ifdef pdp11
+#include <sys/types.h>
+#include <sys/file.h>
+#else
 #include "config.h"
+#endif
 
 #include <sys/stat.h>
 
 #include <fcntl.h>
-#ifdef HAVE_UNISTD_H
+#if defined(HAVE_UNISTD_H) || defined(pdp11)
 #include <unistd.h>
 #endif
 #include <stdio.h>
@@ -53,8 +58,14 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef pdp11
 #include "compat.h"
+#endif
 #include "cpp.h"
+
+#ifdef pdp11
+#define	VERSSTR "Portable C Compiler 1.2.0.DEVEL 20190327"
+#endif
 
 #ifndef S_ISDIR
 #define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)
@@ -74,7 +85,6 @@ int tflag;	/* traditional cpp syntax */
 int dflag;	/* debug printouts */
 static void prline(const usch *s);
 static void prrep(mvtyp);
-static usch *addname(usch *str);
 #define	DPRINT(x) if (dflag) printf x
 #else
 #define DPRINT(x)
@@ -171,6 +181,8 @@ static int getyp(usch *s);
 static void macsav(int ch);
 static void fstrstr(struct iobuf *ib, struct iobuf *ob);
 static usch *chkfile(const usch *n1, const usch *n2);
+static usch *addname(usch *str);
+static void *addblock(int sz);
 
 int
 main(int argc, char **argv)
@@ -178,7 +190,7 @@ main(int argc, char **argv)
 	struct includ bic;
 	struct iobuf *fb = getobuf(BNORMAL);
 	register int ch;
-	const usch *fn1, *fn2;
+	register const usch *fn1, *fn2;
 	char *a;
 
 #ifdef TIMING
@@ -188,7 +200,7 @@ main(int argc, char **argv)
 #endif
 
 #if LIBVMF
-	if (vminit(4))
+	if (vminit(NVMPGS))
 		error("vminit");
 	if (vmopen(&ibspc, NULL) < 0)
 		error("vmopen ibspc");
@@ -327,11 +339,11 @@ main(int argc, char **argv)
 
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
-	bsheap(fb, "#define __BSD2_11__\n");
-	bsheap(fb, "#define BSD2_11\n");
-	bsheap(fb, "#define __pdp11__\n");
-	bsheap(fb, "#define pdp11\n");
-	bsheap(fb, "#define unix\n"); /* XXX go away */
+	bsheap(fb, "#define __BSD2_11__ 1\n");
+	bsheap(fb, "#define BSD2_11 1\n");
+	bsheap(fb, "#define __pdp11__ 1\n");
+	bsheap(fb, "#define pdp11 1\n");
+	bsheap(fb, "#define unix 1\n"); /* XXX go away */
 	addidir("/usr/include", &incdir[SYSINC]);
 	if (tflag == 0)
 		bsheap(fb, "#define __STDC__ 1\n");
@@ -428,7 +440,7 @@ main(int argc, char **argv)
  * Write a character to an out buffer.
  */
 void
-putob(struct iobuf *ob, int ch)
+putob(register struct iobuf *ob, register int ch)
 {
 	if (ob->cptr == ob->bsz) {
 		int sz = ob->bsz;
@@ -453,24 +465,18 @@ putob(struct iobuf *ob, int ch)
 	ob->buf[ob->cptr++] = ch;
 }
 
-static int niobs;
-static struct iobuf *iobs, *ioblnk;
+static struct iobuf *ioblnk;
 
 static struct iobuf *
-giob(int typ, const usch *bp, int bsz)
+giob(int typ, register const usch *bp, int bsz)
 {
-	struct iobuf *iob;
+	register struct iobuf *iob;
 
 	if (ioblnk) {
 		iob = ioblnk;
 		ioblnk = (void *)iob->buf;
-	} else {
-		if (niobs == 0) {
-			iobs = xmalloc(CPPBUF);
-			niobs = CPPBUF/sizeof(*iob);
-		}
-		iob = &iobs[--niobs];
-	}
+	} else
+		iob = addblock(sizeof(*iob));
 
 	if (bp == NULL)
 		bp = xmalloc(bsz);
@@ -488,9 +494,9 @@ int nbufused;
  * Get a new buffer.
  */
 struct iobuf *
-getobuf(int type)
+getobuf(register int type)
 {
-	struct iobuf *iob = 0;
+	register struct iobuf *iob = 0;
 
 	switch (type) {
 	case BMAC:
@@ -522,9 +528,9 @@ getobuf(int type)
  * Create a read-only input buffer.
  */
 static struct iobuf *
-mkrobuf(const usch *s)
+mkrobuf(register const usch *s)
 {
-	struct iobuf *iob;
+	register struct iobuf *iob;
 
 	nbufused++;
 	iob = giob(BNORMAL, s, strlen((char *)s));
@@ -537,9 +543,9 @@ mkrobuf(const usch *s)
  * Copy a buffer to another buffer.
  */
 struct iobuf *
-buftobuf(struct iobuf *in, struct iobuf *iob)
+buftobuf(register struct iobuf *in, register struct iobuf *iob)
 {
-	int cp;
+	register int cp;
 
 	DPRINT(("buftobuf in %p out %p instr %s\n", in, iob, in->buf));
 	if (iob == NULL)
@@ -553,7 +559,7 @@ buftobuf(struct iobuf *in, struct iobuf *iob)
  * Copy a string to a buffer.
  */
 struct iobuf *
-strtobuf(const usch *str, struct iobuf *iob)
+strtobuf(register const usch *str, register struct iobuf *iob)
 {
 	if (iob == NULL)
 		iob = getobuf(BNORMAL);
@@ -568,9 +574,9 @@ strtobuf(const usch *str, struct iobuf *iob)
 static void
 macsav(int ch)
 {
-	int cpos = VALBUF(macpos);
-	int cptr = VALPTR(macpos);
-	char *mp;
+	register int cpos = VALBUF(macpos);
+	register int cptr = VALPTR(macpos);
+	register char *mp;
 
 #if LIBVMF
 	if (lckmacbuf != cpos) {
@@ -595,7 +601,7 @@ macsav(int ch)
 }
 
 static void                     
-macstr(const usch *s)
+macstr(register const usch *s)
 {
 	do {
 		macsav(*s);
@@ -604,10 +610,10 @@ macstr(const usch *s)
 }
 
 static int
-macget(mvtyp a)
+macget(register mvtyp a)
 {
 #if LIBVMF
-	struct vseg *vseg = vmmapseg(&macspc, VALBUF(a));
+	register struct vseg *vseg = vmmapseg(&macspc, VALBUF(a));
 	return vseg->s_cinfo[VALPTR(a)];
 #else
 	return macptr[VALBUF(a)][VALPTR(a)];
@@ -619,10 +625,10 @@ macget(mvtyp a)
  * XXX - no need to copy if everything in one buffer.
  */
 static struct iobuf *
-macrepbuf(mvtyp p)
+macrepbuf(register mvtyp p)
 {
-	struct iobuf *ob;
-	int ch;
+	register struct iobuf *ob;
+	register int ch;
 
 	ob = getobuf(BNORMAL);
 	while ((ch = macget(p++))) {
@@ -640,7 +646,7 @@ macrepbuf(mvtyp p)
 #define	clrcmbase()	macptr = cmbase
 
 void
-bufree(struct iobuf *iob)
+bufree(register struct iobuf *iob)
 {
 	if (iob->type == BNORMAL)
 		nbufused--;
@@ -651,9 +657,9 @@ bufree(struct iobuf *iob)
 }
 
 static void
-addidir(char *idir, struct incs **ww)
+addidir(register char *idir, register struct incs **ww)
 {
-	struct incs *w;
+	register struct incs *w;
 	struct stat st;
 
 	if (stat(idir, &st) == -1 || !S_ISDIR(st.st_mode))
@@ -688,8 +694,8 @@ addidir(char *idir, struct incs **ww)
 void
 line(void)
 {
-	struct iobuf *ib, *ob;
-	usch *inp;
+	register struct iobuf *ib, *ob;
+	register usch *inp;
 	int n, ln, oidx;
 
 	oidx = ifiles->idx;
@@ -815,10 +821,10 @@ fsrch_macos_framework(const usch *fn, const usch *dir)
  * Return 1 on success.
  */
 static int
-fsrch(const usch *fn, int idx, struct incs *w)
+fsrch(const usch *fn, int idx, register struct incs *w)
 {
-	usch *res;
-	int i;
+	register usch *res;
+	register int i;
 
 	for (i = idx; i < 2; i++) {
 		if (i > idx)
@@ -870,11 +876,11 @@ prem(void)
 static struct iobuf *
 incfn(void)
 {
-	struct iobuf *ob;
+	register struct iobuf *ob;
 	struct symtab *nl;
-	usch *dp;
+	register usch *dp;
 	int c;
-	int oCflag;
+	register int oCflag;
 
 	oCflag = Cflag;
 	Cflag = 0;
@@ -913,10 +919,10 @@ incfn(void)
  * return a permanent version of the resulting name or NULL if nonexisting.
  */
 static usch *
-chkfile(const usch *n1, const usch *n2)
+chkfile(register const usch *n1, register const usch *n2)
 {
-	struct iobuf *ob;
-	usch *res = NULL;
+	register struct iobuf *ob;
+	register usch *res = NULL;
 
 	if (n2 != NULL) {
 		ob = bsheap(NULL, "%s/%s", n2, n1);
@@ -936,8 +942,8 @@ chkfile(const usch *n1, const usch *n2)
 void
 include(void)
 {
-	struct iobuf *ob;
-	usch *fn, *nm = NULL;
+	register struct iobuf *ob;
+	register usch *fn, *nm = NULL;
 
 	if (flslvl)
 		return;
@@ -975,8 +981,8 @@ prt:	prtline(1);
 void
 include_next(void)
 {
-	struct iobuf *ob;
-	usch *fn;
+	register struct iobuf *ob;
+	register usch *fn;
 
 	if (flslvl)
 		return;
@@ -998,7 +1004,7 @@ include_next(void)
 static int
 cmprepl(mvtyp oin, mvtyp nin)
 {
-	int o, n;
+	register int o, n;
 
 	for (; ; oin++, nin++) {
 		/* comment skip */
@@ -1044,9 +1050,9 @@ skipwscmnt(struct iobuf *ib)
 }
 
 static int
-findarg(usch *s, struct iobuf *ab, int *arg, int narg)
+findarg(register usch *s, register struct iobuf *ab, int *arg, int narg)
 {
-	int i;
+	register int i;
 
 	for (i = 0; i < narg; i++)
 		if (strcmp((char *)s, (char *)ab->buf + arg[i]) == 0)
@@ -1057,8 +1063,8 @@ findarg(usch *s, struct iobuf *ab, int *arg, int narg)
 static void
 delews(mvtyp beg)
 {
-	int c;
-	mvtyp lastnonws = beg;
+	register int c;
+	register mvtyp lastnonws = beg;
 
 	macsav(0);
 	for (;;beg++) {
@@ -1082,11 +1088,11 @@ void
 define(void)
 {
 	extern int incmnt;
-	struct iobuf *ab;
-	struct symtab *np;
+	register struct iobuf *ab;
+	register struct symtab *np;
 	usch cc[2], *vararg, *dp;
 	int arg[MAXARGS+1];
-	int c, i, redef, oCflag, t;
+	register int c, i, redef, oCflag, t;
 	int type, narg;
 	int wascon;
 	mvtyp begpos;
@@ -1419,7 +1425,7 @@ error(const char *fmt, ...)
 }
 
 static int
-pragwin(struct iobuf *ib)
+pragwin(register struct iobuf *ib)
 {
 	return ib ? ib->buf[ib->cptr++] : cinput();
 }
@@ -1427,7 +1433,7 @@ pragwin(struct iobuf *ib)
 static int
 skipws(struct iobuf *ib)
 {
-	int t;
+	register int t;
 
 	while ((t = pragwin(ib)) == ' ' || t == '\t')
 		;
@@ -1439,9 +1445,9 @@ skipws(struct iobuf *ib)
  * Syntax is already correct.
  */
 static void
-pragoper(struct iobuf *ib)
+pragoper(register struct iobuf *ib)
 {
-	int t;
+	register int t;
 
 	if (skipws(ib) != '(' || ((t = skipws(ib)) != '\"' && t != 'L'))
 		goto err;
@@ -1489,7 +1495,7 @@ prblocker(char *s, int id)
  * Check if symtab is in blocklist based on index l.
  */
 static int
-expok(struct symtab *sp, int id)
+expok(struct symtab *sp, register int id)
 {
 
 	if (id == 0)
@@ -1510,8 +1516,8 @@ expok(struct symtab *sp, int id)
 static int
 blkget(struct symtab *sp, int id)
 {
-	int upper = BLKBUF(blkidp);
-	int off = BLKPTR(blkidp);
+	register int upper = BLKBUF(blkidp);
+	register int off = BLKPTR(blkidp);
 
 	if (upper == L2MAX)
 		error("too complex macro");
@@ -1523,7 +1529,7 @@ blkget(struct symtab *sp, int id)
 }
 
 static int
-mergeadd(int l, int m)
+mergeadd(register int l, register int m)
 {
 
 	DPRINT(("mergeadd: %d %d\n", l, m));
@@ -1550,7 +1556,7 @@ mergeadd(int l, int m)
 }
 
 static void
-storeblk(int l, struct iobuf *ob)
+storeblk(register int l, register struct iobuf *ob)
 {
 	DPRINT(("storeblk: %d\n", l));
 	if (l == 0)
@@ -1569,8 +1575,8 @@ storeblk(int l, struct iobuf *ob)
 static struct iobuf *
 unfname(void)
 {
-	struct iobuf *ob = getobuf(BNORMAL);
-	const usch *bp = ifiles->fname;
+	register struct iobuf *ob = getobuf(BNORMAL);
+	register const usch *bp = ifiles->fname;
 
 	putob(ob, '\"');
 	for (; *bp; bp++) {
@@ -1587,10 +1593,10 @@ unfname(void)
  * We know that it is a number before calling this routine.
  */
 static void
-fstrnum(struct iobuf *ib, struct iobuf *ob)  
+fstrnum(struct iobuf *ib, register struct iobuf *ob)  
 {	
-	usch *s = ib->buf+ib->cptr;
-	int c2;
+	register usch *s = ib->buf+ib->cptr;
+	register int c2;
 
 	if (*s == '.') {
 		/* not digit, dot.  Next will be digit */
@@ -1613,10 +1619,10 @@ fstrnum(struct iobuf *ib, struct iobuf *ob)
  * similar to faststr.
  */
 static void
-fstrstr(struct iobuf *ib, struct iobuf *ob)
+fstrstr(struct iobuf *ib, register struct iobuf *ob)
 {
-	usch *s = ib->buf+ib->cptr;
-	int ch;
+	register usch *s = ib->buf+ib->cptr;
+	register int ch;
 
 	if (*s == 'L' || *s == 'U' || *s == 'u')
 		putob(ob, *s++);
@@ -1637,9 +1643,9 @@ fstrstr(struct iobuf *ib, struct iobuf *ob)
  * Save standard comments if found.
  */
 static void
-fcmnt(struct iobuf *ib, struct iobuf *ob)
+fcmnt(struct iobuf *ib, register struct iobuf *ob)
 {
-	usch *s = ib->buf+ib->cptr;
+	register usch *s = ib->buf+ib->cptr;
 
 	putob(ob, *s++); /* / */
 	putob(ob, *s++); /* * */
@@ -1652,7 +1658,7 @@ fcmnt(struct iobuf *ib, struct iobuf *ob)
 }
 
 static int
-getyp(usch *s)
+getyp(register usch *s)
 {
 
 	if (ISID0(*s)) return IDENT;
@@ -1674,11 +1680,11 @@ getyp(usch *s)
  * Expect ib to be zero-terminated.
  */
 static struct symtab *
-loopover(struct iobuf *ib, struct iobuf *ob)
+loopover(register struct iobuf *ib, register struct iobuf *ob)
 {
 	struct iobuf *xb, *xob;
 	struct symtab *sp;
-	usch *cp;
+	register usch *cp;
 	int l, c, t, cn;
 
 	ib->cptr = 0; /* start from beginning */
@@ -1788,7 +1794,7 @@ struct iobuf *
 kfind(struct symtab *sp)
 {
 	extern int inexpr;
-	struct iobuf *ib, *ob, *outb, *ab;
+	register struct iobuf *ib, *ob, *outb, *ab;
 	const usch *argary[MAXARGS+1];
 	int c, n = 0;
 	int l;
@@ -1886,10 +1892,10 @@ again:		if ((ab = readargs(NULL, sp, argary)) == 0)
  * The same as kfind but read a string.
  */
 struct iobuf *
-submac(struct symtab *sp, int lvl, struct iobuf *ib, int l)
+submac(struct symtab *sp, int lvl, register struct iobuf *ib, int l)
 {
 	int bl;
-	struct iobuf *ob, *ab;
+	register struct iobuf *ob, *ab;
 	const usch *argary[MAXARGS+1];
 	int cn;
 
@@ -1951,7 +1957,7 @@ submac(struct symtab *sp, int lvl, struct iobuf *ib, int l)
 static int
 skpws(void)
 {
-	int c;
+	register int c;
 	while ((c = cinput()) == ' ' || c == '\t')
 		;
 	return c;
@@ -1962,10 +1968,10 @@ skpws(void)
  * Follow the guidelines from Fred Tydeman's proposal of line numbering.
  */
 struct iobuf *
-readargs(struct iobuf *in, struct symtab *sp, const usch **args)
+readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 {
-	struct iobuf *ab, *saved;
-	int infil, c, i, j, plev, narg, ellips = 0;
+	register struct iobuf *ab, *saved;
+	register int c, infil, i, j, plev, narg, ellips = 0;
 	int argary[MAXARGS+1];
 
 	DPRINT(("readargs\n"));
@@ -2111,9 +2117,9 @@ readargs(struct iobuf *in, struct symtab *sp, const usch **args)
  * escape "\ inside strings.
  */
 static void
-escstr(const usch *bp, struct iobuf *ob)
+escstr(register const usch *bp, register struct iobuf *ob)
 {
-	int instr = 0;
+	register int instr = 0;
 
 	while (*bp) {
 		if (!instr && ISWS(*bp)) {
@@ -2147,7 +2153,7 @@ struct iobuf *
 subarg(struct symtab *nl, const usch **args, int lvl, int l)
 {
 	int lw;
-	struct iobuf *ob, *cb, *nb, *vb;
+	register struct iobuf *ob, *cb, *nb, *vb;
 	int narg, snuff, c2;
 	const usch *sp, *bp, *ap, *vp;
 
@@ -2253,13 +2259,13 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
  * concatenated, in which case the blocking is removed.
  */
 struct iobuf *
-exparg(int lvl, struct iobuf *ib, struct iobuf *ob, int l)
+exparg(int lvl, register struct iobuf *ib, register struct iobuf *ob, int l)
 {
 	extern int inexpr;
 	struct iobuf *nob, *tb;
 	struct symtab *nl;
 	int c, m;
-	usch *cp;
+	register usch *cp;
 
 	DPRINT(("%d:exparg: entry ib %s\n", lvl, ib->buf+ib->cptr));
 #ifdef PCC_DEBUG
@@ -2434,7 +2440,7 @@ cntline(void)
 }
 
 void
-putch(int ch)
+putch(register int ch)
 {
 	if (skpows) {
 		if (ch == '\n')
@@ -2467,11 +2473,11 @@ putstr(const usch *s)
  * convert a number to an ascii string. Store it on the heap.
  */
 static void
-num2str(struct iobuf *ob, int num)
+num2str(struct iobuf *ob, register int num)
 {
 	static usch buf[12];
-	usch *b = buf;
-	int m = 0;
+	register usch *b = buf;
+	register int m = 0;
 
 	if (num < 0)
 		num = -num, m = 1;
@@ -2490,7 +2496,7 @@ num2str(struct iobuf *ob, int num)
  * saves result on heap.
  */
 static void
-vsheap(struct iobuf *ob, const char *fmt, va_list ap)
+vsheap(register struct iobuf *ob, register const char *fmt, va_list ap)
 {
 	for (; *fmt; fmt++) {
 		if (*fmt == '%') {
@@ -2516,7 +2522,7 @@ vsheap(struct iobuf *ob, const char *fmt, va_list ap)
 }
 
 struct iobuf *
-bsheap(struct iobuf *ob, const char *fmt, ...)
+bsheap(register struct iobuf *ob, const char *fmt, ...)
 {
 	va_list ap;
 
@@ -2574,34 +2580,15 @@ struct tree {
 static struct tree *sympole;
 static int numsyms;
 
-static struct tree *
-gtree(void)
-{
-	static int ntrees;
-	static struct tree *tp;
-
-	if (ntrees == 0) {
-		tp = xmalloc(CPPBUF);
-		ntrees = CPPBUF/sizeof(*tp);
-	}
-	return &tp[--ntrees];
-}
-
 /*
  * Allocate a symtab struct and store the string.
  */
 static struct symtab *
 getsymtab(const usch *str)
 {
-	static int nsyms;
-	static struct symtab *spp;
-	struct symtab *sp;
+	register struct symtab *sp;
 
-	if (nsyms == 0) {
-		spp = xmalloc(CPPBUF);
-		nsyms = CPPBUF/sizeof(*sp);
-	}
-	sp = &spp[--nsyms];
+	sp = addblock(sizeof(*sp));
 
 	sp->namep = str;
 	sp->valoff = 0;
@@ -2615,10 +2602,10 @@ getsymtab(const usch *str)
  * Only do full string matching, no pointer optimisations.
  */
 struct symtab *
-lookup(const usch *key, int enterf)
+lookup(register const usch *key, int enterf)
 {
 	struct symtab *sp;
-	struct tree *w, *new, *last;
+	register struct tree *w, *new, *last;
 	int len, cix, bit, fbit, svbit, ix, bitno;
 	const usch *k, *m;
 
@@ -2675,7 +2662,7 @@ lookup(const usch *key, int enterf)
 		ix >>= 1, cix++;
 
 	/* Create new node */
-	new = gtree();
+	new = addblock(sizeof(*new));
 	bit = P_BIT(key, cix);
 	new->bitno = cix | (bit ? RIGHT_IS_LEAF : LEFT_IS_LEAF);
 	new->lr[bit] = (struct tree *)getsymtab(key);
@@ -2718,7 +2705,7 @@ lookup(const usch *key, int enterf)
 void *
 xmalloc(int sz)
 {
-	usch *rv;
+	register usch *rv;
 
 	if ((rv = (void *)malloc(sz)) == NULL)
 		error("xmalloc: out of mem");
@@ -2728,30 +2715,63 @@ xmalloc(int sz)
 void *
 xrealloc(void *p, int sz)
 {
-	usch *rv;
+	register usch *rv;
 
 	if ((rv = (void *)realloc(p, sz)) == NULL)
 		error("xrealloc: out of mem");
 	return rv;
 }
 
+#if CPPBUF < 1024
+#define ALLBUF  1024
+#else
+#define ALLBUF CPPBUF 
+#endif
 /*
  *
  */
 static usch *
-addname(usch *str)
+addname(register usch *str)
 {
 	static usch *nbase;
 	static int nsz;
-	int len = strlen((char *)str) + 1;
+	register usch *w = str;
+	register int len;
 
-	if (nsz < len) {
-		nbase = xmalloc(CPPBUF);
-		nsz = CPPBUF;
+	while (*w++)
+		;
+	len = w - str;
+	if (len > nsz) {
+		nbase = xmalloc(ALLBUF);
+		nsz = ALLBUF;
 	}
-	memcpy(nbase, str, len);
-	str = nbase;
 	nsz -= len;
-	nbase += len;
+	w = nbase;
+	while ((*nbase++ = *str++))
+		;
+	return w;
+}
+
+/*
+ * Get permanent storage space for a struct.
+ */
+static void *
+addblock(register int sz)
+{
+	static usch *nbase;
+	static int nsz;
+	register usch *str;
+
+	/* round up to pointer alignment */
+	sz = (sz + sizeof(int *)-1) & ~(sizeof(int *)-1);
+
+	if (nsz < sz) {
+		nbase = xmalloc(ALLBUF);
+		nsz = ALLBUF;
+	}
+	str = nbase;
+	nsz -= sz;
+	nbase += sz;
 	return str;
 }
+
