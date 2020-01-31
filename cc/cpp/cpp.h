@@ -142,7 +142,8 @@ struct includ {
 	int lineno;
 	int escln;		/* escaped newlines, to be added */
 	int infil;
-	struct iobuf *ib;
+	int opend, oinp;
+	usch *opbeg;
 	int idx;
 	void *incs;
 	const usch *fn;
@@ -154,6 +155,7 @@ struct includ {
 #define SYSINC 1
 
 extern struct includ *ifiles;
+extern usch *pbeg, *pend, *outp, *inp;
 
 /* Symbol table entry  */
 struct symtab {

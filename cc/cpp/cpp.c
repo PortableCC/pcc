@@ -91,6 +91,7 @@ static void prrep(mvtyp);
 #endif
 #define	PUTOB(ob, ch) (ob->cptr == ob->bsz ? \
 	(putob(ob, ch), 1) : (ob->buf[ob->cptr++] = ch))
+#define	cunput(x)	*--inp = x
 
 static int istty;
 int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
@@ -403,9 +404,10 @@ main(int argc, char **argv)
 	bic.fname = bic.orgfn = (const usch *)"<command line>";
 	bic.lineno = 1;
 	bic.infil = -1;
-	bic.ib = fb;
 	fb->bsz = fb->cptr;
 	fb->cptr = 0;
+	pbeg = outp = inp = fb->buf;
+	pend = pbeg + fb->bsz;
 	ifiles = &bic;
 	fastscan();
 	bufree(fb);
@@ -695,63 +697,63 @@ void
 line(void)
 {
 	register struct iobuf *ib, *ob;
-	register usch *inp;
+	register usch *inpp;
 	int n, ln, oidx;
 
 	oidx = ifiles->idx;
 	ob = savln();
 	ob->cptr = 0;
 	exparg(1, ob, ib = getobuf(BNORMAL), 0);
-	inp = ib->buf;
+	inpp = ib->buf;
 
-	while (ISWSNL(*inp))
-		inp++;
+	while (ISWSNL(*inpp))
+		inpp++;
 
 	n = 0;
-	while (ISDIGIT(*inp))
-		n = n * 10 + *inp++ - '0';
+	while (ISDIGIT(*inpp))
+		n = n * 10 + *inpp++ - '0';
 
 	/* Can only be decimal number here between 1-2147483647 */
 	if (n < 1 || n > 2147483647L)
 		goto bad;
 
-	while (ISWSNL(*inp))
-		inp++;
+	while (ISWSNL(*inpp))
+		inpp++;
 
 	ln = n;
 	ifiles->escln = 0;
 
-	if (*inp == 0)
+	if (*inpp == 0)
 		goto out;
 
-	if (getyp(inp) != STRING)
+	if (getyp(inpp) != STRING)
 		goto bad;
 
-	if (*inp != '\"')
+	if (*inpp != '\"')
 		warning("#line only allows character literals");
 
 	ob->cptr = 0;
-	ib->cptr = (int) (inp - ib->buf);
+	ib->cptr = (int) (inpp - ib->buf);
 	fstrstr(ib, ob);
-	inp = ib->buf + ib->cptr;
+	inpp = ib->buf + ib->cptr;
 	ob->buf[--ob->cptr] = 0; /* remove trailing \" */
 
 	if (strcmp((char *)ifiles->fname, (char *)ob->buf+1))
 		ifiles->fname = addname(ob->buf+1);
 
-	while (ISWSNL(*inp))
-		inp++;
+	while (ISWSNL(*inpp))
+		inpp++;
 
-	if (*inp == 0)
+	if (*inpp == 0)
 		goto out;
 
-	if (*inp < '0' || *inp > '9')
+	if (*inpp < '0' || *inpp > '9')
 		goto bad;
 
-	if (*inp++ == '3')
+	if (*inpp++ == '3')
 		ifiles->idx = SYSINC;
 
-	if (*inp != 0)
+	if (*inpp != 0)
 		goto bad;
 
 out:	ifiles->lineno = ln;
@@ -1793,7 +1795,6 @@ newmac:				if ((xob = submac(sp, 1, ib, 0)) == NULL) {
 struct iobuf *
 kfind(struct symtab *sp)
 {
-	extern int inexpr;
 	register struct iobuf *ib, *ob, *outb, *ab;
 	const usch *argary[MAXARGS+1];
 	int c, n = 0;
@@ -1832,8 +1833,7 @@ kfind(struct symtab *sp)
 			if (c == '\n')
 				n++;
 		if (c != '(') {
-			if (inexpr == 0)
-				putstr(sp->namep);
+			putstr(sp->namep);
 			if (n == 0)
 				putch(' ');
 			else for (ifiles->lineno += n; n; n--)
@@ -1911,6 +1911,7 @@ submac(struct symtab *sp, int lvl, register struct iobuf *ib, int l)
 		pragoper(ib);
 		ob = getobuf(BNORMAL);
 		break;
+	case DEFLOC:
 	case OBJCT:
 		bl = blkget(sp, l);
 		ib = macrepbuf(sp->valoff);
@@ -1970,7 +1971,8 @@ skpws(void)
 struct iobuf *
 readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 {
-	register struct iobuf *ab, *saved;
+	usch *opbeg, *opend, *oinp;
+	register struct iobuf *ab;
 	register int c, infil, i, j, plev, narg, ellips = 0;
 	int argary[MAXARGS+1];
 
@@ -1978,10 +1980,20 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	narg = sp->narg;
 	ellips = sp->type == VARG;
 
-	saved = ifiles->ib;
+#ifdef __GNUC__
+	opbeg = opend = oinp = 0;
+#endif
+
 	infil = ifiles->infil;
-	if (in)
-		ifiles->ib = in, ifiles->infil = -1;
+	if (in) {
+		oinp = inp;
+		opend = pend;
+		opbeg = pbeg;
+		ifiles->infil = -1;
+		pbeg = in->buf;
+		inp = pbeg + in->cptr;
+		pend = pbeg + in->bsz;
+	}
 
 #ifdef PCC_DEBUG
 	if (dflag > 1) {
@@ -2009,8 +2021,12 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 			switch (c) {
 			case 0:
 				if (in) {
+					in->cptr = inp - pbeg;
+					pend = opend;
+					inp = oinp;
+					pbeg = opbeg;
+					/* XXX */
 					in->cptr--; /* qcchar() walks over */
-					ifiles->ib = saved;
 					in = NULL;
 				} else
 					error("eof in macro");
@@ -2018,9 +2034,9 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 			case BLKID2:
 			case BLKID:
 				putob(ab, c);
-				putob(ab, ifiles->ib->buf[ifiles->ib->cptr++]);
+				putob(ab, *inp++);
 				if (c == BLKID2)
-					putob(ab, ifiles->ib->buf[ifiles->ib->cptr++]);
+					putob(ab, *inp++);
 				break;
 			case '/':
 				if ((c = cinput()) == '*' || c == '/')
@@ -2109,7 +2125,14 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 		error("wrong arg count");
 	for (j = 0; j < i; j++)
 		args[j] = ab->buf + argary[j];
-	ifiles->ib = saved, ifiles->infil = infil;
+
+	ifiles->infil = infil;
+	if (in) {
+		in->cptr = inp - pbeg;
+		inp = oinp;
+		pend = opend;
+		pbeg = opbeg;
+	}
 	return ab;
 }
 
@@ -2261,7 +2284,6 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 struct iobuf *
 exparg(int lvl, register struct iobuf *ib, register struct iobuf *ob, int l)
 {
-	extern int inexpr;
 	struct iobuf *nob, *tb;
 	struct symtab *nl;
 	int c, m;
@@ -2316,24 +2338,6 @@ exparg(int lvl, register struct iobuf *ib, register struct iobuf *ob, int l)
 			/* Any match? */
 			if ((nl = lookup(tb->buf, FIND)) == NULL) {
 				buftobuf(tb, ob);
-			} else if (inexpr && nl->type == DEFLOC) {
-				/* Used in #if stmts */
-				int gotlp = 0;
-
-				cp = ib->buf+ib->cptr;
-				while (ISWS(*cp)) cp++;
-				if (*cp == '(')
-					gotlp++, cp++;
-				while (ISWS(*cp)) cp++;
-				if (!ISID0(*cp))
-					error("bad defined");
-				putob(ob, lookup(cp, FIND) ? '1' : '0');
-				while (ISID(*cp)) cp++;
-				while (ISWS(*cp)) cp++;
-				if (gotlp && *cp != ')')
-					error("bad defined");
-				cp++;
-				ib->cptr = (int)(cp - ib->buf);
 			} else if (expokb(nl, l) && expok(nl, m) &&
 			    (nob = submac(nl, lvl+1, ib, l))) {
 				didexpand = 1;
