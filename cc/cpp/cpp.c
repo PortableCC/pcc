@@ -886,7 +886,7 @@ incfn(void)
 
 	oCflag = Cflag;
 	Cflag = 0;
-	if (spechr[c = skipws(NULL)] & C_ID0) {
+	if (ISID0(c = skipws(NULL))) {
 		dp = readid(c);
 		if ((nl = lookup(dp, FIND)) == NULL)
 			return NULL;
@@ -1276,7 +1276,7 @@ back:					if (c == '*') {
 				if (c == '-' || c == '+') {
 					if ((i & 0337) != 'E' && i != 'P')
 						break;
-				} else if ((c != '.') && ((spechr[c] & C_ID) == 0))
+				} else if ((c != '.') && ((ISID(c)) == 0))
 					break;
 			}
 			continue;
@@ -1610,7 +1610,7 @@ fstrnum(struct iobuf *ib, register struct iobuf *ob)
 			if (s[1] != '-' && s[1] != '+')
 				break;
 			putob(ob, *s++);
-		} else if ((*s != '.') && ((spechr[*s] & C_ID) == 0))
+		} else if ((*s != '.') && ((ISID(*s)) == 0))
 			break;
 	}
 	ib->cptr = (int)(s - ib->buf);
@@ -1668,8 +1668,8 @@ getyp(register usch *s)
 	    (s[1] == '\'' || s[1] == '\"')) return STRING;
 	if (s[0] == 'u' && s[1] == '8' && s[2] == '\"') return STRING;
 	if (s[0] == '\'' || s[0] == '\"') return STRING;
-	if (spechr[*s] & C_DIGIT) return NUMBER;
-	if (*s == '.' && (spechr[s[1]] & C_DIGIT)) return NUMBER;
+	if (ISDIGIT(*s)) return NUMBER;
+	if (*s == '.' && (ISDIGIT(s[1]))) return NUMBER;
 	if (*s == '/' && (s[1] == '/' || s[1] == '*')) return CMNT;
 	return *s;
 	
@@ -1712,7 +1712,7 @@ loopover(register struct iobuf *ib, register struct iobuf *ob)
 			fstrstr(ib, xb);
 			xb->buf[xb->cptr] = 0;
 			for (cp = xb->buf; *cp; cp++) {
-				if (*cp <= BLKID2) {
+				if (*cp <= BLKID2 && *cp > 0) {
 					if (*cp == BLKID)
 						cp++;
 					if (*cp == BLKID2)
@@ -1724,9 +1724,9 @@ loopover(register struct iobuf *ib, register struct iobuf *ob)
 			continue;
 		case BLKID:
 		case BLKID2:
-			l = ib->buf[++ib->cptr];
+			l = (unsigned char)ib->buf[++ib->cptr];
 			if (t == BLKID2)
-				l = (l << 8) | ib->buf[++ib->cptr];
+				l = (l << 8) | (unsigned char)ib->buf[++ib->cptr];
 			ib->cptr++;
 			/* FALLTHROUGH */
 		case IDENT:
@@ -2208,11 +2208,11 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 			;
 		else if (*sp == WARN) {
 
-			if (sp[1] == C99ARG) {
+			if (sp[1] == (usch)C99ARG) {
 				bp = ap = args[narg];
 				sp++;
 #ifdef GCC_COMPAT
-			} else if (sp[1] == GCCARG) {
+			} else if (sp[1] == (usch)GCCARG) {
 				/* XXX remove last , not add 0 */
 				ap = args[narg];
 				if (ap[0] == 0)
@@ -2221,7 +2221,7 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 				sp++;
 #endif
 			} else
-				bp = ap = args[(int)*++sp];
+				bp = ap = args[(unsigned char)*++sp];
 #ifdef PCC_DEBUG
 			if (dflag>1){
 				printf("%d:subarg GOTwarn; arglist '", lvl);
@@ -2313,9 +2313,9 @@ exparg(int lvl, register struct iobuf *ib, register struct iobuf *ob, int l)
 			break;
 		case BLKID2:
 		case BLKID:
-			m = ib->buf[++ib->cptr];
+			m = (unsigned char)ib->buf[++ib->cptr];
 			if (c == BLKID2)
-				m = (m << 8) | ib->buf[++ib->cptr];
+				m = (m << 8) | (unsigned char)ib->buf[++ib->cptr];
 			ib->cptr++;
 			/* FALLTHROUGH */
 		case IDENT:
@@ -2396,8 +2396,8 @@ prrep(mvtyp ptr)
 		switch (s) {
 		case WARN:
 			s = macget(ptr++);
-			if (s == C99ARG) printf("<C99ARG>");
-			else if (s == GCCARG) printf("<GCCARG>");
+			if (s == (usch)C99ARG) printf("<C99ARG>");
+			else if (s == (usch)GCCARG) printf("<GCCARG>");
 			else printf("<ARG(%d)>", s);
 			break;
 		case CONC: printf("<CONC>"); break;
@@ -2414,14 +2414,14 @@ prline(const usch *s)
 {
 	while (*s) {
 		switch (*s) {
-		case BLKID: blkprint(*++s); break;
-		case BLKID2: blkprint(s[1] << 8 | s[2]); s += 2; break;
+		case BLKID: blkprint((unsigned char)*++s); break;
+		case BLKID2: blkprint((unsigned char)s[1] << 8 | (unsigned char)s[2]); s += 2; break;
 		case WARN: printf("<WARN>"); break;
 		case CONC: printf("<CONC>"); break;
 		case SNUFF: printf("<SNUFF>"); break;
 		case '\n': printf("<NL>"); break;
 		default: 
-			if (*s > 0x7f)
+			if ((unsigned char)*s > 0x7f)
 				printf("<0x%x>", *s);
 			else
 				printf("%c", *s);

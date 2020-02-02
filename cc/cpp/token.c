@@ -114,47 +114,55 @@ static int chktg2(int ch);
 #define C_I	(C_SPEC|C_ID|C_ID0)
 #define C_IX	(C_SPEC|C_ID|C_ID0|C_HEX)
 
-usch spechr[256] = {
-	C_SPEC|C_Q, 0,	0,	0,	C_SPEC,	C_SPEC,	0,	0,
-	0,	C_WSNL,	C_NL,	0,	0,	C_WSNL|C_Q, 0,	0,
-	0,	0,	0,	0,	0,	0,	0,	0,
-	0,	0,	0,	0,	0,	0,	0,	0,
-
-	C_WSNL,	C_2,	C_SPEC,	0,	0,	0,	C_2,	C_SPEC,
-	0,	0,	0,	C_2,	0,	C_2,	0,	C_SPEC|C_Q,
-	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,
-	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_SPEC|C_Q,
-
-	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	0,	C_SPEC|C_Q, 0,	0,	C_I,
-
-	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
+#define FIRST_128							\
+	C_SPEC|C_Q, 0,	0,	0,	C_SPEC,	C_SPEC,	0,	0,	\
+	0,	C_WSNL,	C_NL,	0,	0,	C_WSNL|C_Q, 0,	0,	\
+	0,	0,	0,	0,	0,	0,	0,	0,	\
+	0,	0,	0,	0,	0,	0,	0,	0,	\
+	\
+	C_WSNL,	C_2,	C_SPEC,	0,	0,	0,	C_2,	C_SPEC,	\
+	0,	0,	0,	C_2,	0,	C_2,	0,	C_SPEC|C_Q, \
+	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	\
+	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_SPEC|C_Q, \
+	\
+	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	0,	C_SPEC|C_Q, 0,	0,	C_I,	\
+	\
+	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
 	C_I,	C_I,	C_I,	0,	C_2,	0,	0,	0,
 
 /* utf-8 */
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
+#define LAST_128							\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
+	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
 
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
-	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
+usch spechr[256] = {
+#ifdef CHAR_UNSIGNED
+	FIRST_128 LAST_128
+#else
+	LAST_128 FIRST_128
+#endif
 };
 
 #if 0
@@ -363,7 +371,7 @@ ucn(register int n)
 
 	cp = 0;
 	while (n-- > 0) {
-		if ((ch = qcchar()) == 0 || (spechr[ch] & C_HEX) == 0) {
+		if ((ch = (unsigned char)qcchar()) == 0 || (ISHEX(ch)) == 0) {
 			warning("invalid universal character name");
 			/* XXX should actually unput the chars and return 0 */
 			unch(ch); /* XXX eof */
@@ -453,7 +461,7 @@ bufid(int ch, register struct iobuf *ob)
 			ob->buf[ob->cptr++] = ch;
 		else
 			putob(ob, ch);
-	} while (spechr[ch = qcchar()] & C_ID);
+	} while (ISID(ch = qcchar()));
 	ob->buf[ob->cptr] = 0; /* legal */
 	unch(ch);
 	return ob->buf+n;
@@ -474,7 +482,7 @@ readid(int ch)
 		if (p < MAXIDSZ)
 			idbuf[p] = ch;
 		p++;
-	} while (spechr[ch = qcchar()] & C_ID);
+	} while (ISID(ch = qcchar()));
 	idbuf[p] = 0;
 	unch(ch);
 	return idbuf;
@@ -553,7 +561,7 @@ fastnum(register int ch, register struct iobuf *ob)
 		putob(ob, ch);
 		if ((ch = qcchar()) == 0)
 			break;
-		if ((spechr[ch] & C_ID) == 0 && ch != '.')
+		if ((ISID(ch)) == 0 && ch != '.')
 			break;
 		if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
 			if ((c2 = qcchar()) == '-' || c2 == '+') {
@@ -596,8 +604,8 @@ fastscan(void)
 				ch = *inp++;
 			else
 				ch = qcchar();
-xloop:			if (ch < 0) ch = 0; /* XXX */
-			if ((spechr[ch] & C_SPEC) != 0)
+xloop:
+			if ((ISSPEC(ch)) != 0)
 				break;
 			putch(ch);
 		}
@@ -678,12 +686,6 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 			faststr(ch, &pb);
 			break;
 
-		case '.':  /* for pp-number */
-			if ((spechr[c2 = qcchar()] & C_DIGIT) == 0) {
-				putch('.');
-				goto xloop;
-			}
-			unch(c2);
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7': case '8': case '9':
 			if (skpows)
@@ -707,7 +709,7 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 			/* FALLTHROUGH */
 		default:
 #ifdef PCC_DEBUG
-			if ((spechr[ch] & C_ID) == 0)
+			if ((ISID(ch)) == 0)
 				error("fastscan");
 #endif
 			if (flslvl)
@@ -754,7 +756,7 @@ yylex(void)
 igen:	while ((ch = qcchar()) == ' ' || ch == '\t')
 		;
 	t = ISDIGIT(ch) ? NUMBER : ch;
-	if (ch < 128 && (spechr[ch] & C_2))
+	if (ch < 128 && (ISC2(ch)))
 		c2 = qcchar();
 	else
 		c2 = 0;
@@ -1000,7 +1002,7 @@ cvtdig(register int c)
 	} else
 		rad = 10;
 
-	while ((spechr[c] & C_HEX)) {
+	while ((ISHEX(c))) {
 		rv = rv * rad + dig2num(c);
 		/* check overflow */
 		if (rv / rad < rv2)
@@ -1043,14 +1045,14 @@ charcon(void)
 		case '\'': val = '\''; break;
 		case '\\': val = '\\'; break;
 		case 'x':
-			while ((spechr[c = qcchar()] & C_HEX))
+			while ((ISHEX(c = qcchar())))
 				val = val * 16 + dig2num(c);
 			break;
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7':
 			do
 				val = val * 8 + (c - '0');
-			while ((spechr[c = qcchar()] & C_DIGIT));
+			while ((ISDIGIT(c = qcchar())));
 			*--inp = c;
 			break;
 		default: val = c;
@@ -1405,7 +1407,7 @@ redo:	Cflag = 0;
 		return;
 	}
 	Cflag = oldC;
-	if ((spechr[ch] & C_ID0) == 0)
+	if ((ISID0(ch)) == 0)
 		goto out;
 	bp = readid(ch);
 
