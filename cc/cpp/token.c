@@ -104,7 +104,7 @@ static struct iobuf *lb;
 static usch *lpbeg, *lpend, *linp;
 static int lif;
 
-static void ucn(int n);
+static usch *ucn(usch *p, usch *q);
 static void fastcmnt2(int);
 static int chktg2(int ch);
 
@@ -180,59 +180,84 @@ usch spechr[256] = {
 static void
 packbuf(void)
 {
-	static usch pbb[2];
+	static usch pbb[10];
 	register usch *p, *q;
 	register int l;
 
 	/* if we found potential trigraph */
-	if (pbb[0]) {
-		*--inp = pbb[0];
-		if (pbb[1])
-			*--inp = pbb[1];
-		pbb[0] = pbb[1] = 0;
+	if (pbb[9]) {
+		p = pbb+10;
+		while ((*--inp = *--p))
+			;
+		inp++;
+		pbb[9] = 0;
 	}
 
 	p = inp;
-	q = NULL;
 fast:	while (ISPACK(*p++) == 0)
 		;
 	if (--p >= pend)
 		return;
 
-	switch ((l = *p++)) {
+	switch (*p) {
 	case '?':
-		if (*p == '?') {
-			if ((l = chktg2(p[1])))
-				goto slow;
-		}
-		if (pend-p < 3) {
+		if (p[1] == '?'&& chktg2(p[2]))
+			goto slow;
+psave:		if (pend-p < 3) {
 			/* Save for future use */
-			if (p[1])
-				pbb[0] = p[1], pbb[1] = *p;
-			else
-				pbb[0] = *p;
-			*p = 0;
-			pend = p;
+			q = pbb+10;
+			while (pend > p)
+				*--q = *--pend;
+			*--q = 0;
+			*pend = 0;
 			return;
 		}
 		break;
 	case '\r':
 		goto slow;
+	case '\\':
+		if (p[1] == 0)
+			goto psave;
+		if (/* *p == '\n' || */ (p[1] | 040) == 'u')
+			goto slow;
+		break;
 	default:
 		break;
 	}
+	p++;
 	goto fast;
 
 /* need to pack, so we must write as well */
-slow:	q = --p;
+slow:	q = p;
 
-more:	if (*p == '\r') {
+more:	if (*p == '\\') {
+		if ((l = p[1]) == 0)
+			goto psave2;
+		else if (l == 'u') {
+			if (pend-p < 6)
+				goto psave2;
+			q = ucn(p, q);
+			p += 6;
+		} else if (l == 'U') {
+			if (pend-p < 10)
+				goto psave2;
+			q = ucn(p, q);
+			p += 10;
+		} else
+			p++, q++;
+	} else if (*p == '\r') {
 		p++;
-	} else if (*p == '?' && p[1] == '?' && (l = chktg2(p[2]))) {
-		/* found trigraph */
-		*q++ = l;
-		p += 3;
-	} else p++, q++;
+	} else if (*p == '?') {
+		if (pend-p < 3)
+			goto psave2;
+		if (p[1] == '?' && (l = chktg2(p[2]))) {
+			/* found trigraph */
+			p += 2;
+			*p = l;
+		} else
+			p++, q++;
+	} else
+		p++, q++;
 	while (ISPACK(*q++ = *p++) == 0)
 		;
 	if (--p >= pend) {
@@ -243,6 +268,15 @@ more:	if (*p == '\r') {
 	q--;
 	goto more;
 
+psave2:	
+	/* Save for future use */
+	*q = 0;
+	q = pbb+10;
+	while (pend > p)
+		*--q = *--pend;
+	*--q = 0;
+	*pend = 0;
+	return;
 }
 
 /*
@@ -251,17 +285,14 @@ more:	if (*p == '\r') {
  * 0 if EOF, != 0 if something could fill up buf.
  */
 static int
-inpbuf(int n)
+inpbuf(void)
 {
-	register int len, sz = 0;
+	register int len;
 	register usch *rdpos;
 
-	if (n > 0) {
-		if (pend > inp + n)
-			return 1; /* enough in buffer */
-		sz = pend - inp;
-		memcpy(pbeg+PBMAX - sz, inp, sz);
-	}
+	rdpos = pbeg + PBMAX;
+	while (inp < pend)
+		*--rdpos = *--pend;
 
 	if (ifiles->infil == -1)
 		return 0;
@@ -277,7 +308,7 @@ inpbuf(int n)
 
 	*rdpos = 0;
 	pend = rdpos;
-	inp = pbeg + PBMAX - sz;
+	inp = pbeg + PBMAX;
 	packbuf();
 	return pend - inp;
 }
@@ -291,13 +322,8 @@ qcchar(void)
 {
 	register int ch;
 
-newone:	do {
-		if (inp < pend) {
-			if (!ISCQ(ch = *inp++))
-				return ch;
-			break;
-		}
-	} while ((ch = inpbuf(0)) > 0);
+newone:	if (ISCQ(ch = *inp++) == 0)
+		return ch;
 
 	switch (ch) {
 	case 0:
@@ -308,19 +334,14 @@ newone:	do {
 			lb = 0;
 			goto newone;
 		}
+		if (inpbuf())
+			goto newone;
 		return 0; /* end of file */
 
 	case '\\':
 		if (inp == pend)
-			inpbuf(0);
+			inpbuf();
 		switch (ch = *inp) {
-		case 'u':
-		case 'U': 
-			if (incmnt) 
-				return '\\';
-			inp++;
-			ucn(ch == 'u' ? 4 : 8);
-			break;
 		case '\n':
 			inp++;
 			ifiles->escln++;
@@ -413,44 +434,48 @@ fastcmnt2(register int ch)
  * check for universal-character-name on input, and
  * unput to the pushback buffer encoded as UTF-8.
  */
-static void
-ucn(register int n)
+static usch *
+ucn(register usch *p, register usch *q)
 {
 	unsigned long cp, m;
 	register int ch;
+	usch bs[6];
+	int n;
 
-	if (incmnt) {
-		inp--;
-		*--inp = '\\';
-		return;
-	}
-
+	p++;
+	n = *p++ == 'u' ? 4 : 8;
 	cp = 0;
 	while (n-- > 0) {
-		if ((ch = (unsigned char)qcchar()) == 0 || (ISHEX(ch)) == 0) {
+		if ((ch = (unsigned char)*p++) == 0 || (ISHEX(ch)) == 0) {
+#if 0 			/* leave untouched */
 			warning("invalid universal character name");
-			/* XXX should actually unput the chars and return 0 */
-			unch(ch); /* XXX eof */
-			break;
+#endif
+			return q;
 		}
 		cp = cp * 16 + dig2num(ch);
 	}
 
+#if 0
 	if ((cp < 0xa0 && cp != 0x24 && cp != 0x40 && cp != 0x60)
 	    || (cp >= 0xd800 && cp <= 0xdfff))	/* 6.4.3.2 */
 		error("universal character name cannot be used");
 
 	if (cp > 0x7fffffff)
 		error("universal character name out of range");
+#endif
 
 	n = 0;
 	m = 0x7f;
+	p = bs;
 	while (cp > m) {
-		unch(0x80 | (cp & 0x3f));
+		*p++ = (0x80 | (cp & 0x3f));
 		cp >>= 6;
 		m >>= (n++ ? 1 : 2);
 	}
-	unch(((m << 1) ^ 0xfe) | cp);
+	*p++ = (((m << 1) ^ 0xfe) | cp);
+	while (p > bs)
+		*q++ = *--p;
+	return q;
 }
 
 /*
@@ -568,7 +593,7 @@ faststr(int bc, register struct iobuf *ob)
 		case '\\':
 			putob(ob, ch);
 			if (inp == pend)
-				inpbuf(0);
+				inpbuf();
 			incmnt = 1;
 			putob(ob, qcchar());
 			incmnt = 0;
@@ -740,15 +765,20 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 		case 'L':
 		case 'U':
 		case 'u':
-			if (inp+2 >= pend)
-				inpbuf(2);
+			if (*inp == 0)
+				inpbuf();
 			if ((c2 = *inp) == '\"' || c2 == '\'') {
 				putch(ch);
 				break;
-			} if (c2 == '8' && ch == 'u' && inp[1] == '\"') {
-				inp++;
-				putstr((usch *)"u8");
-				break;
+			}
+			if (c2 == '8' && ch == 'u') {
+				if (inp[1] == 0)
+					inpbuf();
+				if (inp[1] == '\"') {
+					inp++;
+					putstr((usch *)"u8");
+					break;
+				}
 			}
 			/* FALLTHROUGH */
 		default:
