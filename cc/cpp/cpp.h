@@ -96,8 +96,9 @@ typedef	unsigned int mvtyp;
 /* quick checks for some characters */
 #define C_SPEC	0001		/* for fastscan() parsing */
 #define C_2	0002		/* for yylex() tokenizing */
-#define C_WSNL	0004		/* ' ','\t','\r','\n' */
-#define C_ID	0010		/* [_a-zA-Z0-9] */
+#define C_WSNL	0004		/* [ \t\r\n] */
+#define	C_PACK	0010		/* [\0\\\?\r] */
+#define C_ID	(C_ID0|C_HEX)	/* [_a-zA-Z0-9] */
 #define C_ID0	0020		/* [_a-zA-Z] */
 #define C_Q	0040		/* [\r\\\?] */
 #define C_DIGIT	0100		/* [0-9] */
@@ -109,6 +110,7 @@ extern usch spechr[];
 #define ISC2(x)		((SPECADD+spechr)[(int)(x)] & (C_2))
 #define ISWSNL(x)	((SPECADD+spechr)[(int)(x)] & (C_WSNL))
 #define ISWS(x)		((x) == '\t' || (x) == ' ')
+#define ISPACK(x)	((SPECADD+spechr)[(int)(x)] & C_PACK)
 #define ISID(x)		((SPECADD+spechr)[(int)(x)] & C_ID)
 #define ISID0(x)	((SPECADD+spechr)[(int)(x)] & C_ID0)
 #define	ISDIGIT(x)	((SPECADD+spechr)[(int)(x)] & C_DIGIT)

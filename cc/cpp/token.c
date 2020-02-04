@@ -108,27 +108,28 @@ static void ucn(int n);
 static void fastcmnt2(int);
 static int chktg2(int ch);
 
-/* some common special combos for init */
+/* some common special combos for initialization */
 #define C_NL	(C_SPEC|C_WSNL)
-#define C_DX	(C_SPEC|C_ID|C_DIGIT|C_HEX)
-#define C_I	(C_SPEC|C_ID|C_ID0)
-#define C_IX	(C_SPEC|C_ID|C_ID0|C_HEX)
+#define C_DX	(C_SPEC|C_ID0|C_DIGIT|C_HEX)
+#define C_I	(C_SPEC|C_ID0)
+#define C_IX	(C_SPEC|C_ID0|C_HEX)
+#define C_NBS	(C_SPEC|C_Q|C_PACK)
 
 #define FIRST_128							\
-	C_SPEC|C_Q, 0,	0,	0,	C_SPEC,	C_SPEC,	0,	0,	\
-	0,	C_WSNL,	C_NL,	0,	0,	C_WSNL|C_Q, 0,	0,	\
+	C_NBS,	0,	0,	0,	C_SPEC,	C_SPEC,	0,	0,	\
+	0,	C_WSNL,	C_NL,	0,	0,	C_PACK, 0,	0,	\
 	0,	0,	0,	0,	0,	0,	0,	0,	\
 	0,	0,	0,	0,	0,	0,	0,	0,	\
 	\
 	C_WSNL,	C_2,	C_SPEC,	0,	0,	0,	C_2,	C_SPEC,	\
 	0,	0,	0,	C_2,	0,	C_2,	0,	C_SPEC|C_Q, \
 	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	\
-	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_SPEC|C_Q, \
+	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_PACK,	\
 	\
 	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
-	C_I,	C_I,	C_I,	0,	C_SPEC|C_Q, 0,	0,	C_I,	\
+	C_I,	C_I,	C_I,	0,	C_NBS,	0,	0,	C_I,	\
 	\
 	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
@@ -165,13 +166,84 @@ usch spechr[256] = {
 #endif
 };
 
-#if 0
-packbuf()
-{
-	register usch *p;
+#define	ENDFREE	4	/* space left at end of buffer */
 
-	while ((ch = (*out++ = *in++)) != '\\'
+#if LIBVMF
+#define	INFLIRD	(BYTESPERSEG-PBMAX-ENDFREE)
+#else
+#define	INFLIRD	(CPPBUF-PBMAX-ENDFREE)
 #endif
+
+/*
+ * Convert trigraphs and remove \\n from input stream.
+ */
+static void
+packbuf(void)
+{
+	static usch pbb[2];
+	register usch *p, *q;
+	register int l;
+
+	/* if we found potential trigraph */
+	if (pbb[0]) {
+		*--inp = pbb[0];
+		if (pbb[1])
+			*--inp = pbb[1];
+		pbb[0] = pbb[1] = 0;
+	}
+
+	p = inp;
+	q = NULL;
+fast:	while (ISPACK(*p++) == 0)
+		;
+	if (--p >= pend)
+		return;
+
+	switch ((l = *p++)) {
+	case '?':
+		if (*p == '?') {
+			if ((l = chktg2(p[1])))
+				goto slow;
+		}
+		if (pend-p < 3) {
+			/* Save for future use */
+			if (p[1])
+				pbb[0] = p[1], pbb[1] = *p;
+			else
+				pbb[0] = *p;
+			*p = 0;
+			pend = p;
+			return;
+		}
+		break;
+	case '\r':
+		goto slow;
+	default:
+		break;
+	}
+	goto fast;
+
+/* need to pack, so we must write as well */
+slow:	q = --p;
+
+more:	if (*p == '\r') {
+		p++;
+	} else if (*p == '?' && p[1] == '?' && (l = chktg2(p[2]))) {
+		/* found trigraph */
+		*q++ = l;
+		p += 3;
+	} else p++, q++;
+	while (ISPACK(*q++ = *p++) == 0)
+		;
+	if (--p >= pend) {
+		*--q = 0;
+		pend = q;
+		return;
+	}
+	q--;
+	goto more;
+
+}
 
 /*
  * fill up the input buffer
@@ -182,6 +254,7 @@ static int
 inpbuf(int n)
 {
 	register int len, sz = 0;
+	register usch *rdpos;
 
 	if (n > 0) {
 		if (pend > inp + n)
@@ -192,20 +265,21 @@ inpbuf(int n)
 
 	if (ifiles->infil == -1)
 		return 0;
-#if LIBVMF
-	len = (int)read(ifiles->infil, pbeg+PBMAX, BYTESPERSEG-PBMAX-2);
-#else
-	len = (int)read(ifiles->infil, pbeg+PBMAX, CPPBUF-PBMAX-2);
-#endif
-	if (len == -1)
-		error("read error on file %s", ifiles->orgfn);
+	rdpos = pbeg+PBMAX;
+	pend = rdpos+INFLIRD;
+	do {
+		if ((len = (int)read(ifiles->infil, rdpos, pend - rdpos)) < 0)
+			error("read error on file %s", ifiles->orgfn);
+		if (len == 0)
+			break;
+		rdpos += len;
+	} while (rdpos < pend);
 
-	pbeg[PBMAX + len] = 0;
-	if (len > 0) {
-		inp = pbeg + PBMAX - sz;
-		pend = pbeg + PBMAX + len;
-	}
-	return len + sz;
+	*rdpos = 0;
+	pend = rdpos;
+	inp = pbeg + PBMAX - sz;
+	packbuf();
+	return pend - inp;
 }
 
 /*
@@ -236,9 +310,6 @@ newone:	do {
 		}
 		return 0; /* end of file */
 
-	case '\r':
-		goto newone;
-
 	case '\\':
 		if (inp == pend)
 			inpbuf(0);
@@ -250,11 +321,6 @@ newone:	do {
 			inp++;
 			ucn(ch == 'u' ? 4 : 8);
 			break;
-		case '\r':
-			inp++;
-			if (inp == pend)
-				inpbuf(0);
-			/* FALLTHROUGH */
 		case '\n':
 			inp++;
 			ifiles->escln++;
@@ -263,16 +329,6 @@ newone:	do {
 			return '\\';
 		}
 		goto newone;
-
-	case '?':
-		inpbuf(2);
-		if (*inp == '?') {
-			if ((ch = chktg2(inp[1])) == 0)
-				return '?';
-			*++inp = ch;
-			goto newone;
-		}
-		return '?';
 
 	case '/':
 		if (Cflag || incmnt || instr)
@@ -660,18 +716,6 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 				ppdir();
 			else
 				goto xloop;
-			break;
-
-		case '?':
-			if (inp+1 >= pend)
-				inpbuf(2);
-			if (*inp == '?') {
-				inp++;
-				if ((ch = chktg2(*inp++)))
-					goto xloop;
-				inp -= 2;
-			}
-			putch('?');
 			break;
 
 		case '\'': /* character constant */
