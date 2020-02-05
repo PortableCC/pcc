@@ -109,7 +109,7 @@ static void fastcmnt2(int);
 static int chktg2(int ch);
 
 /* some common special combos for initialization */
-#define C_NL	(C_SPEC|C_WSNL)
+#define C_NL	(C_SPEC|C_WSNL|C_PACK)
 #define C_DX	(C_SPEC|C_ID0|C_DIGIT|C_HEX)
 #define C_I	(C_SPEC|C_ID0)
 #define C_IX	(C_SPEC|C_ID0|C_HEX)
@@ -181,6 +181,7 @@ static void
 packbuf(void)
 {
 	static usch pbb[10];
+	static int eln;
 	register usch *p, *q;
 	register int l;
 
@@ -194,79 +195,103 @@ packbuf(void)
 	}
 
 	p = inp;
-fast:	while (ISPACK(*p++) == 0)
-		;
-	if (--p >= pend)
-		return;
-
-	switch (*p) {
-	case '?':
-		if (p[1] == '?'&& chktg2(p[2]))
-			goto slow;
-psave:		if (pend-p < 3) {
-			/* Save for future use */
-			q = pbb+10;
-			while (pend > p)
-				*--q = *--pend;
-			*--q = 0;
-			*pend = 0;
+	for (;;) {
+		while (ISPACK(*p++) == 0)
+			;
+		if (--p >= pend)
 			return;
-		}
-		break;
-	case '\r':
-		goto slow;
-	case '\\':
-		if (p[1] == 0)
-			goto psave;
-		if (/* *p == '\n' || */ (p[1] | 040) == 'u')
+
+		switch (*p) {
+		case '?':
+			if (p[1] == '?'&& chktg2(p[2]))
+				goto slow;
+psave:			if (pend-p < 3) {
+				/* Save for future use */
+				q = pbb+10;
+				while (pend > p)
+					*--q = *--pend;
+				*--q = 0;
+				*pend = 0;
+				return;
+			}
+			break;
+
+		case '\r':
 			goto slow;
-		break;
-	default:
-		break;
+
+		case '\\':
+			if (p[1] == 0)
+				goto psave;
+			if (/* *p == '\n' || */ (p[1] | 040) == 'u')
+				goto slow;
+			break;
+
+		default:
+			break;
+		}
+		p++;
 	}
-	p++;
-	goto fast;
 
 /* need to pack, so we must write as well */
 slow:	q = p;
 
-more:	if (*p == '\\') {
-		if ((l = p[1]) == 0)
-			goto psave2;
-		else if (l == 'u') {
-			if (pend-p < 6)
+	for (;;) {
+		switch (*p) {
+		case '\\':
+			if ((l = p[1]) == 0)
 				goto psave2;
-			q = ucn(p, q);
-			p += 6;
-		} else if (l == 'U') {
-			if (pend-p < 10)
+			if (l == '\n') {
+				p += 2;
+				eln++;
+			} else if (l == 'u') {
+				if (pend-p < 6)
+					goto psave2;
+				q = ucn(p, q);
+				p += 6;
+			} else if (l == 'U') {
+				if (pend-p < 10)
+					goto psave2;
+				q = ucn(p, q);
+				p += 10;
+			} else
+				p++, q++;
+			break;
+
+		case '\r':
+			p++;
+			break;
+
+		case '\n':
+			p++, q++;
+			while (eln > 0)
+				*q++ = '\n', eln--;
+			break;
+
+		case '?':
+			if (pend-p < 3)
 				goto psave2;
-			q = ucn(p, q);
-			p += 10;
-		} else
+			if (p[1] == '?' && (l = chktg2(p[2]))) {
+				/* found trigraph */
+				p += 2;
+				*p = l;
+			} else
+				p++, q++;
+			break;
+
+		default:
 			p++, q++;
-	} else if (*p == '\r') {
-		p++;
-	} else if (*p == '?') {
-		if (pend-p < 3)
-			goto psave2;
-		if (p[1] == '?' && (l = chktg2(p[2]))) {
-			/* found trigraph */
-			p += 2;
-			*p = l;
-		} else
-			p++, q++;
-	} else
-		p++, q++;
-	while (ISPACK(*q++ = *p++) == 0)
-		;
-	if (--p >= pend) {
-		*--q = 0;
-		pend = q;
-		return;
+			break;
+		}
+
+		while (ISPACK(*q++ = *p++) == 0)
+			;
+		if (--p >= pend) {
+			*--q = 0;
+			pend = q;
+			return;
+		}
+		q--;
 	}
-	q--;
-	goto more;
 
 psave2:	
 	/* Save for future use */
