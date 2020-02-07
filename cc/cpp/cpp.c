@@ -98,8 +98,8 @@ int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
 char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows;
-static usch utbuf[CPPBUF];
-struct iobuf pb /* = { utbuf, 0, CPPBUF, 0, 1, BUTBUF } */ ;
+usch pbbeg[CPPBUF], *pbinp = pbbeg, *pbend = pbbeg + CPPBUF;
+
 static void macstr(const usch *s);
 #if LIBVMF
 struct vspace ibspc, macspc;
@@ -332,12 +332,6 @@ main(int argc, char **argv)
 	macptr[0] = xmalloc(CPPBUF);
 #endif
 
-	/* init output buffer */
-	pb.buf = utbuf;
-	pb.bsz = CPPBUF;
-	pb.inuse = 1;
-	pb.type = BUTBUF;
-
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
 	bsheap(fb, "#define __BSD2_11__ 1\n");
@@ -418,8 +412,8 @@ main(int argc, char **argv)
 
 	if (Mflag == 0) {
 		if (skpows)
-			pb.buf[pb.cptr++] = '\n';
-		write(1, pb.buf, pb.cptr);
+			*pbinp++ = '\n';
+		write(1, pbbeg, pbinp - pbbeg);
 	}
 #ifdef TIMING
 	(void)gettimeofday(&t2, NULL);
@@ -456,11 +450,8 @@ putob(register struct iobuf *ob, register int ch)
 			macsav(ch);
 			return;
 		case BINBUF:
-			error("putob");
 		case BUTBUF:
-			if (Mflag == 0)
-				(void)write(1, ob->buf, sz);
-			ob->cptr = 0;
+			error("putob %d", ob->type);
 			break;
 		}
 	}
@@ -1414,7 +1405,8 @@ error(const char *fmt, ...)
 {
 	va_list ap;
 
-	write(1, pb.buf, pb.cptr);
+	write(1, pbbeg, pbinp-pbbeg);
+	pbinp = pbbeg;
 	if (ifiles != NULL)
 		fprintf(stderr, "%s:%d: error: ",
 		    ifiles->fname, ifiles->lineno);
@@ -2436,8 +2428,14 @@ void
 cntline(void)
 {
 	if (skpows < 10)
-		for (; skpows > 0; skpows--)
-			putob(&pb, '\n');
+		for (; skpows > 0; skpows--) {
+			if (pbinp == pbend) {
+				if (Mflag == 0)
+					(void)write(1, pbbeg, pbinp - pbbeg);
+				pbinp = pbbeg;
+			}
+			*pbinp++ = '\n';
+		}
 	else
 		prtline(1);
 	skpows = 0;
@@ -2456,13 +2454,14 @@ putch(register int ch)
 		skpows = 1;
 		return;
 	}
-	if (pb.cptr == pb.bsz)
-		putob(&pb, ch);
-	else
-		pb.buf[pb.cptr++] = ch;
+	if (pbinp == pbend) {
+		if (Mflag == 0)
+			(void)write(1, pbbeg, pbinp - pbbeg);
+		pbinp = pbbeg;
+	}
+	*pbinp++ = ch;
 	if (ch == '\n' && istty && Mflag == 0)
-		(void)write(1, pb.buf, pb.cptr), pb.cptr = 0;
-		
+		(void)write(1, pbbeg, pbinp - pbbeg), pbinp = pbbeg;
 }
 
 void
@@ -2470,7 +2469,14 @@ putstr(const usch *s)
 {
 	if (skpows)
 		cntline();
-	strtobuf(s, &pb);
+	while (*s) {
+		if (pbinp == pbend) {
+			if (Mflag == 0)
+				(void)write(1, pbbeg, pbinp - pbbeg);
+			pbinp = pbbeg;
+		}
+		*pbinp++ = *s++;
+	}
 }
 
 /*

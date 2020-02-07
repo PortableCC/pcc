@@ -602,11 +602,9 @@ faststr(int bc, register struct iobuf *ob)
 {
 	register int ch;
 
-	if (ob == NULL)
-		ob = getobuf(BNORMAL);
-
+#define	FSPCH(c) if (ob == NULL) putch(c); else putob(ob, c);
 	instr = 1;
-	putob(ob, bc);
+	FSPCH(bc);
 	for (;;) {
 		if (inp == pend)
 			ch = qcchar();
@@ -616,11 +614,12 @@ faststr(int bc, register struct iobuf *ob)
 			inp++;
 		switch (ch) {
 		case '\\':
-			putob(ob, ch);
+			FSPCH(ch);
 			if (inp == pend)
 				inpbuf();
 			incmnt = 1;
-			putob(ob, qcchar());
+			ch = qcchar();
+			FSPCH(ch);
 			incmnt = 0;
 			continue;
 		case '\n':
@@ -629,12 +628,14 @@ faststr(int bc, register struct iobuf *ob)
 			unch(ch);
 			return ob;
 		}
-		putob(ob, ch);
+		FSPCH(ch);
 		if (ch == bc)
 			break;
 	}
-	putob(ob, 0);
-	ob->cptr--;
+	if (ob) {
+		putob(ob, 0);
+		ob->cptr--;
+	}
 	instr = 0;
 	return ob;
 }
@@ -654,24 +655,24 @@ faststr(int bc, register struct iobuf *ob)
  *			pp-number P sign
  *			pp-number .
  */
-int
-fastnum(register int ch, register struct iobuf *ob)
+static int
+fastnum(register int ch)
 {
 	register int c2;
 
 	if (ch == '.') { /* not digit, dot */
-		putob(ob, ch);
+		putch(ch);
 		ch = qcchar();
 	}
 	for (;;) {
-		putob(ob, ch);
+		putch(ch);
 		if ((ch = qcchar()) == 0)
 			break;
 		if ((ISID(ch)) == 0 && ch != '.')
 			break;
 		if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
 			if ((c2 = qcchar()) == '-' || c2 == '+') {
-				putob(ob, ch);
+				putch(ch);
 				ch = c2;
 				continue;
 			}
@@ -695,7 +696,6 @@ void
 fastscan(void)
 {
 	register struct iobuf *ob;
-	extern struct iobuf pb;
 	struct symtab *nl;
 	register int ch, c2;
 	usch *dp;
@@ -735,8 +735,13 @@ xloop:
 					fastcmnt2(ch);
 					if (n == ifiles->lineno)
 						putch(' '); /* 5.1.1.2 p3 */
-				} else
-					Ccmnt2(&pb, ch);
+				} else {
+					ob = getobuf(BNORMAL);
+					Ccmnt2(ob, ch);
+					ob->buf[ob->cptr] = 0;
+					putstr(ob->buf);
+					bufree(ob);
+				}
 			} else {
 				putch('/');
 				goto xloop;
@@ -777,14 +782,14 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 		case '\"': /* strings */
 			if (skpows)
 				cntline();
-			faststr(ch, &pb);
+			faststr(ch, NULL);
 			break;
 
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7': case '8': case '9':
 			if (skpows)
 				cntline();
-			ch = fastnum(ch, &pb);
+			ch = fastnum(ch);
 			goto xloop;
 
 		case 'L':
@@ -821,7 +826,8 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 						putch(' ');
 					if (skpows)
 						cntline();
-					buftobuf(ob, &pb);
+					ob->buf[ob->cptr] = 0;
+					putstr(ob->buf);
 					if (ob->cptr > 0 &&
 					    (ob->buf[ob->cptr-1] == '-' ||
 					    ob->buf[ob->cptr-1] == '+'))
@@ -1061,12 +1067,16 @@ prtline(int nl)
 		}
 	} else if (!Pflag) {
 		skpows = 0;
-		bsheap(&pb, "\n# %d \"%s\"", ifiles->lineno, ifiles->fname);
+		ob = getobuf(BNORMAL);
+		bsheap(ob, "\n# %d \"%s\"", ifiles->lineno, ifiles->fname);
 		if (ifiles->idx == SYSINC)
-			strtobuf((usch *)" 3", &pb);
-		if (nl) strtobuf((usch *)"\n", &pb);
+			strtobuf((usch *)" 3", ob);
+		if (nl) putob(ob, '\n');
+		ob->buf[ob->cptr] = 0;
+		putstr(ob->buf);
+		bufree(ob);
 	} else
-		putob(&pb, '\n');
+		putch('\n');
 }
 
 static int
@@ -1358,7 +1368,9 @@ identstmt(void)
 		if (ob)
 			bufree(ob);
 	} else if (ch == '\"') {
-		bufree(faststr(ch, NULL));
+		ob = getobuf(BNORMAL);
+		faststr(ch, ob);
+		bufree(ob);
 		
 	} else
 		goto bad;
