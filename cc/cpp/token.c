@@ -1008,6 +1008,7 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 	pend = inp = pbeg = (usch *)ifiles->vseg->s_cinfo;
 #else
 	pend = inp = pbeg = xmalloc(CPPBUF);
+	*inp = 0;
 #endif
 	ic->lineno = 1;
 	ic->escln = 0;
