@@ -641,48 +641,6 @@ faststr(int bc, register struct iobuf *ob)
 }
 
 /*
- * get a preprocessing number and save it as given by ob.
- * returns first non-pp-number char.
- * We know that this is a valid number already.
- *
- *	pp-number:	digit
- *			. digit
- *			pp-number digit
- *			pp-number identifier-nondigit
- *			pp-number e sign
- *			pp-number E sign
- *			pp-number p sign
- *			pp-number P sign
- *			pp-number .
- */
-static int
-fastnum(register int ch)
-{
-	register int c2;
-
-	if (ch == '.') { /* not digit, dot */
-		putch(ch);
-		ch = qcchar();
-	}
-	for (;;) {
-		putch(ch);
-		if ((ch = qcchar()) == 0)
-			break;
-		if ((ISID(ch)) == 0 && ch != '.')
-			break;
-		if (ch == 'e' || ch == 'E' || ch == 'p' || ch == 'P') {
-			if ((c2 = qcchar()) == '-' || c2 == '+') {
-				putch(ch);
-				ch = c2;
-				continue;
-			}
-			unch(c2);
-		}
-	}
-	return ch;
-}
-
-/*
  * Scan quickly the input file searching for:
  *	- '#' directives
  *	- keywords (if not flslvl)
@@ -695,10 +653,10 @@ fastnum(register int ch)
 void
 fastscan(void)
 {
-	register struct iobuf *ob;
+	struct iobuf *ob;
 	struct symtab *nl;
 	register int ch, c2;
-	usch *dp;
+	register usch *dp;
 
 	goto run;
 
@@ -710,7 +668,7 @@ fastscan(void)
 				ch = *inp++;
 			else
 				ch = qcchar();
-xloop:
+
 			if ((ISSPEC(ch)) != 0)
 				break;
 			putch(ch);
@@ -744,7 +702,7 @@ xloop:
 				}
 			} else {
 				putch('/');
-				goto xloop;
+				unch(ch);
 			}
 			break;
 
@@ -770,7 +728,7 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 			if (ch  == '#')
 				ppdir();
 			else
-				goto xloop;
+				unch(ch);
 			break;
 
 		case '\'': /* character constant */
@@ -789,8 +747,26 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 		case '5': case '6': case '7': case '8': case '9':
 			if (skpows)
 				cntline();
-			ch = fastnum(ch);
-			goto xloop;
+			for (;;) {
+				putch(ch);
+				if (*inp == 0 || *inp == '\\')
+					ch = qcchar();
+				else
+					ch = *inp++;
+				if (ch == 0)
+					break;
+				if ((ISID(ch)) == 0 && ch != '.')
+					break;
+				if ((ch|040) == 'e' || (ch|040) == 'p') {
+					if ((c2 = qcchar()) == '-' || c2 == '+') {
+						putch(ch);
+						ch = c2;
+					} else
+						unch(c2);
+				}
+			}
+			*--inp = ch;
+			break;
 
 		case 'L':
 		case 'U':
@@ -842,8 +818,9 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 		case '\\':
 			*--inp = '\\';
 			if ((ch = qcchar()) != '\\')
-				goto xloop;
-			putch('\\');
+				unch(ch);
+			else
+				putch('\\');
 			break;
 		}
 	}
