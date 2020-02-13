@@ -57,6 +57,22 @@
  *	3) Tokenize.
  *	   Remove comments (fastcmnt)
  */
+/*  (low address)                                             (high address)
+ *  pbeg                                                                pend
+ *  |                                                                     |
+ *  _______________________________________________________________________
+ * |_______________________________________________________________________|
+ *          |               |               |
+ *          |<-- waiting -->|               |<-- waiting -->
+ *          |    to be      |<-- current -->|    to be
+ *          |    written    |    token      |    scanned
+ *          |               |               |
+ *          outp            inp             p
+ *
+ *  *outp   first char not yet written to output file
+ *  *inp    first char of current token
+ *  *p      first char not yet scanned
+ */
 
 #ifndef pdp11
 #include "config.h"
@@ -174,6 +190,8 @@ usch spechr[256] = {
 #define	INFLIRD	(CPPBUF-PBMAX-ENDFREE)
 #endif
 
+static int numnl;
+
 /*
  * Convert trigraphs and remove \\n from input stream.
  */
@@ -181,68 +199,87 @@ static void
 packbuf(void)
 {
 	static usch pbb[10];
-	static int eln;
 	register usch *p, *q;
 	register int l;
+	usch *rq;
 
+#ifdef PCC_DEBUG
+	if (*inp == 0 && pend > inp)
+		error("*inp == 0");
+#endif
+
+	q = pbeg + PBMAX;
 	/* if we found potential trigraph */
 	if (pbb[9]) {
 		p = pbb+10;
 		while ((*--inp = *--p))
-			;
+			q--;
 		inp++;
 		pbb[9] = 0;
 	}
 
 	p = inp;
-	for (;;) {
-		while (ISPACK(*p++) == 0)
-			;
-		if (--p >= pend)
-			return;
-
-		switch (*p) {
-		case '?':
-			if (p[1] == '?'&& chktg2(p[2]))
-				goto slow;
-psave:			if (pend-p < 3) {
-				/* Save for future use */
-				q = pbb+10;
-				while (pend > p)
-					*--q = *--pend;
-				*--q = 0;
-				*pend = 0;
+	rq = q;
+	if (numnl == 0) {
+		for (;;) {
+			while (ISPACK(*p++) == 0)
+				;
+			if (--p >= pend)
 				return;
-			}
-			break;
+	
+			switch (*p) {
+			case '?':
+				if (p[1] == '?'&& chktg2(p[2]))
+					goto slow;
+psave:				if (pend-p < 3) {
+					/* Save for future use */
+					q = pbb+10;
+					while (pend > p)
+						*--q = *--pend;
+					*--q = 0;
+					*pend = 0;
+					return;
+				}
+				break;
 
-		case '\r':
-			goto slow;
-
-		case '\\':
-			if (p[1] == 0)
-				goto psave;
-			if (/* *p == '\n' || */ (p[1] | 040) == 'u')
+			case '\r':
 				goto slow;
-			break;
 
-		default:
-			break;
+			case '\\':
+				if (p[1] == 0)
+					goto psave;
+				if (p[1] == '\n' || (p[1] | 040) == 'u')
+					goto slow;
+				break;
+
+			default:
+				break;
+			}
+			p++;
 		}
-		p++;
-	}
+slow:		q = p;
+	} 
 
 /* need to pack, so we must write as well */
-slow:	q = p;
 
 	for (;;) {
+		while (ISPACK(*q++ = *p++) == 0)
+			;
+		if (--p >= pend) {
+			*--q = 0;
+			pend = q;
+			inp = rq;
+			return;
+		}
+		q--;
+
 		switch (*p) {
 		case '\\':
 			if ((l = p[1]) == 0)
 				goto psave2;
 			if (l == '\n') {
 				p += 2;
-				eln++;
+				numnl++;
 			} else if (l == 'u') {
 				if (pend-p < 6)
 					goto psave2;
@@ -263,8 +300,8 @@ slow:	q = p;
 
 		case '\n':
 			p++, q++;
-			while (eln > 0)
-				*q++ = '\n', eln--;
+			while (numnl > 0)
+				*q++ = '\n', numnl--;
 			break;
 
 		case '?':
@@ -278,29 +315,30 @@ slow:	q = p;
 				p++, q++;
 			break;
 
+		case 0:
+			error("stray 0");
 		default:
 			p++, q++;
 			break;
 		}
 
-		while (ISPACK(*q++ = *p++) == 0)
-			;
-		if (--p >= pend) {
-			*--q = 0;
-			pend = q;
-			return;
-		}
-		q--;
 	}
 
 psave2:	
 	/* Save for future use */
+#ifdef PCC_DEBUG
+	if (pend-p > 9)
+		error("pend-p > 9");
+#endif
+
+	inp = rq;
+	rq = pend;
+	pend = q;
 	*q = 0;
 	q = pbb+10;
-	while (pend > p)
-		*--q = *--pend;
+	while (rq > p)
+		*--q = *--rq;
 	*--q = 0;
-	*pend = 0;
 	return;
 }
 
@@ -312,31 +350,77 @@ psave2:
 static int
 inpbuf(void)
 {
+	register usch *ninp, *oinp;
 	register int len;
-	register usch *rdpos;
-
-	rdpos = pbeg + PBMAX;
-	while (inp < pend)
-		*--rdpos = *--pend;
 
 	if (ifiles->infil == -1)
 		return 0;
-	rdpos = pbeg+PBMAX;
-	pend = rdpos+INFLIRD;
+
+	if (inp < pend)
+		error("inp < pend");
+
+	ninp = pbeg + PBMAX + numnl;
+	oinp = inp;
+	while (oinp < pend)
+		*ninp++ = *oinp++;
+	pend = pbeg + INFLIRD + PBMAX;
+	inp = pbeg+PBMAX+numnl;
+
+	if ((len = (int)read(ifiles->infil, ninp, pend - ninp)) < 0)
+		error("read error on file %s", ifiles->orgfn);
+
+	ninp += len;
+	pend = ninp;
+	*pend = 0;
+
+#if 0
+{ usch *w = inp; while (w < pend) { if (*w == 0) error("*w == 0"); w++; } }
+#endif
+	packbuf();
+#if 0
+{ usch *w = inp; while (w < pend) { if (*w == 0) error("*w == 0-2"); w++; } }
+#endif
+	return pend-inp;
+}
+
+#ifdef notyet
+/*
+ * moves data from inp to p to beginning of buffer.
+ * fill up the input buffer from p to INFLIRD-numnl
+ * update pointers (pend, inp, outp, p)
+ */
+static usch *
+refill(usch *p)
+{
+	register usch *ninp, *oinp;
+	register int len;
+
+	/* dump(); */
+	ninp = pbeg+PBMAX;
+	oinp = inp;
+	while (oinp < pend)
+		*ninp++ = *oinp++;
+	p -= (oinp - ninp);
+	pend -= (oinp - ninp);
+	outp = inp = pbeg+PBMAX;
+
+	if (ifiles->infil == -1)
+		return 0;
+
+	ninp = pbeg + PBMAX + INFLIRD - numnl;
 	do {
-		if ((len = (int)read(ifiles->infil, rdpos, pend - rdpos)) < 0)
+		if ((len = (int)read(ifiles->infil, pend, ninp-pend)) < 0)
 			error("read error on file %s", ifiles->orgfn);
 		if (len == 0)
 			break;
-		rdpos += len;
-	} while (rdpos < pend);
+		pend += len;
+	} while (pend < ninp);
 
-	*rdpos = 0;
-	pend = rdpos;
-	inp = pbeg + PBMAX;
+	*pend = 0;
 	packbuf();
-	return pend - inp;
+	return p;
 }
+#endif
 
 /*
  * Return a quick-cooked character.
@@ -352,6 +436,7 @@ newone:	if (ISCQ(ch = *inp++) == 0)
 
 	switch (ch) {
 	case 0:
+		inp--;
 		if (lb) {
 			pend = lpend, pbeg = lpbeg, inp = linp;
 			ifiles->infil = lif;
