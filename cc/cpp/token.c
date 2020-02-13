@@ -145,7 +145,7 @@ static int chktg2(int ch);
 	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
-	C_I,	C_I,	C_I,	0,	C_NBS,	0,	0,	C_I,	\
+	C_I,	C_I,	C_I,	0,	C_PACK,	0,	0,	C_I,	\
 	\
 	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
@@ -447,19 +447,6 @@ newone:	if (ISCQ(ch = *inp++) == 0)
 		if (inpbuf())
 			goto newone;
 		return 0; /* end of file */
-
-	case '\\':
-		if (inp == pend)
-			inpbuf();
-		switch (ch = *inp) {
-		case '\n':
-			inp++;
-			ifiles->escln++;
-			break;
-		default:
-			return '\\';
-		}
-		goto newone;
 
 	case '/':
 		if (Cflag || incmnt || instr)
@@ -898,14 +885,6 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 			} else {
 				putstr(dp);
 			}
-			break;
-
-		case '\\':
-			*--inp = '\\';
-			if ((ch = qcchar()) != '\\')
-				unch(ch);
-			else
-				putch('\\');
 			break;
 		}
 	}

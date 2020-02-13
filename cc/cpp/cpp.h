@@ -102,7 +102,7 @@ extern usch pbbeg[CPPBUF], *pbinp, *pbend;
 #define	C_PACK	0010		/* [\0\\\?\r] */
 #define C_ID	(C_ID0|C_HEX)	/* [_a-zA-Z0-9] */
 #define C_ID0	0020		/* [_a-zA-Z] */
-#define C_Q	0040		/* [\0\\/] */
+#define C_Q	0040		/* [\0/] */
 #define C_DIGIT	0100		/* [0-9] */
 #define C_HEX	0200		/* [0-9a-fA-F] */
 
