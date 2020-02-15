@@ -98,7 +98,7 @@ int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
 char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows;
-usch pbbeg[CPPBUF], *pbinp = pbbeg, *pbend = pbbeg + CPPBUF;
+usch pbbeg[MINBUF], *pbinp = pbbeg, *pbend = pbbeg + MINBUF;
 
 static void macstr(const usch *s);
 int lckmacbuf;
@@ -627,10 +627,8 @@ macmapin(int seg)
 #if LIBVMF
 	struct vseg *vseg= vmmapseg(&macspc, seg);
 	return vseg->s_cinfo;
-#define	MACBUFSZ	BYTESPERSEG
 #else
 	return macptr[seg];
-#define	MACBUFSZ	CPPBUF
 #endif
 }
 
@@ -651,13 +649,13 @@ macrepbuf(struct symtab *sp)
 	tend = to + ob->bsz;
 
 	from = macmapin(cvoff++);
-	fend = from + MACBUFSZ;
+	fend = from + MINBUF;
 	from += VALPTR(sp->valoff);
 
 	while ((ch = (*to++ = *from++)) != 0) {
 iloop:		if (from == fend) {
 			from = macmapin(cvoff++);
-			fend = from + MACBUFSZ;
+			fend = from + MINBUF;
 		}
 		if (to == tend) {
 			ob->cptr = to - ob->buf;
@@ -749,7 +747,7 @@ line(void)
 		inpp++;
 
 	ln = n;
-	ifiles->escln = 0;
+	escln = 0;
 
 	if (*inpp == 0)
 		goto out;
@@ -2056,7 +2054,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 				}
 				break;
 			case '\n':
-				ifiles->escln++;
+				escln++;
 				c = skpws();
 				if (c == '#') {
 					ppdir();
@@ -2110,7 +2108,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 			} else
 				putob(ab, c);
 			if ((c = cinput()) == '\n')
-				ifiles->escln++, c = ' ';
+				escln++, c = ' ';
 		}
 		if (c == 0)
 			error("unterminated macro invocation");
@@ -2749,11 +2747,6 @@ xrealloc(void *p, int sz)
 	return rv;
 }
 
-#if CPPBUF < 1024
-#define ALLBUF  1024
-#else
-#define ALLBUF CPPBUF 
-#endif
 /*
  *
  */
@@ -2769,8 +2762,8 @@ addname(register usch *str)
 		;
 	len = w - str;
 	if (len > nsz) {
-		nbase = xmalloc(ALLBUF);
-		nsz = ALLBUF;
+		nbase = xmalloc(MINBUF);
+		nsz = MINBUF;
 	}
 	nsz -= len;
 	w = nbase;
@@ -2793,8 +2786,8 @@ addblock(register int sz)
 	sz = (sz + sizeof(int *)-1) & ~(sizeof(int *)-1);
 
 	if (nsz < sz) {
-		nbase = xmalloc(ALLBUF);
-		nsz = ALLBUF;
+		nbase = xmalloc(MINBUF);
+		nsz = MINBUF;
 	}
 	str = nbase;
 	nsz -= sz;

@@ -46,6 +46,7 @@ extern	int	tflag, Aflag, Cflag, Pflag;
 extern	int	Mflag, dMflag, MPflag, MMDflag;
 extern	char	*Mfile, *MPfile;
 extern	int	defining, inclevel;
+extern	int	escln;	/* escaped newlines, to be added */
 
 /* args for lookup() */
 #define FIND    0
@@ -53,7 +54,7 @@ extern	int	defining, inclevel;
 
 /* buffer used internally */
 #if SIZEOF_INT_P == 2 || LIBVMF
-#define CPPL2	10
+#define CPPL2	7
 typedef	unsigned short mvtyp;
 #else
 #define CPPL2	14
@@ -61,11 +62,16 @@ typedef	unsigned int mvtyp;
 #endif
 
 #define	CPPBUF		(1 << CPPL2)
-#define	VALPTR(x)	((x) & (CPPBUF-1))
-#define	VALBUF(x)	((x) >> CPPL2)
-#define	MKVAL(b, c)	(((b) << CPPL2) + (c))
+#if CPPBUF < 1024
+#define	MINBUF	1024	/* must be == BYTESPERSEG */
+#else
+#define	MINBUF	CPPBUF
+#endif
+#define	VALPTR(x)	((x) & (MINBUF-1))
+#define	VALBUF(x)	((x) / MINBUF)
+#define	MKVAL(b, c)	(((b) * MINBUF) + (c))
 
-extern usch pbbeg[CPPBUF], *pbinp, *pbend;
+extern usch pbbeg[], *pbinp, *pbend;
 
 #define	MAXARGS	128	/* Max # of args to a macro. Should be enough */
 #define	MAXIDSZ	63	/* Max length of C99 identifier; 5.2.4.1 */
@@ -92,7 +98,7 @@ extern usch pbbeg[CPPBUF], *pbinp, *pbend;
 #define	BLKID2	5	/* ENQ, not legal char */
 
 /* Used in macro expansion */
-#define	L2MAX	32			/* max index into blocker pages */
+#define	L2MAX	64			/* max index into blocker pages */
 #define	MKB(l,h)	(l+((h)<<8))
 
 /* quick checks for some characters */
@@ -151,7 +157,6 @@ struct includ {
 	const usch *fname;	/* current fn, changed if #line found */
 	const usch *orgfn;	/* current fn, not changed */
 	int lineno;
-	int escln;		/* escaped newlines, to be added */
 	int infil;
 	int opend, oinp;
 	usch *opbeg;
