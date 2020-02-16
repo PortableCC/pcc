@@ -97,7 +97,7 @@ static int istty;
 int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
 char *Mfile, *MPfile;
 char *Mxfile;
-int warnings, Mxlen, skpows;
+int warnings, Mxlen, skpows, readinc;
 usch pbbeg[MINBUF], *pbinp = pbbeg, *pbend = pbbeg + MINBUF;
 
 static void macstr(const usch *s);
@@ -722,75 +722,41 @@ addidir(register char *idir, register struct incs **ww)
 void
 line(void)
 {
-	register struct iobuf *ib, *ob;
-	register usch *inpp;
-	int n, ln, oidx;
+	register struct iobuf *ob;
+	register int x, n, ln, oidx;
 
 	oidx = ifiles->idx;
-	ob = savln();
-	ob->cptr = 0;
-	exparg(1, ob, ib = getobuf(BNORMAL), 0);
-	inpp = ib->buf;
 
-	while (ISWSNL(*inpp))
-		inpp++;
+	x = 0;
+	if (yylex() == NUMBER &&
+	    (yynode.nd_val >= 1 || yynode.nd_val <= 2147483647L)) {
+		ln = yynode.nd_val;
+		escln = 0;
 
-	n = 0;
-	while (ISDIGIT(*inpp))
-		n = n * 10 + *inpp++ - '0';
+		if ((x = yylex()) == STRING) {
+			ob = yynode.nd_ob;
+			ob->buf[--ob->cptr] = 0; /* remove trailing \" */
+			if (strcmp((char *)ifiles->fname, (char *)ob->buf+1))
+				ifiles->fname = addname(ob->buf+1);
+			bufree(ob);
 
-	/* Can only be decimal number here between 1-2147483647 */
-	if (n < 1 || n > 2147483647L)
-		goto bad;
+			if ((x = yylex()) == NUMBER &&
+			    ((n = yynode.nd_val) >= 0 || n <= 9)) {
+				if (n == 3)
+					ifiles->idx = SYSINC;
+				x = yylex();
+			}
+		}
+	}
 
-	while (ISWSNL(*inpp))
-		inpp++;
+	if (x != WARN)
+		error("bad #line");
 
-	ln = n;
-	escln = 0;
-
-	if (*inpp == 0)
-		goto out;
-
-	if (getyp(inpp) != STRING)
-		goto bad;
-
-	if (*inpp != '\"')
-		warning("#line only allows character literals");
-
-	ob->cptr = 0;
-	ib->cptr = (int) (inpp - ib->buf);
-	fstrstr(ib, ob);
-	inpp = ib->buf + ib->cptr;
-	ob->buf[--ob->cptr] = 0; /* remove trailing \" */
-
-	if (strcmp((char *)ifiles->fname, (char *)ob->buf+1))
-		ifiles->fname = addname(ob->buf+1);
-
-	while (ISWSNL(*inpp))
-		inpp++;
-
-	if (*inpp == 0)
-		goto out;
-
-	if (*inpp < '0' || *inpp > '9')
-		goto bad;
-
-	if (*inpp++ == '3')
-		ifiles->idx = SYSINC;
-
-	if (*inpp != 0)
-		goto bad;
-
-out:	ifiles->lineno = ln;
+	ifiles->lineno = ln;
 	prtline(1);
 	ifiles->idx = oidx;
 	ifiles->lineno--;
-	bufree(ob);
-	bufree(ib);
-	return;
 
-bad:	error("bad #line");
 }
 
 #ifdef MACHOABI
@@ -901,6 +867,7 @@ prem(void)
 	error("premature EOF");
 }
 
+#if 0
 static struct iobuf *
 incfn(void)
 {
@@ -941,6 +908,7 @@ incfn(void)
 	ob->buf[ob->cptr-1] = 0;
 	return ob;
 }
+#endif
 
 /*
  * concatenate n1 with n2 and see if the result is an accessible file.
@@ -976,8 +944,12 @@ include(void)
 	if (flslvl)
 		return;
 
-	if ((ob = incfn()) == NULL) /* get include file name in obuf */
+	readinc++;
+	if (yylex() != STRING)
 		error("bad #include");
+	readinc = 0;
+	ob = yynode.nd_ob;
+	ob->buf[ob->cptr-1] = 0; /* last \" */
 
 	if (ob->buf[1] == '/') {
 		 if ((fn = chkfile(&ob->buf[1], 0)) != NULL)
@@ -1015,8 +987,12 @@ include_next(void)
 	if (flslvl)
 		return;
 
-	if ((ob = incfn()) == NULL) /* get include file name in obuf */
+	readinc++;
+	if (yylex() != STRING)
 		error("bad #include_next");
+	readinc = 0;
+	ob = yynode.nd_ob;
+	ob->buf[ob->cptr-1] = 0; /* last \" */
 
 	fn = addname(&ob->buf[1]);
 	bufree(ob);
@@ -1630,24 +1606,41 @@ fstrnum(struct iobuf *ib, register struct iobuf *ob)
  * similar to faststr.
  */
 static void
-fstrstr(struct iobuf *ib, register struct iobuf *ob)
+fstrstr(struct iobuf *ib, struct iobuf *ob)
 {
-	register usch *s = ib->buf+ib->cptr;
+	register usch *p, *q;
 	register int ch;
 
-	if (*s == 'L' || *s == 'U' || *s == 'u')
-		putob(ob, *s++);
-	if (*s == '8')
-		putob(ob, *s++);
-	ch = *s;
-	putob(ob, *s++);
-	while (*s != ch) {
-		if (*s == '\\')
-			putob(ob, *s++);
-		putob(ob, *s++);
+	q = p = ib ? ib->buf+ib->cptr : inp;
+	if (*p == 'L' || (*p|040) == 'u')
+		p++;
+	if (*p == '8')
+		p++;
+	ch = *p++;
+	for (;;) {
+		while (ISESTR(*p++) == 0)
+			;
+		if (*--p == 0 && ib == NULL) {
+			/* only from stdin */
+			strtobuf(inp, ob);
+			inp = p;
+			inpbuf();
+			q = p = inp;
+			p--;
+		} else if (*p == '\\') {
+			p++;
+		} else if (*p == '\n' && ib == NULL) {
+			warning("unterminated literal");
+			p--;
+			break;
+		} else if (ch == *p)
+			break;
+		p++;
 	}
-	putob(ob, *s++);
-	ib->cptr = (int)(s - ib->buf);
+	++p;
+	while (q < p)
+		putob(ob, *q++);
+	if (ib == 0) inp = p; else ib->cptr = p  - ib->buf;
 }
 
 /*
@@ -2067,7 +2060,8 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 				break;
 			case '\"':
 			case '\'':
-				faststr(c, ab);
+				*--inp = c;
+				fstrstr(NULL, ab);
 				break;
 			default:
 				if (ISID0(c)) {
@@ -2104,7 +2098,8 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 			if (c == '(') plev++;
 			if (c == ')') plev--;
 			if (c == '\"' || c == '\'') {
-				faststr(c, ab);
+				*--inp = c;
+				fstrstr(NULL, ab);
 			} else
 				putob(ab, c);
 			if ((c = cinput()) == '\n')

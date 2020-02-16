@@ -106,13 +106,13 @@ extern usch pbbeg[], *pbinp, *pbend;
 #define C_2	0002		/* for yylex() tokenizing */
 #define C_WSNL	0004		/* [ \t\r\n] */
 #define	C_PACK	0010		/* [\0\\\?\r] */
-#define C_ID	(C_ID0|C_HEX)	/* [_a-zA-Z0-9] */
+#define C_ID	(C_ID0|C_DIGIT)	/* [_a-zA-Z0-9] */
 #define C_ID0	0020		/* [_a-zA-Z] */
 #define C_Q	0040		/* [\0/] */
 #define C_DIGIT	0100		/* [0-9] */
-#define C_HEX	0200		/* [0-9a-fA-F] */
+#define C_ESTR	0200		/* [\0\n\\\'\"] */
 
-extern usch spechr[];
+extern short spechr[];
 
 #define ISSPEC(x)	((SPECADD+spechr)[(int)(x)] & (C_SPEC))
 #define ISC2(x)		((SPECADD+spechr)[(int)(x)] & (C_2))
@@ -123,7 +123,7 @@ extern usch spechr[];
 #define ISID0(x)	((SPECADD+spechr)[(int)(x)] & C_ID0)
 #define	ISDIGIT(x)	((SPECADD+spechr)[(int)(x)] & C_DIGIT)
 #define	ISCQ(x)		((SPECADD+spechr)[(int)(x)] & C_Q)
-#define	ISHEX(x)	((SPECADD+spechr)[(int)(x)] & C_HEX)
+#define	ISESTR(x)	((SPECADD+spechr)[(int)(x)] & C_ESTR)
 
 /* buffer definition */
 #define	BNORMAL	0	/* standard buffer */
@@ -195,12 +195,14 @@ struct nd {
 	union {
 		long long val;
 		unsigned long long uval;
+		struct iobuf *ob;
 	} n;
 };
 extern struct nd yynode;
 
 #define nd_val n.val
 #define nd_uval n.uval
+#define nd_ob n.ob
 
 enum { NUMBER = 257, UNUMBER, LS, RS, EQ, NE, STRING, WSPACE, CMNT, IDENT,
 	OROR, ANDAND, DEFINED, LE, GE };
@@ -236,9 +238,9 @@ int inc2(void);
 void Ccmnt2(struct iobuf *, int);
 usch *bufid(int ch, struct iobuf *);
 usch *readid(int ch);
-struct iobuf *faststr(int bc, struct iobuf *);
+void faststr(int bc, struct iobuf *);
 void *xrealloc(void *p, int sz);
 void *xmalloc(int sz);
 void fastscan(void);
 void cntline(void);
-struct iobuf *savln(void);
+int inpbuf(void);
