@@ -923,6 +923,13 @@ igen:	while ((ch = qcchar()) == ' ' || ch == '\t')
 			error("invalid preprocessor operator %c%c", ch, c2);
 		goto pb;
 
+	case 'L':
+	case 'u':
+	case 'U':
+		if (*inp != '\'')
+			goto ident;
+		inp++;
+		/* FALLTHROUGH */
 	case '\'':
 		yynode.op = NUMBER;
 		yynode.nd_val = charcon();
@@ -957,7 +964,7 @@ str:		ob = getobuf(BNORMAL);
 		break;
 
 	default:
-		if (ISID0(t) == 0)
+ident:		if (ISID0(t) == 0)
 			break;
 
 		yynode.op = NUMBER;
