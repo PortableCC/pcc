@@ -814,11 +814,9 @@ fillstr(struct symtab *sp)
 {
 	int cl = NO_CLASS;
 	TWORD t;
-	int sz;
 
 	for (; sp; sp = sp->snext) {
 		t = sp->stype;
-		sz = (int)tsize(t, sp->sdf, sp->sap);
 		while (ISARY(t))
 			t = DECREF(t);
 
