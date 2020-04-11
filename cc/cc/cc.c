@@ -88,9 +88,6 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#ifdef HAVE_LIBGEN_H
-#include <libgen.h>
-#endif
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
