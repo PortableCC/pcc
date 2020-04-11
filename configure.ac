@@ -651,7 +651,7 @@ fi
 
 # Checks for header files.
 # AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
-AC_CHECK_HEADERS([string.h malloc.h])
+AC_CHECK_HEADERS([string.h])
 AC_HEADER_SYS_WAIT
 
 # Checks for library functions.
