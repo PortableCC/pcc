@@ -1206,6 +1206,7 @@ charcon(void)
 			while (ISDIGIT(c = qcchar()) ||
 			    ((c|040) >= 'a' && (c|040) <= 'f'))
 				val = val * 16 + dig2num(c);
+			*--inp = c;
 			break;
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7':
