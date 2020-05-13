@@ -326,7 +326,7 @@ fcomp(NODE *p)
 		expand(p, 0, "\tfstp %st(0)\n");	/* pop fromstack */
 	} else {
 		expand(p, 0, "\tfucompp\n");
-		expand(p, 0, "\tfnstsw %%ax\n");
+		expand(p, 0, "\tfnstsw %ax\n");
 		expand(p, 0, "\tsahf\n");
 	}
 	switch (p->n_op) {
