@@ -490,7 +490,6 @@ builtin_va_arg(const struct bitable *bt, P1ND *a)
 #ifdef BACKAUTO
 	rv = buildtree(COMOP, rv , buildtree(PLUSEQ, a->n_left, bcon(sz)));
 #else
-#error fix wrong eval order in builtin_va_arg
 	ecomp(buildtree(MINUSEQ, a->n_left, bcon(sz)));
 #endif
 

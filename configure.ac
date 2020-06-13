@@ -111,6 +111,7 @@ case "$target_os" in
 	stabs=yes
 	case "$target_cpu" in
 	    arm*) targmach=arm ;;
+	    aarch64) targmach=aarch64 ;;
 	    i?86) targmach=i386 ;;
 	    powerpc*) targmach=powerpc endian=big ;;
 	    x86_64) targmach=amd64 ;;

@@ -60,6 +60,9 @@
 #define MUSL_ROOT	"/lib/ld-musl-mips"
 #define MUSL_EL		"el"
 #define MUSL_SF		"-sf"
+#elif defined(mach_aarch64)
+#define CPPMDADD        { "-D__aarch64__", NULL, }
+#define MUSL_DYLIB      "/lib/ld-musl-aarch64.so.1"
 #else
 #error defines for arch missing
 #endif
