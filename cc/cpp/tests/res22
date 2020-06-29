@@ -1,0 +1,3 @@
+
+# 1 "<stdin>"
+char cbuf[sizeof "'\\U12340'"];

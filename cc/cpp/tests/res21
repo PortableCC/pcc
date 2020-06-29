@@ -1,0 +1,14 @@
+
+# 1 "<stdin>"
+
+
+
+
+_PROTOTYPE( void __bad_assertion, (const char *_mess) );
+
+
+
+
+
+
+((sizeof(lists) / sizeof(lists[0]) == sizeof(sysroots) / sizeof(sysroots[0]))? (void)0 : __bad_assertion("Assertion \"" "sizeof(lists) / sizeof(lists[0]) == sizeof(sysroots) / sizeof(sysroots[0])" "\" failed, file " "\"<stdin>\"" ", line " "12" "\n"));
