@@ -251,6 +251,9 @@ psave:				if (pend-p < 3) {
 					goto psave;
 				if (p[1] == '\n' || (p[1] | 040) == 'u')
 					goto slow;
+				/* avoid fake escape next loop */
+				if (p[1] == '\\')
+					p++;
 				break;
 
 			default:
