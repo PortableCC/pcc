@@ -216,6 +216,7 @@ picstatic(NODE *p)
 	return q;
 }
 
+#if 0
 static NODE *
 convert_ulltof(NODE *p)
 {
@@ -261,6 +262,7 @@ convert_ulltof(NODE *p)
 	return clocal(buildtree(QUEST, l, r));
 
 }
+#endif
 
 
 /* clocal() is called to do local transformations on
@@ -486,6 +488,7 @@ clocal(NODE *p)
 			return l;
 		}
 
+#if 0
 		/*
 		 * if converting ULONGLONG to FLOAT/(L)DOUBLE,
 		 * replace ___floatunsdidf() with ___floatdidf()
@@ -494,6 +497,7 @@ clocal(NODE *p)
 		    p->n_type <= LDOUBLE) {
 			return convert_ulltof(p);
 		}
+#endif
 
 		o = l->n_op;
 		m = p->n_type;
