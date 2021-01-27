@@ -788,6 +788,15 @@ soft_fp2fp(SFP sfp, TWORD t)
 	*sfp = rv;
 }
 
+/* All minvals are positive */
+static CONSZ minval[] = {
+	MIN_CHAR, 0, MIN_SHORT, 0, MIN_INT, 0,
+	MIN_LONG, 0, MIN_LONGLONG, 0 };
+static U_CONSZ maxval[] = {
+	MAX_CHAR, MAX_UCHAR, MAX_SHORT, MAX_USHORT, MAX_INT, MAX_UNSIGNED,
+	MAX_LONG, MAX_ULONG, MAX_LONGLONG, MAX_ULONGLONG
+};
+
 /*
  * Convert a fp number to a CONSZ. Always chop toward zero.
  */
@@ -795,8 +804,9 @@ CONSZ
 soft_fp2int(SFP sfp, TWORD t)
 {
 	U_CONSZ rv;
+	CONSZ rv2;
 	MINT m;
-	int c, s, e;
+	int c, s, e, ovf;
 
 	MINTDECL(m);
 
@@ -813,15 +823,37 @@ soft_fp2int(SFP sfp, TWORD t)
 		rv |= ((CONSZ)m.val[3] << 48);
 
 	e = e - LDBLPTR->nbits + LDBLPTR->expadj;
-	while (e > 0)
+	ovf = 0;
+	while (e > 0) {
+		if (rv & (1ULL << 63))
+			ovf = 1;
 		rv <<= 1, e--;
+	}
 	while (e < 0)
 		rv >>= 1, e++;
-	if (s)
-		rv = -rv;
+	/*
+	 * Check for overflow.
+	 *
+	 * For unsigned types;
+	 *	- if negative, set 0
+	 *	- if larger than type, set MAX_Utype
+	 * else
+	 *	- if smaller than MIN_type, set MIN_type
+	 *	- if largern than MAX_type, set MAX_type
+	 */
+	if (s == 0) {
+		if (rv > maxval[t-CHAR] || ovf)
+			rv = maxval[t-CHAR];
+	} else {
+		rv2 = (CONSZ)rv;
+		if (rv2 < 0 || -rv2 < minval[t-CHAR] || ovf)
+			rv = minval[t-CHAR];
+		else
+			rv = -rv2;
+	}
 
-#ifdef DEBUGFP
-	{ uint64_t u = (uint64_t)sfp->debugfp;
+#ifdef notdef /* cannot runtime check conversion */
+	if (!ovf) { uint64_t u = (uint64_t)sfp->debugfp;
 	  int64_t ss = (int64_t)sfp->debugfp;
 		if (ISUNSIGNED(t)) {
 			if (u != (U_CONSZ)rv)
@@ -832,6 +864,7 @@ soft_fp2int(SFP sfp, TWORD t)
 		}
 	}
 #endif
+
 	return rv;
 }
 
