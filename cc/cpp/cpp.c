@@ -723,7 +723,7 @@ void
 line(void)
 {
 	register struct iobuf *ob;
-	register int x, n, ln, oidx;
+	register int x, n, ln = 0, oidx;
 
 	oidx = ifiles->idx;
 
