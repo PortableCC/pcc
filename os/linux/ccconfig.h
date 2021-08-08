@@ -37,7 +37,10 @@
 
 #define STARTLABEL "_start"
 
-#if defined(mach_i386)
+#if defined(mach_arm)
+#define CPPMDADD	{ "-D__arm__", NULL, }
+#define	DYNLINKLIB	"/lib/ld-linux.so.2"
+#elif defined(mach_i386)
 #define CPPMDADD	{ "-D__i386__", NULL, }
 #define	DYNLINKLIB	"/lib/ld-linux.so.2"
 #define MUSL_DYLIB	"/lib/ld-musl-i386.so.1"

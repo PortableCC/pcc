@@ -41,12 +41,14 @@
 #define STARTFILES { NULL }
 #define	ENDFILES { NULL }
 
-#if defined(mach_m16c)
+#if defined(mach_arm)
+#define	CPPMDADD { "-D__arm__", NULL, }
+#elif defined(mach_i86)
+#define	CPPMDADD { "-D__i86__", NULL, }
+#elif defined(mach_m16c)
 #define	CPPMDADD { "-D__m16c__", NULL, }
 #elif defined(mach_nova)
 #define	CPPMDADD { "-D__nova__", NULL, }
-#elif defined(mach_i86)
-#define	CPPMDADD { "-D__i86__", NULL, }
 #elif defined(mach_pdp7)
 #define	CPPMDADD { "-D__pdp7__", "-Dpdp7", NULL, }
 #else

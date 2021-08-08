@@ -2820,6 +2820,7 @@ case "$target_os" in
     *)
         targos="$target_os"
 	case "$target_cpu" in
+	    arm) targmach=arm targos=none abi=$target_os ;;
 	    m16c) targmach=m16c ;;
 	    nova) targmach=nova ;;
 	    i86) targmach=i86 ;;
