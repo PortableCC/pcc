@@ -1513,7 +1513,8 @@ soft_nan(SFP sfp, char *c)
  * Convert internally stored floating point to fp type in TWORD.
  * Save as a static array of uint32_t.
  */
-uint32_t * soft_toush(SFP sfp, TWORD t, int *nbits)
+uint32_t *
+soft_toush(SFP sfp, TWORD t, int *nbits)
 {
 	static SF sf;
 	MINT mant;
@@ -1524,7 +1525,9 @@ uint32_t * soft_toush(SFP sfp, TWORD t, int *nbits)
 #ifdef DEBUGFP
 	SD(("soft_toush: sfp %Lf %La t %d\n", sfp->debugfp, sfp->debugfp, t));
 #endif
+#if (SZLDOUBLE > 64)
 	SD(("soft_toushLD: %x %x %x\n", sfp->fp[2], sfp->fp[1], sfp->fp[0]));
+#endif
 #ifdef DEBUGFP
 	if (sfdebug) {
 	double d = sfp->debugfp;
