@@ -227,7 +227,7 @@ char *cppmdadd[] = CPPMDADD;
 #define	DEFCXXLIBS	{ "-lp++", "-lpcc", "-lc", "-lpcc", 0 }
 #endif
 #ifndef STARTLABEL
-#define STARTLABEL "__start"
+#define STARTLABEL	"__start"
 #endif
 #ifndef DYNLINKARG
 #define DYNLINKARG	"-dynamic-linker"
@@ -1928,7 +1928,7 @@ struct flgcheck ccomflgcheck[] = {
 #if !defined(os_sunos) && !defined(mach_i386)
 	{ &vflag, 1, "-v" },
 #endif
-#ifdef os_darwin
+#if defined(os_darwin)
 	{ &Bstatic, 0, "-k" },
 #elif defined(os_sunos) && defined(mach_i386)
 	{ &kflag, 1, "-K" },
@@ -2061,8 +2061,10 @@ setup_ld_flags(void)
 			strlist_append(&early_linker_flags, dynlinkarg);
 			strlist_append(&early_linker_flags, dynlinklib);
 		}
+#ifndef os_darwin
 		strlist_append(&early_linker_flags, "-e");
 		strlist_append(&early_linker_flags, STARTLABEL);
+#endif
 	}
 	if (shared == 0 && rflag)
 		strlist_append(&early_linker_flags, "-r");
@@ -2131,7 +2133,9 @@ setup_ld_flags(void)
 				b = RCRT0;
 			else
 				b = CRT0;
+#ifndef os_darwin
 			strap(&middle_linker_flags, &crtdirs, b, 'p');
+#endif
 		}
 #endif
 	}

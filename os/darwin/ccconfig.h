@@ -25,12 +25,17 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define XCODE_PLATFORM		"MacOSX"
+#define XCODE_SELECT_LINK	"/var/db/xcode_select_link/"
+#define XCODE_PLATFORM_SDK	XCODE_SELECT_LINK "Platforms/" XCODE_PLATFORM ".platform/Developer/SDKs/" XCODE_PLATFORM ".sdk"
+
 /*
  * Various settings that controls how the C compiler works.
  */
 
 /* common cpp predefines */
 #define	CPPADD		{ "-D__Darwin__", "-D__APPLE__", "-D__MACH__", "-D__APPLE_CPP__", NULL }
+#define STDINC		XCODE_PLATFORM_SDK "/usr/include"
 #define	CRT0		"crt1.o"
 #define GCRT0		"gcrt1.o"
 #define CRTBEGIN_T	0
@@ -43,7 +48,8 @@
 #define CRTN		0
 #define DEFLIBS		{ "-lSystem", "-lpcc", NULL }
 #define DEFPROFLIBS	{ "-lSystem_profile", "-lpcc", NULL }
-#define STARTLABEL "start"
+#define DEFLIBDIRS	{ XCODE_PLATFORM_SDK "/usr/lib", NULL }
+#define STARTLABEL	"start"
 
 #ifdef LANG_F77
 #define F77LIBLIST { "-L" PCCLIBDIR, "-lF77", "-lI77", "-lm", "-lc", NULL };
@@ -58,7 +64,9 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 #elif defined(mach_powerpc)
 #define	CPPMDADD { "-D__ppc__", "-D__BIG_ENDIAN__", NULL }
 #elif defined(mach_amd64)
-#define	CPPMDADD { "-D__x86_64__", "-D__LITTLE_ENDIAN__", NULL }
+#define CPPMDADD \
+        { "-D__x86_64__", "-D__x86_64", "-D__amd64__", "-D__amd64", \
+          "-D__LP64__", "-D_LP64", "-D__LITTLE_ENDIAN__", NULL }
 #elif define(mach_m68k)
 #define	CPPMDADD { "-D__m68k__", "-D__BIG_ENDIAN__", NULL }
 #else
@@ -107,5 +115,3 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 		continue;						\
 	} 								\
 }
-
-
