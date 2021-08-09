@@ -599,7 +599,12 @@ andable(NODE *p)
 	if (p->n_sp->sclass == STATIC || p->n_sp->sclass == USTATIC)
 		return 1;
 #endif
+
+#ifdef MACHOABI
+	return (!kflag || p->n_sp->sclass == EXTERN);
+#else
 	return !kflag;
+#endif
 }
 
 /*
