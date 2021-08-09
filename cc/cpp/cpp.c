@@ -845,7 +845,6 @@ fsrch(const usch *fn, int idx, register struct incs *w)
 			if (fsrch_macos_framework(fn, dir) == 1)
 				return 1;
 		}
-		free(dir);
 
 		if (fsrch_macos_framework(fn,
 		    (const usch *)"/Library/Frameworks/") == 1)
