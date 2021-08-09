@@ -401,7 +401,6 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; int i[2]; } u;
 	struct symtab *q;
 	TWORD t;
 	int i, j;
