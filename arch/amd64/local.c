@@ -126,7 +126,11 @@ picext(NODE *p)
 #endif
 
 	c = getexname(p->n_sp);
+#ifndef PASS1
 	sp = picsymtab("", c, mcmodel & MCLARGE ? "@GOTOFF" : "@GOTPCREL");
+#else
+	sp = picsymtab("", c, "@GOTOFF");
+#endif
 	sp->sap = attr_add(sp->sap, attr_new(ATTR_AMD64_BEENHERE, 1));
 	q = block(NAME, NIL, NIL, INCREF(p->n_type), p->n_df, p->n_ap);
 	q->n_sp = sp;
@@ -343,10 +347,12 @@ clocal(NODE *p)
 
 		case EXTERN:
 		case EXTDEF:
+#ifdef TLS
 			if (q->sflags & STLS) {
 				p = tlsref(p);
 				break;
 			}
+#endif
 			if (kflag == 0 || statinit)
 				break;
 			if (blevel > 0)
@@ -539,10 +545,14 @@ myp2tree(NODE *p)
 
 		sp = p->n_left->n_sp;
 		if ((s = strstr(sp->sname, "@GOTPCREL")) != NULL) {
+#ifndef PASS1
 			if (mcmodel & MCLARGE)
 				memcpy(s, "@PLTOFF", sizeof("@PLTOFF"));
 			else
 				memcpy(s, "@PLT", sizeof("@PLT"));
+#else
+			memcpy(s, "@PLTOFF", sizeof("@PLTOFF"));
+#endif
 			p->n_left->n_op = ICON;
 		}
 		return;
@@ -839,7 +849,7 @@ fixdef(struct symtab *sp)
 			printf("\t.weakref %s,%s\n", sn, wr);
 	} else
 #endif
-	       if ((ga = attr_find(sp->sap, GCC_ATYP_ALIAS)) != NULL) {
+		if ((ga = attr_find(sp->sap, GCC_ATYP_ALIAS)) != NULL) {
 		char *an = ga->sarg(0);
 		char *sn = getsoname(sp);
 		char *v;

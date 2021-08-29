@@ -57,7 +57,7 @@ OBJS=	builtins.o cgram.o code.o common.o compat.o dwarf.o external.o	\
 
 OBJS0=  builtins.o cgram.o code.o common.o compat.o dwarf.o external.o	\
 	gcc_compat.o init.o inline.o local.o main.o             	\
-	optim.o pftn.o softfloat.o strtodg.o				\
+	optim.o pftn.o softfloat.o					\
 	scan.o stabs.o symtabs.o trees.o unicode.o
 
 OBJS1=  common2.o compat.o external.o           			\

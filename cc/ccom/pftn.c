@@ -442,6 +442,7 @@ defid2(NODE *q, int class, char *astr)
 
 	case REGISTER:
 		p->sclass = class = AUTO;
+#ifndef PASS1
 		if (astr != NULL) {
 #ifdef GCC_COMPAT
 			if (blevel == 0)
@@ -463,6 +464,7 @@ defid2(NODE *q, int class, char *astr)
 			}
 #endif
 		}
+#endif
 		/* FALLTHROUGH */
 	case AUTO:
 		if (isdyn(p)) {
