@@ -82,12 +82,10 @@ typedef	long long CONSZ;
 typedef	unsigned long long U_CONSZ;
 typedef long long OFFSZ;
 
-#define CONFMT	"#%lld"		/* format for printing constants */
+#define CONFMT	"%lld"		/* format for printing constants */
 #define LABFMT	".L%d"		/* format for printing labels */
 #define	STABLBL	"LL%d"		/* format for stab (debugging) labels */
 #define STAB_LINE_ABSOLUTE	/* S_LINE fields use absolute addresses */
-
-#undef	FIELDOPS		/* no bit-field instructions */
 
 /* Definitions mostly used in pass2 */
 

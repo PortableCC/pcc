@@ -32,6 +32,7 @@ CPPFLAGS = @CPPFLAGS@ -DLIBEXECDIR=\"$(libexecdir)/\" \
 	-Dos_$(TARGOS) -Dmach_$(TARGMACH) -DTARGOSVER=$(TARGOSVER) \
 	-DCXXPROGNAME=\"$(BINPREFIX)p++$(EXEEXT)\" \
 	-DCPPROGNAME=\"$(BINPREFIX)pcpp$(EXEEXT)\" \
+	-DCC0=\"$(BINPREFIX)cc0$(EXEEXT)\" -DCC1=\"$(BINPREFIX)cc1$(EXEEXT)\" \
 	-I$(top_srcdir)/cc/driver -I$(top_builddir) \
 	-I$(top_srcdir)/os/$(TARGOS) -I$(MIPDIR) -I$(MDIR) -I$(COMMONDIR)
 LIBS = @LIBS@

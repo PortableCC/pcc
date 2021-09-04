@@ -528,17 +528,17 @@ halfword(NODE *p)
                 /* load */
 		lval = getlval(r);
 		expand(p, 0, "\tldrh A1,");
-		printf("[%s," CONFMT "]\n", rnames[r->n_rval], lval+idx0);
+		printf("[%s,#" CONFMT "]\n", rnames[r->n_rval], lval+idx0);
         } else if (p->n_op == ASSIGN && l->n_op == OREG) {
                 /* store */
 		lval = getlval(l);
 		expand(p, 0, "\tstrh AR,");
-		printf("[%s," CONFMT "]\n", rnames[l->n_rval], lval+idx0);
+		printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
         } else if (p->n_op == SCONV || p->n_op == UMUL) {
                 /* load */
 		lval = getlval(l);
 		expand(p, 0, "\tldrh A1,");
-		printf("[%s," CONFMT "]\n", rnames[l->n_rval], lval+idx0);
+		printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
         } else if (p->n_op == NAME || p->n_op == ICON || p->n_op == OREG) {
                 /* load */
 		lval = getlval(p);
@@ -549,7 +549,7 @@ halfword(NODE *p)
 			default:
 				expand(p, 0, "\tldrh A1,");
 		}
-		printf("[%s," CONFMT "]\n", rnames[p->n_rval], lval+idx0);
+		printf("[%s,#" CONFMT "]\n", rnames[p->n_rval], lval+idx0);
 	} else {
 		comperr("halfword");
 	}
@@ -670,7 +670,7 @@ shtemp(NODE *p)
 void
 adrcon(CONSZ val)
 {
-	printf(CONFMT, val);
+	printf("#" CONFMT, val);
 }
 
 void
@@ -698,7 +698,7 @@ conput(FILE *fp, NODE *p)
 				else if (val < 0)
 					fprintf(fp, "-%d", -val);
 			} else
-				fprintf(fp, CONFMT, (CONSZ)val);
+				fprintf(fp, "#" CONFMT, (CONSZ)val);
 			return;
 
 		default:
@@ -734,7 +734,7 @@ upput(NODE *p, int size)
 			setlval(p, getlval(p) - size);
 			break;
 		case ICON:
-			printf(CONFMT, getlval(p) >> 32);
+			printf("#" CONFMT, getlval(p) >> 32);
 			break;
 		default:
 			comperr("upput bad op %d size %d", p->n_op, size);
@@ -756,7 +756,7 @@ adrput(FILE *io, NODE *p)
 				if (getlval(p) != 0)
 					fprintf(io, "+%lld", getlval(p));
 			} else
-				fprintf(io, CONFMT, getlval(p));
+				fprintf(io, "#" CONFMT, getlval(p));
 			return;
 
 		case OREG:

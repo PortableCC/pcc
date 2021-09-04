@@ -176,14 +176,6 @@ prologue(struct interpass_prolog *ipp)
 
 	ftype = ipp->ipp_type;
 
-#if 0
-	printf("\t.align 2\n");
-	if (ipp->ipp_vis)
-		printf("\t.global %s\n", exname(ipp->ipp_name));
-	printf("\t.type %s,%%function\n", exname(ipp->ipp_name));
-#endif
-	printf("%s:\n", exname(ipp->ipp_name));
-
 	/*
 	 * We here know what register to save and how much to 
 	 * add to the stack.
@@ -441,7 +433,7 @@ shiftop(NODE *p)
 
 	if (p->n_op == LS && r->n_op == ICON && getlval(r) < 32) {
 		expand(p, INBREG, "\tmov A1,AL,lsr ");
-		printf(CONFMT COM "64-bit left-shift\n", 32 - getlval(r));
+		printf("#" CONFMT COM "64-bit left-shift\n", 32 - getlval(r));
 		expand(p, INBREG, "\tmov U1,UL,asl AR\n");
 		expand(p, INBREG, "\torr U1,U1,A1\n");
 		expand(p, INBREG, "\tmov A1,AL,asl AR\n");
@@ -449,14 +441,14 @@ shiftop(NODE *p)
 		expand(p, INBREG, "\tmov A1,#0" COM "64-bit left-shift\n");
 		expand(p, INBREG, "\tmov U1,AL");
 		if (getlval(r) - 32 != 0)
-			printf(",asl " CONFMT, getlval(r) - 32);
+			printf(",asl #" CONFMT, getlval(r) - 32);
 		printf("\n");
 	} else if (p->n_op == LS && r->n_op == ICON) {
 		expand(p, INBREG, "\tmov A1,#0" COM "64-bit left-shift\n");
 		expand(p, INBREG, "\tmov U1,#0\n");
 	} else if (p->n_op == RS && r->n_op == ICON && getlval(r) < 32) {
 		expand(p, INBREG, "\tmov U1,UL,asl ");
-		printf(CONFMT COM "64-bit right-shift\n", 32 - getlval(r));
+		printf("#" CONFMT COM "64-bit right-shift\n", 32 - getlval(r));
 		expand(p, INBREG, "\tmov A1,AL,lsr AR\n");
 		expand(p, INBREG, "\torr A1,A1,U1\n");
 		if (ty == LONGLONG)
@@ -474,7 +466,7 @@ shiftop(NODE *p)
 			shifttype = "lsr";
 		}
 		if (getlval(r) - 32 != 0)
-			printf(",%s " CONFMT, shifttype, getlval(r) - 32);
+			printf(",%s #" CONFMT, shifttype, getlval(r) - 32);
 		printf("\n");
 	} else if (p->n_op == RS && r->n_op == ICON) {
 		expand(p, INBREG, "\tmov A1,#0" COM "64-bit right-shift\n");
@@ -663,33 +655,33 @@ halfword(NODE *p)
                 /* load */
 		lval = getlval(r);
                 expand(p, 0, "\tldrb A1,");
-                printf("[%s," CONFMT "]\n", rnames[r->n_rval], lval+idx0);
+                printf("[%s,#" CONFMT "]\n", rnames[r->n_rval], lval+idx0);
                 expand(p, 0, "\tldrb AL,");
-                printf("[%s," CONFMT "]\n", rnames[r->n_rval], lval+idx1);
+                printf("[%s,#" CONFMT "]\n", rnames[r->n_rval], lval+idx1);
                 expand(p, 0, "\torr AL,A1,AL,asl #8\n");
         } else if (p->n_op == ASSIGN && l->n_op == OREG) {
                 /* store */
 		lval = getlval(l);
                 expand(p, 0, "\tstrb AR,");
-                printf("[%s," CONFMT "]\n", rnames[l->n_rval], lval+idx0);
+                printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
                 expand(p, 0, "\tmov A1,AR,asr #8\n");
                 expand(p, 0, "\tstrb A1,");
-                printf("[%s," CONFMT "]\n", rnames[l->n_rval], lval+idx1);
+                printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx1);
         } else if (p->n_op == SCONV || p->n_op == UMUL) {
                 /* load */
 		lval = getlval(l);
                 expand(p, 0, "\tldrb A1,");
-                printf("[%s," CONFMT "]\n", rnames[l->n_rval], lval+idx0);
+                printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
                 expand(p, 0, "\tldrb A2,");
-                printf("[%s," CONFMT "]\n", rnames[l->n_rval], lval+idx1);
+                printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx1);
                 expand(p, 0, "\torr A1,A1,A2,asl #8\n");
         } else if (p->n_op == NAME || p->n_op == ICON || p->n_op == OREG) {
                 /* load */
 		lval = getlval(p);
                 expand(p, 0, "\tldrb A1,");
-                printf("[%s," CONFMT "]\n", rnames[p->n_rval], lval+idx0);
+                printf("[%s,#" CONFMT "]\n", rnames[p->n_rval], lval+idx0);
                 expand(p, 0, "\tldrb A2,");
-                printf("[%s," CONFMT "]\n", rnames[p->n_rval], lval+idx1);
+                printf("[%s,#" CONFMT "]\n", rnames[p->n_rval], lval+idx1);
                 expand(p, 0, "\torr A1,A1,A2,asl #8\n");
 	} else {
 		comperr("halfword");
@@ -855,7 +847,7 @@ shtemp(NODE *p)
 void
 adrcon(CONSZ val)
 {
-	printf(CONFMT, val);
+	printf("#" CONFMT, val);
 }
 
 void
@@ -888,7 +880,7 @@ conput(FILE *fp, NODE *p)
 			else if (val < 0)
 				fprintf(fp, "-%d", -val);
 		} else
-			fprintf(fp, CONFMT, (CONSZ)val);
+			fprintf(fp, "#" CONFMT, (CONSZ)val);
 		return;
 
 	default:
@@ -924,7 +916,7 @@ upput(NODE *p, int size)
 		setlval(p, getlval(p) - size);
 		break;
 	case ICON:
-		printf(CONFMT, getlval(p) >> 32);
+		printf("#" CONFMT, getlval(p) >> 32);
 		break;
 	default:
 		comperr("upput bad op %d size %d", p->n_op, size);
@@ -948,7 +940,7 @@ adrput(FILE *io, NODE *p)
 			if (getlval(p) != 0)
 				fprintf(io, "+%lld", getlval(p));
 		} else
-			fprintf(io, CONFMT, getlval(p));
+			fprintf(io, "#" CONFMT, getlval(p));
 		return;
 
 	case OREG:
