@@ -170,20 +170,20 @@ builtin_bswap64(const struct bitable *bt, P1ND *a)
 {
 	P1ND *f, *t1, *t2, *t3, *t4, *t5, *t6, *t7, *t8;
 
-#define	X(x) xbcon(x, NULL, ctype(ULONGLONG))
-	t1 = buildtree(LS, buildtree(AND, ccopy(a), X(255)), bcon(56));
-	t2 = buildtree(LS, buildtree(AND, ccopy(a), X(255 << 8)), bcon(40));
-	t3 = buildtree(LS, buildtree(AND, ccopy(a), X(255 << 16)), bcon(24));
-	t4 = buildtree(LS, buildtree(AND, ccopy(a), X(255 << 24)), bcon(8));
-	t5 = buildtree(AND, buildtree(RS, ccopy(a), bcon(8)), X(255 << 24));
-	t6 = buildtree(AND, buildtree(RS, ccopy(a), bcon(24)), X(255 << 16));
-	t7 = buildtree(AND, buildtree(RS, ccopy(a), bcon(40)), X(255 << 8));
-	t8 = buildtree(AND, buildtree(RS, a, bcon(56)), X(255));
+#define	XBCON(x) xbcon(x, NULL, ctype(ULONGLONG))
+	t1 = buildtree(LS, buildtree(AND, ccopy(a), XBCON(255)), bcon(56));
+	t2 = buildtree(LS, buildtree(AND, ccopy(a), XBCON(255 << 8)), bcon(40));
+	t3 = buildtree(LS, buildtree(AND, ccopy(a), XBCON(255 << 16)), bcon(24));
+	t4 = buildtree(LS, buildtree(AND, ccopy(a), XBCON(255 << 24)), bcon(8));
+	t5 = buildtree(AND, buildtree(RS, ccopy(a), bcon(8)), XBCON(255 << 24));
+	t6 = buildtree(AND, buildtree(RS, ccopy(a), bcon(24)), XBCON(255 << 16));
+	t7 = buildtree(AND, buildtree(RS, ccopy(a), bcon(40)), XBCON(255 << 8));
+	t8 = buildtree(AND, buildtree(RS, a, bcon(56)), XBCON(255));
 	f = buildtree(OR,
 	    buildtree(OR, buildtree(OR, t1, t2), buildtree(OR, t3, t4)),
 	    buildtree(OR, buildtree(OR, t5, t6), buildtree(OR, t7, t8)));
 	return f;
-#undef X
+#undef XBCON
 }
 
 #endif
