@@ -663,8 +663,7 @@ readid(int ch)
 		if (p == MAXIDSZ)
 			warning("identifier exceeds C99 5.2.4.1, truncating");
 		if (p < MAXIDSZ)
-			idbuf[p] = ch;
-		p++;
+			idbuf[p++] = ch;
 	} while (ISID(ch = qcchar()));
 	idbuf[p] = 0;
 	unch(ch);
