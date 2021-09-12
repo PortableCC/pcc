@@ -2713,7 +2713,7 @@ p2print(NODE *p)
 	if (ty != BITYPE) {
 		if (p->n_op != NAME && p->n_op != ICON)
 			printf("%d ", p->n_rval);
-		}
+	}
 
 	/* handle special cases */
 	if (p->n_op == NAME || p->n_op == ICON ||
@@ -2778,7 +2778,16 @@ pass2_compile(struct interpass *ip)
 		printf("^ %d\n", ip->ip_lbl);
 		break;
 	case IP_ASM:
-		printf("$ %s\n", ip->ip_asm);
+		{
+			const char *s = ip->ip_asm;
+			printf("$ ");
+			while (*s != '\0') {
+				putchar(*s);
+				if (*s++ == '\n') 
+					printf("$ ");
+			}
+			printf("\n");
+		}
 		break;
 	case IP_EPILOG:
 		ipp = (struct interpass_prolog *)ip;
