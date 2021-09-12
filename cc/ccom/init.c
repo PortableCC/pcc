@@ -311,7 +311,7 @@ infld(CONSZ off, int fsz, CONSZ val)
 		int shsz = SZCHAR-inbits;
 		xinval = (xinval << shsz) | (val >> (fsz - shsz));
 		printf(PRTPREF "%s " CONFMT "\n",
-		    astypnames[CHAR], xinval & SZMASK(SZCHAR));
+		    astypnames[CHAR], (CONSZ)(xinval & SZMASK(SZCHAR)));
 		fsz -= shsz;
 		val &= SZMASK(fsz);
 		xinval = inbits = 0;
@@ -362,7 +362,7 @@ zbits(OFFSZ off, int fsz)
 			fsz -= m;
 			xinval <<= m;
 			printf(PRTPREF "%s " CONFMT "\n", 
-			    astypnames[CHAR], xinval & SZMASK(SZCHAR));
+			    astypnames[CHAR], (CONSZ)(xinval & SZMASK(SZCHAR)));
 			xinval = inbits = 0;
 		}
 	}
