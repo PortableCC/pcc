@@ -562,6 +562,7 @@ mainp2()
 				ip->type = IP_ASM;
 				ip->ip_asm = tmpalloc(sz+1);
                 		memcpy(ip->ip_asm, p, sz);
+				ip->ip_asm[sz] = 0;
 				pass2_compile(ip);
 			}
 			break;
