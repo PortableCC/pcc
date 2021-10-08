@@ -132,8 +132,7 @@ typedef long long OFFSZ;
 #define	MYALIGN			/* user power-of-2 alignment */
 #endif
 
-#define BACKAUTO 		/* stack grows negatively for automatics */
-#define BACKTEMP 		/* stack grows negatively for temporaries */
+#define STACK_DOWN 		/* stack grows negatively for automatics */
 
 #undef	FIELDOPS		/* no bit-field instructions */
 #define TARGET_ENDIAN TARGET_LE

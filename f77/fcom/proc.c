@@ -593,7 +593,7 @@ autovar(int nelt, int t, bigptr lengp)
 		q->vleng = MKICON(leng);
 	q->vstg = STGAUTO;
 	q->b_addr.ntempelt = nelt;
-#ifdef BACKAUTO
+#ifdef STACK_DOWN
 	/* stack grows downward */
 	autoleng += nelt*leng;
 	q->b_addr.memoffset = MKICON( - autoleng );

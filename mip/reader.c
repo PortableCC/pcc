@@ -1611,7 +1611,7 @@ freetemp(int k)
 	al = (k > 1 ? ALDOUBLE/ALCHAR : ALINT/ALCHAR);
 	sz = k * (SZINT/SZCHAR);
 
-#ifndef BACKTEMP
+#ifndef STACK_DOWN
 	SETOFF(p2autooff, al);
 	t = p2autooff;
 	p2autooff += sz;

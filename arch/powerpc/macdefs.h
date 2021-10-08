@@ -343,8 +343,7 @@ typedef long long OFFSZ;
 #ifdef FPREG
 #define ARGINIT		(24*8)	/* # bits above fp where arguments start */
 #define AUTOINIT	(8*8)	/* # bits above fp where automatics start */
-#define BACKAUTO 		/* stack grows negatively for automatics */
-#define BACKTEMP 		/* stack grows negatively for temporaries */
+#define STACK_DOWN 		/* stack grows negatively for automatics */
 #else
 #define ARGINIT		(24*8)	/* # bits above fp where arguments start */
 #define AUTOINIT	(56*8)	/* # bits above fp where automatics start */

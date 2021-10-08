@@ -203,8 +203,7 @@ typedef long long OFFSZ;
 	{ -1, },					\
 	{ -1, },					\
 
-#define BACKTEMP 		/* stack grows negatively for temporaries */
-#define BACKAUTO 		/* stack grows negatively for automatics */
+#define STACK_DOWN 		/* stack grows negatively for temporaries */
 
 #define ARGINIT		(4*8)	/* # bits above fp where arguments start */
 #define AUTOINIT	(12*8)	/* # bits above fp where automatics start */

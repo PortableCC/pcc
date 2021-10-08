@@ -1336,7 +1336,7 @@ oalloc(struct symtab *p, int *poff )
 	al = talign(p->stype, p->sap);
 	noff = off = *poff;
 	tsz = (int)tsize(p->stype, p->sdf, p->sap);
-#ifdef BACKAUTO
+#ifdef STACK_DOWN
 	if (p->sclass == AUTO) {
 		noff = off + tsz;
 		if (noff < 0)

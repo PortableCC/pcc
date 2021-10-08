@@ -107,8 +107,7 @@ typedef long long OFFSZ;
 #define LABFMT	".L%d"		/* format for printing labels */
 #define STABLBL ".LL%d"		/* format for stab (debugging) labels */
 
-#undef BACKAUTO 		/* stack grows negatively for automatics */
-#undef BACKTEMP 		/* stack grows negatively for temporaries */
+#undef STACK_DOWN 		/* stack grows negatively for automatics */
 
 #undef	FIELDOPS		/* no bit-field instructions */
 #define TARGET_ENDIAN TARGET_BE

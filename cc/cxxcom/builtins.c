@@ -328,7 +328,7 @@ builtin_stdarg_start(const struct bitable *bt, NODE *a)
 
 	/* do the real job */
 	p = buildtree(ADDROF, p, NIL); /* address of last arg */
-#ifdef BACKAUTO
+#ifdef STACK_DOWN
 	p = optim(buildtree(PLUS, p, bcon(sz))); /* add one to it (next arg) */
 #else
 	p = optim(buildtree(MINUS, p, bcon(sz))); /* add one to it (next arg) */
@@ -358,7 +358,7 @@ builtin_va_arg(const struct bitable *bt, NODE *a)
 	r = a->n_right;
 	sz = (int)tsize(r->n_type, r->n_df, r->n_ap)/SZCHAR;
 	/* add one to ap */
-#ifdef BACKAUTO
+#ifdef STACK_DOWN
 	rv = buildtree(COMOP, rv , buildtree(PLUSEQ, a->n_left, bcon(sz)));
 #else
 	ecomp(buildtree(MINUSEQ, a->n_left, bcon(sz)));

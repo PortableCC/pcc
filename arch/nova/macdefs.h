@@ -99,8 +99,7 @@ typedef long OFFSZ;
 #define LABFMT	"L%d"		/* format for printing labels */
 #define	STABLBL	"LL%d"		/* format for stab (debugging) labels */
 
-#undef BACKAUTO 		/* stack grows upwards for automatics */
-#undef BACKTEMP 		/* stack grows upwards for temporaries */
+#undef STACK_DOWN 		/* stack grows upwards for automatics */
 #define ARGINIT		32	/* first arg at 2 word below offset */
 #define AUTOINIT	16	/* first var one word above offset */
 

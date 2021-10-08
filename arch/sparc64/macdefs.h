@@ -98,8 +98,7 @@ typedef long long OFFSZ;
 #define LABFMT  "L%d"
 #define STABLBL "LL%d"
 
-#define BACKAUTO 		/* Stack grows negatively for automatics. */
-#define BACKTEMP 		/* Stack grows negatively for temporaries. */
+#define STACK_DOWN 		/* Stack grows negatively for automatics. */
 
 #undef	FIELDOPS
 #define TARGET_ENDIAN TARGET_BE

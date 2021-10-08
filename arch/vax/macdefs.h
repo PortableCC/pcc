@@ -103,8 +103,7 @@ typedef long long OFFSZ;
 
 
 /* show stack grows negatively */
-#define BACKAUTO
-#define BACKTEMP
+#define STACK_DOWN
 
 /* show field hardware support on VAX */
 /* XXX notyet */

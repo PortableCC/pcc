@@ -100,8 +100,7 @@ typedef long long OFFSZ;
 #define ARGOFFSET 8
 #endif
 
-#define BACKAUTO		/* stack grows negatively for automatics */
-#define BACKTEMP		/* stack grows negatively for temporaries */
+#define STACK_DOWN		/* stack grows negatively for automatics */
 
 #undef	FIELDOPS		/* no bit-field instructions */
 #define TARGET_ENDIAN TARGET_BE /* big-endian */
