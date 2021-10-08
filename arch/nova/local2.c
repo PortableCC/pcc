@@ -49,8 +49,8 @@ deflab(int label)
 void
 prologue(struct interpass_prolog *ipp)
 {
-	totstk = p2maxautooff/(SZINT/SZCHAR) + maxargsz;
-	maxargsz = 0;
+	totstk = p2maxautooff/(SZINT/SZCHAR) + 1;
+printf("prologue: p2maxautooff %d totstk %d\n", p2maxautooff, totstk);
 
 #ifdef os_none
 	if (ipp->ipp_vis)
@@ -60,36 +60,35 @@ prologue(struct interpass_prolog *ipp)
 	printf("	.NREL\n");
 	printf("	0%o\n", totstk);
 	printf(".%s:\n", ipp->ipp_name);
+	printf("	sta 3,@csp\n");	/* put ret pc on stack */
+	printf("	jsr @prolog\n");	/* jump to prolog */
 #else
 	if (ipp->ipp_vis)
 		printf("	.globl %s\n", ipp->ipp_name);
-	if (totstk)
-		printf("	.word 0%o\n", totstk);
 	printf("%s:\n", ipp->ipp_name);
+	printf("	sta 3,@spref\n");	/* put ret pc on stack */
+	printf("	jsr @csav\n");		/* jump to prolog */
+	printf("	.word 0%o\n", totstk);
 #endif
-	printf("	sta 3,@csp\n");	/* put ret pc on stack */
-	printf("	jsr @prolog\n");	/* jump to prolog */
 }
 
 void
 eoftn(struct interpass_prolog *ipp)
 {
 	struct conlbl *w;
-	char *ch;
 
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return; /* no code needs to be generated */
-	printf("	jmp @epilog\n");
+	printf("	jmp @cret\n");
 	if (pole == NULL)
 		return;
 	while (pole != NULL) {
 		w = pole, pole = w->next;
-		printf("." LABFMT ":\t", w->lbl);
-		ch = w->isch ? "*2" : "";
+		printf(LABFMT ":\t%s ", w->lbl, w->isch ? ".bptr" : ".word");
 		if (w->n[0])
-			printf("%s%s%s", w->n, ch, w->l ? "+" : "");
+			printf("%s%s", w->n, w->l ? "+" : "");
 		if (w->l || w->n[0] == 0)
-			printf(CONFMT "%s", w->l, ch);
+			printf(CONFMT, w->l);
 		printf("\n");
 		free(w);
 	}
@@ -263,7 +262,7 @@ zzzcode(NODE *p, int c)
 {
 	struct conlbl *w;
 	char *ch;
-	int pr;
+	int i;
 
 	switch (c) {
 
@@ -271,7 +270,7 @@ zzzcode(NODE *p, int c)
 		if (pole == NULL)
 			break;
 		w = pole, pole = w->next;
-		printf(",skp\n." LABFMT ":\t", w->lbl);
+		printf(",skp\n" LABFMT ":\t", w->lbl);
 		ch = w->isch ? "*2" : "";
 		if (w->n[0])
 			printf("%s%s%s", w->n, ch, w->l ? "+" : "");
@@ -283,6 +282,12 @@ zzzcode(NODE *p, int c)
 	case 'B': /* push arg relative sp */
 		printf("%d,", p->n_rval);
 		expand(p, 0, "A1");
+		break;
+
+	case 'C': /* save constants for loading separately */
+		printf(LABFMT, i = getlab2());
+		addacon(i, getlval(p), p->n_name,
+		    p->n_type == INCREF(CHAR) || p->n_type == INCREF(UCHAR));
 		break;
 
 	default:
@@ -445,7 +450,7 @@ if (looping == 0) {
 
 	switch (p->n_op) {
 	case ICON:
-#if 1
+#if 0
 		/* addressable value of the constant */
 		printf("." LABFMT, i = getlab2());
 		addacon(i, getlval(p), p->n_name,
@@ -633,24 +638,3 @@ myxasm(struct interpass *ip, NODE *p)
 {
 	return 0;
 }
-
-#ifdef MYSTOREMOD
-void
-storemod(NODE *q, int off, int reg)
-{
-	NODE *l, *r, *p;
-
-	if (off < MAXZP*2) {
-		q->n_op = NAME;
-		q->n_name = "";
-		setlval(q, -off/2 + ZPOFF);
-	} else {
-		l = mklnode(REG, 0, reg, INCREF(q->n_type));
-		r = mklnode(ICON, off, 0, INT);
-		p = mkbinode(PLUS, l, r, INCREF(q->n_type));
-		q->n_op = UMUL;
-		q->n_left = p;
-	}
-	q->n_rval = q->n_su = 0;
-}
-#endif

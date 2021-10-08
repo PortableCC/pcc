@@ -99,10 +99,10 @@ typedef long OFFSZ;
 #define LABFMT	"L%d"		/* format for printing labels */
 #define	STABLBL	"LL%d"		/* format for stab (debugging) labels */
 
-#define BACKAUTO 		/* stack grows negatively for automatics */
-#define BACKTEMP 		/* stack grows negatively for temporaries */
-#define ARGINIT		16	/* first arg at 0 offset */
-#define AUTOINIT	32	/* first var below 32-bit offset */
+#undef BACKAUTO 		/* stack grows upwards for automatics */
+#undef BACKTEMP 		/* stack grows upwards for temporaries */
+#define ARGINIT		32	/* first arg at 2 word below offset */
+#define AUTOINIT	16	/* first var one word above offset */
 
 
 #undef	FIELDOPS	/* no bit-field instructions */
@@ -118,14 +118,13 @@ typedef long OFFSZ;
 	((t) == LONG || (t) == ULONG || (t) == FLOAT) ? 2 : 1)
 
 /*
- * The Nova has two register classes.  Note that the space used in 
- * zero page is considered stack.
+ * The Nova has two register classes.
  * Register 6 and 7 are FP and SP (in zero page).
  *
  * The classes used on Nova are:
- *	A - AC0-AC3 (as non-index registers)	: reg 0-3
- *	B - AC2-AC3 (as index registers)	: reg 4-5
- * FP/SP as 6/7.
+ *	A - AC0-AC2 (as non-index registers)	: reg 0-2
+ *	B - AC2		(as index registers)	: reg 4
+ * FP/SP as 5/7.
  */
 #define	AC0	0
 #define	AC1	1
@@ -135,17 +134,15 @@ typedef long OFFSZ;
 #define	MAXREGS	8	/* 0-29 */
 
 #define	RSTATUS	\
-	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
-	SBREG|TEMPREG, SBREG|TEMPREG, 0, 0
+	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, 0,	\
+	SBREG|TEMPREG, 0, 0, 0
 
 #define	ROVERLAP \
-	{ -1 }, { -1 }, { 4, -1 }, { 5, -1 }, { 2, -1 }, { 3, -1 },	\
-	{ -1 }, { -1 }
+	{ -1 }, { -1 }, { 4, -1 }, { -1 }, { 2, -1 }, { -1 }, { -1 }, { -1 }
 
 /* Return a register class based on the type of the node */
 /* Used in tshape, avoid matching fp/sp as reg */
-#define PCLASS(p) (p->n_op == REG && regno(p) > 5 ? 0 :	\
-	ISPTR(p->n_type) ? SBREG : SAREG)
+#define PCLASS(p) (ISPTR(p->n_type) ? SBREG : SAREG)
 
 #define	NUMCLASS 	2	/* highest number of reg classes used */
 
@@ -158,30 +155,18 @@ int COLORMAP(int c, int *r);
 #define ENCRA(x,y)	((x) << (6+y*6))	/* encode regs in int */
 #define	RETREG(x)	(0) /* ? Sanity */
 
-#define FPREG	6	/* frame pointer */
+#define FPREG	5	/* frame pointer */
 #define STKREG	7	/* stack pointer */
-
-#define	MAXZP	030	/* number of locations used as stack */
-#define	ZPOFF	050	/* offset of zero page regs */
 
 #ifdef os_none
 #define	MYINSTRING
 #endif
-#undef	MYSTOREMOD
-#define	MYLONGTEMP(p,w) {					\
-	if (w->r_class == 0) {					\
-		w->r_color = freetemp(szty(p->n_type));		\
-		w->r_class = FPREG;				\
-	}							\
-	if (w->r_color < MAXZP*2) { /* color in bytes */	\
-		p->n_op = NAME;					\
-		setlval(p, w->r_color/2 + ZPOFF);		\
-		p->n_name = "";					\
-		break;						\
-	}							\
-}
 
 /*
  * special shapes for sp/fp.
  */
 #define	SLDFPSP		(MAXSPECIAL+1)	/* load fp or sp */
+
+/* floating point definitions */
+#define	FDFLOAT
+#define	DEFAULT_FPI_DEFS { &fpi_ffloat, &fpi_dfloat, &fpi_dfloat }

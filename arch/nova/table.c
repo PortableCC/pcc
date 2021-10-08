@@ -33,8 +33,8 @@
 # define ANYUSIGNED TUNSIGNED|TULONG|TUSHORT|TUCHAR
 # define ANYFIXED ANYSIGNED|ANYUSIGNED
 # define ANYREG (INAREG|INBREG|INCREG)
-# define TUWORD TUNSIGNED|TULONG
-# define TSWORD TINT|TLONG
+# define TUWORD TUNSIGNED
+# define TSWORD TINT
 # define TWORD TUWORD|TSWORD
 
 struct optab table[] = {
@@ -95,7 +95,7 @@ struct optab table[] = {
 	SANY,	TANY,
 	SCON,	TWORD|TPOINT,
 		NAREG|NBREG,	RESC1,
-		"	lda A1,AR\n", },
+		"	lda A1,ZC\n", },
 
 /* mem -> reg */
 { OPLTYPE,	INAREG,
@@ -243,8 +243,8 @@ struct optab table[] = {
 { FUNARG,	FOREFF,
 	SAREG|SBREG,	TCHAR|TUCHAR|TWORD|TPOINT,
 	SANY,		TCHAR|TUCHAR|TWORD|TPOINT,
-		NBREG,	RNULL,
-		"	lda A1,csp\n	sta AL,ZB\n", },
+		0,	RNULL,
+		"	sta AL,@spref\n", },
 
 # define DF(x) FORREW,SANY,TANY,SANY,TANY,REWRITE,x,""
 

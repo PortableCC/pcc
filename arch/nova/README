@@ -3,21 +3,22 @@ Calling conventions, stack frame and zero page:
 The variables that normally are placed on the stack or in registers in C
 are instead allocated in the zero page and saved on a (fictive) stack
 when calling functions.  Some locations have predefined functions though.
-Arrays allocated as automatics are stored on the stack with a pointer
-in zero page to its destination.
+
+The stack will first increment, then store values.
+Frame pointer is kept in AC3 and ZP "fp" (or HW FP).
+Stack pointer is kept in ZP "sp".
+Stack reference pointer is kept in ZP "spref".
+Stack reference pointer is the top of stack and used to restore stack
+after a function call.  This offset on the stack is unallocated and used
+when calling subroutines.
 
 #ifdef 2bsd
 0-7	Unused (by us)
-10	Stack pointer
-11	Frame pointer
-12-14	Unused
-15	Prolog private word
-16	Prolog address, written in crt0
-17	Epilog address, written in crt0
-20-27	(Auto-increment), scratch
+11	Frame pointer	(if lacking HW stack)
+12	Stack pointer
+20-26	(Auto-increment), scratch
 30-37	(Auto-decrement), scratch
 40-47	Used by HW stack and MMPU
-50-77	Permanent, save before use.
 100-377	Addresses for subroutines, written by the linker
 #elif rdos
 0-17	Unused (by us)
@@ -27,234 +28,114 @@ in zero page to its destination.
 50-377	Addresses for subroutines, written by the linker
 #endif
 
-The normal registers (AC0-AC3) are all considered scratch registers.
+The normal registers (AC0-AC2) are all considered scratch registers.
 
 Register classes are assigned as:
-	AC0-AC3: AREGs.
-	AC2-AC3: BREGs.
+	AC0-AC2: AREGs.
+	AC2: BREGs.
 	...and eventually register pairs/floats as EREGs, double in FREGs.
 
-In byte code the left half of a word is the first byte (big-endian).
-This is bit 0-7 in Nova syntax.
-The stack is growing towards lower adresses (as opposed to the HW stack).
-Stack pointer points to the last used stack entry, which means:
-PUSH: store value, dec sp
-POP:  inc sp, fetch val
+In byte code the right half of a word is the first byte (little-endian).
+This is different to how the hardware handle it.
 
-Note that internally is the first 24 words stored in loc 50-77!
-So an offset is subtracted in adrput().
+Stack frame layout (with frame pointer). 2+1 words to save on stack:
+Stack grows upward
 
-Functions which modifies stack (like calls to alloca) will have a frame
-pointer to which everything relates.  Functions that do not only have 
-stack pointer.  
+ sp ->	! free	! 3	<- also spref
+	! w2	! 2
+	! w1	! 1
+ fp ->	! ospref! 0
+ 	! ofp	! -1
+	! arg0	! -2	<- stack pointer when enter new function
+	! arg1	! -3
+ospref->! opc	! -4
 
-Space for all possible arguments are allocated on stack by the compiler,
-so no pushing and popping.
+Return values are in ac0 (and ac1).
 
-Stack layout (with frame pointer):
+The prolog/epilog (csav/cret); they are implemented as subroutines.
+Both can be omitted if the function do not need it, but the FP in AC3
+must be restored.
 
-	! arg1	! 2
- 	! arg0	! 1
- fp ->	! ret pc! 0	<- stack pointer when enter new function
- 	! old fp! -1
- sp ->	! saved ! -2
+sp is either in loc 027 (auto-inc) or in HW stack.
 
-
-Stack references to zero page are converted to NAMEs, using word addresses.
-References to the stack itself are using byte offsets.
-
-Arguments are transferred on the stack.  To avoid unneccessary double instructions
-they are copied to the zp use area initially. XXX? Need tests here.
-Return values in ac0 and ac1.
-
-A reference to a struct member in assembler, a = b->c; b is in ZP 50 (or on stack)
-+ is zeropage-addressing
-* is fp-adressing, assume fp in ac3
-
-# offset 0
-+	lda 0,@50	# load value from indirect ZP 50 into ac0
-or
-*	lda 2,,3	# load value from (ac3) into ac2
-*	lda 0,,2	# load value from (ac2) into ac0
-
-# offset 12
-+	lda 2,50	# load value from ZP 50 into ac2
-+	lda 0,12,2	# load value from (ac2+12) into ac0
-or
-*	lda 2,,3	# load value from (ac3) into ac2
-*	lda 0,12,2	# load value from 12(ac2) into ac0
-
-# offset 517
-+	lda %2,50	# load value from ZP 50 into ac2
-+	lda %0,.L42-.,%1	# load offset from .L42 PC-indexed
-+	addz %0,%2,skp	# add offset to ac2 and skip
-+.L42:	.word 517	# offset value
-+	lda %0,,%2	# load value from (ac2) into ac0
-or
-
-The prolog/epilog; they are implemented as subroutines.
-Both can be omitted if the function do not need it.
+calling function 2-arg: (cleanup done in return function)
+	sta arg2,@sp	/	push arg2
+	sta arg1,@sp	/	push arg1
+	jsr @_fun	/	jsr @_fun
 
 
-	.word 012	# total words that needs to be saved
-func:
-	mov 3,0		# avoid trashing return address
-	jsr @prolog	# go to prolog
+in function: (2 words used on stack)
+	sta 3,@spref	/	sta 3,@spref
+	jsr @_csav	/	jsr @_csav
+	.word 2		/	.word 2
 	...
-	jmp @epilog	# jump to epilog
+	jmp @_cret	/	jmp @_cret
 
-#ifdef prolog
-	lda 0,sp
-	sta 3,@sp
-	lda 1,fp
-	sta 1,@sp
-	sta 0,fp
-	lda 1,[Css]
-	sub 1,0
-	sta 0,sp
-#endif
+csav: 
+	lda 1,0,3	/	lda 1,0,3	# fetch words on stack
+	inc 3,2		/	inc 3,2		# put return address in ac2
 
-...
+	lda 0,fp	/	mffp 0		# fetch fp
+	sta 0,@sp	/	push 0		# ...and push
+	lda 0,spref	/	lda 0,spref	# fetch spref
+	sta 0,@sp	/	push 0		# ...and push
+	lda 3,sp	/	mfsp 3		# fetch sp
+	sta 3,fp	/	mtfp 3		# save sp as new fp
 
-	lda 2,fp
-	lda 3,-1,2
-	lda 0,-2,2
-	sta 0,fp
-	sta 2,sp
-	jmp 0,3
+	add 3,1		/	add 3,1		# calc new stack pointer
+	sta 1,sp	/	mtsp 1		# store
+	sta 1,spref	/	sta 1,spref	# store spref as well 
+	jmp 0,2		/	jmp 0,2		# return
+
+cret:
+	lda 2,0,3	/	lda 2,0,3	# old sp/spref
+	sta 2,spref	/	sta 2,spref
+	lda 3,-1,3	/	lda 3,-1,3	# old fp
+	sta 3,fp	/	mtfp 3		# restore fp
+	sta 2,sp	/	mtsp 2		# cleanup stack
+	jmp @0,2	/	jmp @0,2
 
 
-#
-# decrement from stack, and save permanent registers.
-#	push retreg
-#	push fp
-#	mov sp,fp
-#	sub $w,sp
-#	
-# prolog: return in ac3, fun in ac0.
-prolog:	lda 1,sp
-	sta 0,@sp
-	lda 0,fp
-	sta 0,@sp
-	sta 1,fp
-	lda 0,-3,3
-	sub 0,1
-	sta 1,sp
-	jmp 0,3
-
-epilog:	lda 3,fp
-	sta 3,sp
-	lda 3,@fp
-	lda 2,@fp
-	sta 2,fp
-	jmp 0,3
-
+# little-endian bytes. 
+# load byte, ptr in ac2, ret in ac0
+lbyte:	sta 3,@spref	# save return address
 	
+	lda 1,[377]	# get byte mask
+	movr 2,2,szc	# skip next if right word
+	movs 1,1	# swap mask
+	lda 0,,2	# load word into ac0
+	and 1,0,szc	# mask our wanted word
+	movs 0,0	# swap back if left
 
+	lda 3,fp	# restore ac3
+	jmp 0,@spref	# get back
 
+# save byte, ptr in ac2, byte in right half of ac0
+sbyte:	sta 3,@spref
 
+	lda 3,[377]	# mask
+	and 3,0		# Ensure ac0 high byte is clear
 
+	movr 2,2,szc	# skip next if left half
+	movs 0,0,skp	# right half; swap input byte
+	movs 3,3	# left half; swap mask
 
-prolog:
-	lda 2,sp	# sp points to the first argument
-	sta 2,30	# store at auto-dec location
-	sta 0,@30	# store fun return address
-	lda 0,fp	# fetch old fp
-	sta 0,@30	# store saved fp
-	sta 2,fp	# save frame pointer
+	lda 1,,2	# get word
+	and 3,1		# mask out saved half
+	add 0,1		# merge in other half
+	sta 1,2		# write back
 
-	lda 0,-3,3	# stack size to subtract
-	neg 0,0,snr	# Any words?
-	jmp 1f		# no, get away
-	lda 1,$51	# fetch zp offset
-	sub 0,1		# get highest word
-	sta 1,31	# at auto-dec location
+	lda 3,fp
+	jmp @spref
 
-2:	lda 1,@31	# fetch word to copy
-	sta 1,@30	# on stack
-	inc 0,0,szr	# count words
-	jmp 1b		# more to go
+# shift ac0 left ac1 times
+shl:	sta 3,@spref
+	neg 1,1,snr	# negate count.
+	jmp out		# done if no shift
 
-1:	lda 0,30	# finished, get stackptr
-	sta 0,sp	#
-	jmp 0,3		# get back!
-
-# epilog, need save frame pointer in ac3
-epilog:
-	lda 0,-3,3	# get words to save
-	neg 0,0,snr	# any words to save?
-	jmp 1f		# No, get out
-
-	lda 1,$51	# get zp offset
-	sub 0,1		# Highest word
-	sta 1,31	# auto-dec loc
-
-	lda 2,fp	# get fp
-	adczl 1,1	# -2
-	add 1,2		# 2 now offset
-	sta 2,30	# auto-dec loc
-
-2:	lda 1,@30
-	sta 1,@31
-	inc 0,0,szr
-	jmp 2b
-
-1:	lda 2,fp	# fetch current fp
-	lda 3,-1,2	# return pc
-	lda 0,-2,2	# fetch old fp
-	sta 0,fp	# restore fp
-	sta 2,sp	# stack pointer restored
-	jmp 0,3		# Done!
-
-#if 0
-Assembler syntax and functions.
-
-The assembler syntax mimics the DG assembler but uses AT&T syntax.
-Load and store to addresses is written "lda 0,foo" to load from address foo.
-If foo is not in zero page then the assembler will put the lda in the
-text area close to the instruction and do an indirect pc-relative load.
-
-Arithmetic instruction: 	
-	subsl#	%0,%1,snr		skip code may be omitted
-	subsl#	%0,%1
-
-Load/store/jmp/jsr/isz/dsz:
-	lda %1,@disp,2		or
-	mov *disp(%2),%1
-		index may be omitted if 0 (ZP)
-		disp can only be +-127 words.
-
-	It's allowed to write "mov $32,%0" which will be converted
-	to an indirect load by the assembler.
-
-	Example of AT&T arguments:
-		01234	- Zero-page
-		L11	- Relative.  Will be converted to
-			  indirect + addr if distance too long
-		(%2)	- indexed
-		012(%2)	- indexed with offset
-		* in front of any of these will generate indirection
-#endif
-
-lbyte:  movr 2,2        # get byte ID into C bit
-        lda 0,,2        # word into ac0
-        mov 2,2,snc     # skip if right byte
-        movs 0,0        # swap bytes
-        jmp 0,3         # get back
-
-sbyte:  sta 3,@sp
-
-        movr 2,2        # get byte ID into C bit
-        lda 1,,2        # get word
-        lda 3,[377]     # get mask
-        and 3,0,snc     # clear left input + skip if right byte
-        movs 1,1        # swap bytes
-        and 3,1         # clear old bits
-        add 0,1,snc     # swap back if necessary
-        movs 1,1        # swap
-        sta 1,2
-
-        lda 3,sp
-        isz sp
-        jmp @0,3
-
+	movzl 0,0	# shift left
+	inc 1,1,szr	# done?
+	jmp .-2
+out:
+	lda 3,fp
+	jmp @spref
