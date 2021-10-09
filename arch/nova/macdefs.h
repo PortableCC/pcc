@@ -85,8 +85,14 @@
 /* Default char is unsigned */
 #define	CHAR_UNSIGNED
 #define WORD_ADDRESSED
+#undef STACK_DOWN	/* nova stack grows upward */
+#define	STACK_TYPE	INT	/* type for accessing stack */
 #define	BOOL_TYPE	UCHAR
 #define	MYALIGN		/* provide private alignment function */
+#undef	FIELDOPS	/* no bit-field instructions */
+#define TARGET_ENDIAN	TARGET_BE
+#define	AUTOINIT	16	/* first var one word above offset */
+#define	ARGINIT		32	/* first arg at 2 word below offset */
 
 /*
  * Use large-enough types.
@@ -98,14 +104,6 @@ typedef long OFFSZ;
 #define CONFMT	"0%lo"		/* format for printing constants */
 #define LABFMT	"L%d"		/* format for printing labels */
 #define	STABLBL	"LL%d"		/* format for stab (debugging) labels */
-
-#undef STACK_DOWN 		/* stack grows upwards for automatics */
-#define ARGINIT		32	/* first arg at 2 word below offset */
-#define AUTOINIT	16	/* first var one word above offset */
-
-
-#undef	FIELDOPS	/* no bit-field instructions */
-#define TARGET_ENDIAN	TARGET_BE
 
 /* Definitions mostly used in pass2 */
 

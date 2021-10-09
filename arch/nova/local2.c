@@ -35,7 +35,7 @@
 void acon(NODE *p);
 int argsize(NODE *p);
 
-static int totstk, maxargsz;
+static int maxargsz;
 struct conlbl { struct conlbl *next; int lbl; CONSZ l; char *n; int isch; };
 struct conlbl *pole;
 
@@ -49,8 +49,6 @@ deflab(int label)
 void
 prologue(struct interpass_prolog *ipp)
 {
-	totstk = p2maxautooff/(SZINT/SZCHAR) + 1;
-printf("prologue: p2maxautooff %d totstk %d\n", p2maxautooff, totstk);
 
 #ifdef os_none
 	if (ipp->ipp_vis)
@@ -58,7 +56,7 @@ printf("prologue: p2maxautooff %d totstk %d\n", p2maxautooff, totstk);
 	printf("	.ZREL\n");
 	printf("%s:	.%s\n", ipp->ipp_name, ipp->ipp_name);
 	printf("	.NREL\n");
-	printf("	0%o\n", totstk);
+	printf("	0%o\n", p2maxautooff-1);
 	printf(".%s:\n", ipp->ipp_name);
 	printf("	sta 3,@csp\n");	/* put ret pc on stack */
 	printf("	jsr @prolog\n");	/* jump to prolog */
@@ -68,7 +66,7 @@ printf("prologue: p2maxautooff %d totstk %d\n", p2maxautooff, totstk);
 	printf("%s:\n", ipp->ipp_name);
 	printf("	sta 3,@spref\n");	/* put ret pc on stack */
 	printf("	jsr @csav\n");		/* jump to prolog */
-	printf("	.word 0%o\n", totstk);
+	printf("	.word 0%o\n", p2maxautooff-1);
 #endif
 }
 
