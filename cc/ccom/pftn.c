@@ -543,6 +543,7 @@ ftnend(void)
 	extern struct savbc *savbc;
 	extern struct swdef *swpole;
 	extern int tvaloff;
+	int stack_usage;
 	char *c;
 
 	if (retlab != NOLAB && nerrors == 0) { /* inside a real function */
@@ -551,8 +552,12 @@ ftnend(void)
 			ecomp(buildtree(FORCE, p1tcopy(cftnod), NIL));
 		efcode(); /* struct return handled here */
 		c = getexname(cftnsp);
-		SETOFF(maxautooff, ALCHAR);
-		send_passt(IP_EPILOG, maxautooff/SZCHAR, c,
+#ifndef STACK_TYPE
+#define	STACK_TYPE	CHAR
+#endif
+		SETOFF(maxautooff, talign(STACK_TYPE, NULL));
+		stack_usage = maxautooff / (int)tsize(STACK_TYPE, NULL, NULL);
+		send_passt(IP_EPILOG, stack_usage, c,
 		    cftnsp->stype, cftnsp->sclass == EXTDEF,
 		    retlab, tvaloff, mkclabs());
 	}
