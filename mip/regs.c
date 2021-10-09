@@ -3226,6 +3226,7 @@ onlyperm: /* XXX - should not have to redo all */
 		ip = ipnode(p);
 		DLIST_INSERT_BEFORE(ipole->qelem.q_back, ip, qelem);
 	}
-	stktemp = freetemp(ntsz);
+	if (ntsz)
+		stktemp = freetemp(ntsz);
 	/* Done! */
 }

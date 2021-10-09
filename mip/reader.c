@@ -1608,8 +1608,13 @@ freetemp(int k)
 {
 	int t, al, sz;
 
+#ifdef WORD_ADDRESSED
+	sz = k;	/* temps is in "words" */
+	al = k;
+#else
 	al = (k > 1 ? ALDOUBLE/ALCHAR : ALINT/ALCHAR);
 	sz = k * (SZINT/SZCHAR);
+#endif
 
 #ifndef STACK_DOWN
 	SETOFF(p2autooff, al);
