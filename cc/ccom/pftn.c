@@ -470,6 +470,12 @@ defid2(NODE *q, int class, char *astr)
 		if (isdyn(p)) {
 			p->sflags |= SDYNARRAY;
 			dynalloc(p, &autooff);
+		} else if (xtemps && (p->stype < STRTY || ISPTR(p->stype)) &&
+		    !(cqual(p->stype, p->squal) & VOL) && cisreg(p->stype)) {
+			NODE *tn = tempnode(0, p->stype, p->sdf, p->sap);
+			p->soffset = regno(tn);
+			p->sflags |= STNODE;
+			nfree(tn);
 		} else
 			oalloc(p, &autooff);
 		break;
@@ -1315,7 +1321,11 @@ upoff(int size, int alignment, int *poff)
 }
 
 /*
- * allocate p with offset *poff, and update *poff
+ * allocate p with offset *poff, and update *poff.
+ * This routine is used to create stack reference for arguments and automatics.
+ * poff is always increasing even if the stack goes downwards, hence 
+ * the off must must be calculated before/after the increase/decrease
+ * of the stack pointer.
  */
 int
 oalloc(struct symtab *p, int *poff )
@@ -1323,50 +1333,46 @@ oalloc(struct symtab *p, int *poff )
 	int al, off, tsz;
 	int noff;
 
-	/*
-	 * Only generate tempnodes if we are optimizing,
-	 * and only for integers, floats or pointers,
-	 * and not if the type on this level is volatile.
-	 */
-	if (xtemps && ((p->sclass == AUTO) || (p->sclass == REGISTER)) &&
-	    (p->stype < STRTY || ISPTR(p->stype)) &&
-	    !(cqual(p->stype, p->squal) & VOL) && cisreg(p->stype)) {
-		NODE *tn = tempnode(0, p->stype, p->sdf, p->sap);
-		p->soffset = regno(tn);
-		p->sflags |= STNODE;
-		nfree(tn);
-		return 0;
-	}
-
 	al = talign(p->stype, p->sap);
 	noff = off = *poff;
 	tsz = (int)tsize(p->stype, p->sdf, p->sap);
+
 #ifdef STACK_DOWN
 	if (p->sclass == AUTO) {
-		noff = off + tsz;
-		if (noff < 0)
-			cerror("stack overflow");
+		/* negative part of stack */
+		noff += tsz;
 		SETOFF(noff, al);
 		off = -noff;
-	} else
-#endif
-	if (p->sclass == PARAM && (p->stype == CHAR || p->stype == UCHAR ||
-	    p->stype == SHORT || p->stype == USHORT || p->stype == BOOL)) {
-		off = upoff(SZINT, ALINT, &noff);
+	} else if (p->sclass == PARAM) {
+		/* positive part of stack */
+		if (p->stype < INT || p->stype == BOOL)
+			tsz = SZINT, al = ALINT;
+		off = upoff(tsz, al, &noff);
 #if TARGET_ENDIAN == TARGET_BE
 		off = noff - tsz;
 #endif
-	} else {
+	} else
+		cerror("bad oalloc class %d", p->sclass);
+#else
+	if (p->sclass == AUTO) {
+		/* positive part of stack */
 		off = upoff(tsz, al, &noff);
-	}
+	} else if (p->sclass == PARAM) {
+		/* negative part of stack */
+		noff += tsz;
+		SETOFF(noff, al);
+		off = -noff;
+#if TARGET_ENDIAN == TARGET_BE
+		off -= tsz;
+#endif
+	} else
+		cerror("bad oalloc class %d", p->sclass);
+#endif
 
-	if (p->sclass != REGISTER) {
-	/* in case we are allocating stack space for register arguments */
-		if (p->soffset == NOOFFSET)
-			p->soffset = off;
-		else if(off != p->soffset)
-			return(1);
-	}
+	if (p->soffset == NOOFFSET)
+		p->soffset = off;
+	else if(off != p->soffset)
+		cerror("oalloc: reallocated");
 
 	*poff = noff;
 	return(0);
