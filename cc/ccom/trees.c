@@ -1900,6 +1900,18 @@ moditype(TWORD ty)
 
 int tvaloff = MAXREGS+NPERMREG > 100 ? MAXREGS+NPERMREG + 100 : 100;
 
+static int
+getn(TWORD t)
+{
+	int n;
+
+	if (tvaloff == -NOOFFSET)
+		tvaloff++; /* Skip this for array indexing */
+	n = tvaloff;
+	tvaloff += szty(t);
+	return n;
+}
+
 /*
  * Returns a TEMP node with temp number nr.
  * If nr == 0, return a node with a new number.
@@ -1909,12 +1921,22 @@ tempnode(int nr, TWORD type, union dimfun *df, struct attr *ap)
 {
 	P1ND *r;
 
-	if (tvaloff == -NOOFFSET)
-		tvaloff++; /* Skip this for array indexing */
 	r = block(TEMP, NULL, NULL, type, df, ap);
-	regno(r) = nr ? nr : tvaloff;
-	tvaloff += szty(type);
+	regno(r) = nr ? nr : getn(type);
 	return r;
+}
+
+/*
+ * Return a tempnode number for a symtab entry (if OK), else 0.
+ */
+int
+tnodenr(struct symtab *sp)
+{
+	if (xtemps && (sp->stype < STRTY || ISPTR(sp->stype)) &&
+	    !(cqual(sp->stype, sp->squal) & VOL) && cisreg(sp->stype)) {
+		return getn(sp->stype);
+	}
+	return 0;
 }
 
 /*
@@ -2223,15 +2245,21 @@ P1ND *
 cstknode(TWORD t, union dimfun *df, struct attr *ap)
 {
 	struct symtab *sp;
+	int i;
 
 	/* create a symtab entry suitable for this type */
 	sp = getsymtab("0hej", SSTMT);
 	sp->stype = t;
+	sp->squal = 0;
 	sp->sdf = df;
 	sp->sap = ap;
 	sp->sclass = AUTO;
 	sp->soffset = NOOFFSET;
-	oalloc(sp, &autooff);
+	if ((i = tnodenr(sp)) != 0) {
+		sp->soffset = i;
+		sp->sflags |= STNODE;
+	} else
+		oalloc(sp, &autooff);
 	return nametree(sp);
 
 }

@@ -172,7 +172,7 @@ defid2(NODE *q, int class, char *astr)
 	struct symtab *p;
 	TWORD type, qual;
 	TWORD stp, stq;
-	int scl;
+	int scl, i;
 	union dimfun *dsym, *ddef;
 	int slev, temp, changed;
 
@@ -448,8 +448,6 @@ defid2(NODE *q, int class, char *astr)
 			if (blevel == 0)
 				werror("no register assignment (yet)");
 			else if (astr != NULL) {
-				int i;
-
 				for (i = 0; i < MAXREGS; i++) {
 					extern char *rnames[]; /* XXX */
 					if (strcmp(rnames[i], astr) == 0) {
@@ -470,12 +468,9 @@ defid2(NODE *q, int class, char *astr)
 		if (isdyn(p)) {
 			p->sflags |= SDYNARRAY;
 			dynalloc(p, &autooff);
-		} else if (xtemps && (p->stype < STRTY || ISPTR(p->stype)) &&
-		    !(cqual(p->stype, p->squal) & VOL) && cisreg(p->stype)) {
-			NODE *tn = tempnode(0, p->stype, p->sdf, p->sap);
-			p->soffset = regno(tn);
+		} else if ((i = tnodenr(p)) != 0) {
+			p->soffset = i;
 			p->sflags |= STNODE;
-			nfree(tn);
 		} else
 			oalloc(p, &autooff);
 		break;
@@ -1334,7 +1329,8 @@ oalloc(struct symtab *p, int *poff )
 	int noff;
 
 	al = talign(p->stype, p->sap);
-	noff = off = *poff;
+	noff = *poff;
+	off = 0;
 	tsz = (int)tsize(p->stype, p->sdf, p->sap);
 
 #ifdef STACK_DOWN
@@ -1348,9 +1344,6 @@ oalloc(struct symtab *p, int *poff )
 		if (p->stype < INT || p->stype == BOOL)
 			tsz = SZINT, al = ALINT;
 		off = upoff(tsz, al, &noff);
-#if TARGET_ENDIAN == TARGET_BE
-		off = noff - tsz;
-#endif
 	} else
 		cerror("bad oalloc class %d", p->sclass);
 #else
@@ -1362,9 +1355,6 @@ oalloc(struct symtab *p, int *poff )
 		noff += tsz;
 		SETOFF(noff, al);
 		off = -noff;
-#if TARGET_ENDIAN == TARGET_BE
-		off -= tsz;
-#endif
 	} else
 		cerror("bad oalloc class %d", p->sclass);
 #endif
