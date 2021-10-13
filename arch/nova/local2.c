@@ -36,9 +36,6 @@ void acon(NODE *p);
 int argsize(NODE *p);
 
 static int maxargsz;
-struct conlbl { struct conlbl *next; int lbl; CONSZ l; char *n; int isch; };
-struct conlbl *pole;
-
 
 void
 deflab(int label)
@@ -56,7 +53,7 @@ prologue(struct interpass_prolog *ipp)
 	printf("	.ZREL\n");
 	printf("%s:	.%s\n", ipp->ipp_name, ipp->ipp_name);
 	printf("	.NREL\n");
-	printf("	0%o\n", p2maxautooff-1);
+	printf("	0%o\n", p2maxautooff);
 	printf(".%s:\n", ipp->ipp_name);
 	printf("	sta 3,@csp\n");	/* put ret pc on stack */
 	printf("	jsr @prolog\n");	/* jump to prolog */
@@ -66,30 +63,16 @@ prologue(struct interpass_prolog *ipp)
 	printf("%s:\n", ipp->ipp_name);
 	printf("	sta 3,@spref\n");	/* put ret pc on stack */
 	printf("	jsr @csav\n");		/* jump to prolog */
-	printf("	.word 0%o\n", p2maxautooff-1);
+	printf("	.word 0%o\n", p2maxautooff);
 #endif
 }
 
 void
 eoftn(struct interpass_prolog *ipp)
 {
-	struct conlbl *w;
-
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return; /* no code needs to be generated */
 	printf("	jmp @cret\n");
-	if (pole == NULL)
-		return;
-	while (pole != NULL) {
-		w = pole, pole = w->next;
-		printf(LABFMT ":\t%s ", w->lbl, w->isch ? ".bptr" : ".word");
-		if (w->n[0])
-			printf("%s%s", w->n, w->l ? "+" : "");
-		if (w->l || w->n[0] == 0)
-			printf(CONFMT, w->l);
-		printf("\n");
-		free(w);
-	}
 }
 
 /*
@@ -244,49 +227,11 @@ starg(NODE *p)
 }
 #endif
 
-static void
-addacon(int lbl, CONSZ lval, char *name, int isch)
-{
-	struct conlbl *w = xmalloc(sizeof(struct conlbl));
-	w->next = pole, pole = w;
-	w->lbl = lbl;
-	w->l = lval;
-	w->n = name;
-	w->isch = isch;
-}
-
 void
 zzzcode(NODE *p, int c)
 {
-	struct conlbl *w;
-	char *ch;
-	int i;
 
 	switch (c) {
-
-	case 'A':
-		if (pole == NULL)
-			break;
-		w = pole, pole = w->next;
-		printf(",skp\n" LABFMT ":\t", w->lbl);
-		ch = w->isch ? "*2" : "";
-		if (w->n[0])
-			printf("%s%s%s", w->n, ch, w->l ? "+" : "");
-		if (w->l || w->n[0] == 0)
-			printf(CONFMT "%s", w->l, ch);
-		free(w);
-		break;
-
-	case 'B': /* push arg relative sp */
-		printf("%d,", p->n_rval);
-		expand(p, 0, "A1");
-		break;
-
-	case 'C': /* save constants for loading separately */
-		printf(LABFMT, i = getlab2());
-		addacon(i, getlval(p), p->n_name,
-		    p->n_type == INCREF(CHAR) || p->n_type == INCREF(UCHAR));
-		break;
 
 	default:
 		comperr("zzzcode %c", c);
@@ -407,27 +352,25 @@ insput(NODE *p)
 void
 upput(NODE *p, int size)
 {
-comperr("upput");
-#if 0
-	size /= SZCHAR;
+//printf("upput\n");
+//fwalk(p, e2print, 0);
 	switch (p->n_op) {
 	case REG:
-		printf("%%%s", &rnames[p->n_rval][3]);
+		printf("1"); /* ac1 is always upper */
 		break;
 
 	case NAME:
 	case OREG:
-		setlval(p, getlval(p) + size);
+		setlval(p, getlval(p) + 1);
 		adrput(stdout, p);
-		setlval(p, getlval(p) - size);
+		setlval(p, getlval(p) - 1);
 		break;
 	case ICON:
-		printf("$" CONFMT, getlval(p) >> 32);
+		printf("[ " CONFMT " ]", getlval(p) >> 16);
 		break;
 	default:
 		comperr("upput bad op %d size %d", p->n_op, size);
 	}
-#endif
 }
 
 void
@@ -448,18 +391,13 @@ if (looping == 0) {
 
 	switch (p->n_op) {
 	case ICON:
-#if 0
-		/* addressable value of the constant */
-		printf("." LABFMT, i = getlab2());
-		addacon(i, getlval(p), p->n_name,
-		    p->n_type == INCREF(CHAR) || p->n_type == INCREF(UCHAR));
-#else
 		fputc('[', io);
 		if (p->n_type == INCREF(CHAR) || p->n_type == INCREF(UCHAR))
 			printf(".byteptr ");
+		else
+			printf(".word ");
 		conput(io, p);
 		fputc(']', io);
-#endif
 		break;
 
 	case NAME:
@@ -483,7 +421,10 @@ if (looping == 0) {
 		break;
 
 	case REG:
-		fprintf(io, "%s", rnames[p->n_rval]);
+		if (p->n_type == LONG || p->n_type == ULONG)
+			fprintf(io, "0");
+		else
+			fprintf(io, "%s", rnames[p->n_rval]);
 		break;
 
 	default:
@@ -552,13 +493,18 @@ COLORMAP(int c, int *r)
 
 	switch (c) {
 	case CLASSA:
-		num = (r[CLASSA]+r[CLASSB]) < AREGCNT;
+		/* must have at least one reg free to guarantee */
+		if (r[CLASSC]*2+r[CLASSA]+r[CLASSB] < 3)
+			num = 1;
 		break;
 	case CLASSB:
-		num = (r[CLASSB]+r[CLASSA]) < BREGCNT;
+		/* no A/B regs can be in use to guarantee */
+		if (r[CLASSB]+r[CLASSA] == 0)
+			num = 1;
 		break;
 	case CLASSC:
-		num = r[CLASSC] < CREGCNT;
+		if (r[CLASSC] || r[CLASSA])
+			num = 0;
 		break;
 	case CLASSD:
 		num = r[CLASSD] < DREGCNT;
@@ -571,7 +517,8 @@ COLORMAP(int c, int *r)
 }
 
 char *rnames[] = {
-	"0", "1", "2", "3", "2", "3", "cfp", "csp"
+	"0", "1", "2", "3", "2", "3", "cfp", "csp",
+	"lc0", "fp0", "fp1", "fp2"
 };
 
 /*
@@ -580,7 +527,7 @@ char *rnames[] = {
 int
 gclass(TWORD t)
 {
-	return ISPTR(t) ? CLASSB : CLASSA;
+	return ISPTR(t) ? CLASSB : (t==LONG||t==ULONG) ? CLASSC : CLASSA;
 }
 
 /*

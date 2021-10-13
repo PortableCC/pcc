@@ -92,7 +92,7 @@
 #undef	FIELDOPS	/* no bit-field instructions */
 #define TARGET_ENDIAN	TARGET_BE
 #define	AUTOINIT	16	/* first var one word above offset */
-#define	ARGINIT		32	/* first arg at 2 word below offset */
+#define	ARGINIT		16	/* start args one word below fp */
 
 /*
  * Use large-enough types.
@@ -122,35 +122,43 @@ typedef long OFFSZ;
  *	A - AC0-AC2 (as non-index registers)	: reg 0-2
  *	B - AC2		(as index registers)	: reg 4
  * FP/SP as 5/7.
+ *	C - LC0 (long, AC0-1 concatenated)	: reg 8
+ *	D - FP0-3 (floating point)		: 9-12
  */
 #define	AC0	0
 #define	AC1	1
 #define	AC2	2
 #define	AC3	3
+#define	LC0	8
 
-#define	MAXREGS	8	/* 0-29 */
+#define	MAXREGS	12	/* 0-29 */
 
 #define	RSTATUS	\
 	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, 0,	\
-	SBREG|TEMPREG, 0, 0, 0
+	SBREG|TEMPREG, 0, 0, 0, SCREG, \
+	SDREG|TEMPREG, SDREG|TEMPREG, SDREG|TEMPREG, SDREG|TEMPREG
+	
 
 #define	ROVERLAP \
-	{ -1 }, { -1 }, { 4, -1 }, { -1 }, { 2, -1 }, { -1 }, { -1 }, { -1 }
+	{ LC0, -1 }, { LC0, -1 }, { 4, -1 }, { -1 }, \
+	{ 2, -1 }, { -1 }, { -1 }, { -1 }, \
+	{ 0, 1, -1 }, { -1 }, { -1 }, { -1 }
 
 /* Return a register class based on the type of the node */
 /* Used in tshape, avoid matching fp/sp as reg */
-#define PCLASS(p) (ISPTR(p->n_type) ? SBREG : SAREG)
+#define PCLASS(p) (ISPTR(p->n_type) ? \
+	SBREG : p->n_type >= LONG ? SCREG : SAREG)
 
-#define	NUMCLASS 	2	/* highest number of reg classes used */
+#define	NUMCLASS 	3	/* highest number of reg classes used */
 
 int COLORMAP(int c, int *r);
-#define	GCLASS(x) (x < 4 ? CLASSA : CLASSB)
+#define	GCLASS(x) (x < 4 ? CLASSA : x == LC0 ? CLASSC : CLASSB)
 #define DECRA(x,y)	(((x) >> (y*6)) & 63)	/* decode encoded regs */
 #define	ENCRD(x)	(x)		/* Encode dest reg in n_reg */
 #define ENCRA1(x)	((x) << 6)	/* A1 */
 #define ENCRA2(x)	((x) << 12)	/* A2 */
 #define ENCRA(x,y)	((x) << (6+y*6))	/* encode regs in int */
-#define	RETREG(x)	(0) /* ? Sanity */
+#define	RETREG(t)	(t==LONG || t==ULONG ? LC0 : AC0)
 
 #define FPREG	5	/* frame pointer */
 #define STKREG	7	/* stack pointer */

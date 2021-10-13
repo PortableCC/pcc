@@ -39,8 +39,9 @@ int canaddr(NODE *);
 int
 notoff(TWORD t, int r, CONSZ off, char *cp)
 {
-	if (r != 4 && r != 5)
-		return 1; /* can only index ac2 and ac3 */
+//printf("notoff: t %x r %d off %ld\n", t, r, off);
+	if (r < 2 || r > 7)
+		return 1; /* can only index ac2/3 */
 #if 0
 	if (t == CHAR || t == UCHAR) {
 		if (off < -256 || off > 254)
@@ -64,13 +65,13 @@ offstar(NODE *p, int shape)
 	if (x2debug)
 		printf("offstar(%p)\n", p);
 
-	if (regno(p) == 4 || regno(p) == 5)
-		return; /* Is already OREG */
+//	if (regno(p) == 4 || regno(p) == 5)
+//		return; /* Is already OREG */
 
 	r = p->n_right;
 	if ((p->n_op == PLUS || p->n_op == MINUS) && r->n_op == ICON) {
 		if (!isreg(p->n_left) ||
-		    (regno(p->n_left) != 4 && regno(p->n_left) != 5))
+		    (regno(p->n_left) < 2 && regno(p->n_left) > 7))
 			(void)geninsn(p->n_left, INBREG);
 		return;
 	}

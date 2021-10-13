@@ -51,6 +51,26 @@ struct optab table[] = {
 		0,	RLEFT,
 		"",	},
 
+{ SCONV,	INAREG,
+	SAREG,	TINT|TUNSIGNED,
+	SAREG,	TINT|TUNSIGNED,
+		0,	RLEFT,
+		"",	},
+
+{ SCONV,	INAREG,
+	SOREG,	TLONG|TULONG,
+	SAREG,	TINT|TUNSIGNED,
+		NAREG,	RESC1,
+		"	lda A1,UL\n",	},
+
+
+{ PCONV,	INBREG,
+	SAREG,	TSHORT|TUSHORT|TINT|TUNSIGNED,
+	SBREG,	TPOINT,
+		NBREG|NBSL,	RESC1,
+		"	mov AL,A1\n",	},
+
+
 /*
  * All ASSIGN entries.
  */
@@ -60,6 +80,7 @@ struct optab table[] = {
 	SAREG|SBREG,	TWORD|TPOINT,
 		0,	RDEST,
 		"	mov AR,AL\n", },
+
 /* reg->mem */
 { ASSIGN,	FOREFF|INAREG|INBREG,
 	SNAME|SOREG,	TWORD|TPOINT,
@@ -73,29 +94,74 @@ struct optab table[] = {
 		0,	RDEST,
 		"	lda AL,AR\n", },
 
+/* reg->mem */
+{ ASSIGN,	FOREFF|INCREG,
+	SNAME|SOREG,	TLONG|TULONG,
+	SCREG,		TLONG|TULONG,
+		0,	RDEST,
+		"	sta AR,AL\n"
+		"	sta UR,UL\n", },
+
+/* mem->reg */
+{ ASSIGN,	FOREFF|INCREG,
+	SCREG,		TLONG|TULONG,
+	SNAME|SOREG,	TLONG|TULONG,
+		0,	RDEST,
+		"	lda AL,AR\n"
+		"	lda UL,UR\n", },
+
+/* reg->reg */
+/* this should be end up as a NOP since there is only one CREG */
+{ ASSIGN,	FOREFF|INCREG,
+	SCREG,		TLONG|TULONG,
+	SCREG,		TLONG|TULONG,
+		0,	RDEST,
+		"	XXX - cannot happen\n", },
+
 /*
  * LEAF type movements.
  */
-/* 0 -> reg */
-{ OPLTYPE,	INAREG|INBREG,
+/* 0 -> Areg */
+{ OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SZERO,	TWORD,
 		NAREG,	RESC1,
 		"	subo A1,A1\n", },
 
-/* 1 -> reg */
-{ OPLTYPE,	INAREG|INBREG,
+/* 0 -> Creg */
+{ OPLTYPE,	INCREG,
+	SANY,	TANY,
+	SZERO,	TWORD,
+		NCREG,	RESC1,
+		"	subo A1,A1\n	subo U1,U1\n", },
+
+/* 1 -> Areg */
+{ OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SONE,	TWORD,
-		NAREG|NBREG,	RESC1,
+		NAREG,	RESC1,
 		"	subzl A1,A1\n", },
 
-/* constant -> reg */
-{ OPLTYPE,	INAREG|INBREG,
+/* 1 -> Creg */
+{ OPLTYPE,	INCREG,
+	SANY,	TANY,
+	SONE,	TLONG|TULONG,
+		NCREG,	RESC1,
+		"	subo A1,A1\n	subzl U1,U1\n", },
+
+/* constant -> Areg */
+{ OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SCON,	TWORD|TPOINT,
-		NAREG|NBREG,	RESC1,
-		"	lda A1,ZC\n", },
+		NAREG,	RESC1,
+		"	lda A1,AR\n", },
+
+/* constant -> Breg */
+{ OPLTYPE,	INBREG,
+	SANY,	TANY,
+	SCON,	TWORD|TPOINT,
+		NBREG,	RESC1,
+		"	lda A1,AR\n", },
 
 /* mem -> reg */
 { OPLTYPE,	INAREG,
@@ -118,6 +184,27 @@ struct optab table[] = {
 		NBREG,	RESC1,
 		"	mov AR,A1\n", },
 
+/* temp -> reg */
+{ OPLTYPE,	INAREG,
+	SANY,	TANY,
+	SAREG,	TWORD|TPOINT,
+		NAREG,	RESC1,
+		"	mov AR,A1\n", },
+
+/* temp -> reg */
+{ OPLTYPE,	INBREG,
+	SANY,	TANY,
+	SBREG,	TWORD|TPOINT,
+		NBREG,	RESC1,
+		"	mov AR,A1\n", },
+
+/* temp -> Creg */
+{ OPLTYPE,	INCREG,
+	SANY,	TANY,
+	SCREG,	TLONG|TULONG,
+		NCREG,	RESC1,
+		"	mov AR,A1\n	mov UR,U1\n", },
+
 { OPLTYPE,	INBREG,
 	SANY,		TANY,
 	SNAME|SOREG,	TPOINT,
@@ -130,6 +217,13 @@ struct optab table[] = {
 		NBREG,	RESC1,
 		"	lda A1,AR\n", },
 
+{ OPLTYPE,	INCREG,
+	SANY,		TLONG|TULONG,
+	SNAME|SOREG,	TLONG|TULONG,
+		NCREG,	RESC1,
+		"	lda A1,AR\n"
+		"	lda U1,UR\n", },
+
 /*
  * Simple ops.
  */
@@ -138,6 +232,48 @@ struct optab table[] = {
 	SONE,		TANY,
 		0,	RLEFT,
 		"	inc AL,AL\n", },
+
+/* long add, 5 word */
+{ PLUS,		INCREG,
+	SCREG,		TLONG|TULONG,
+	SOREG,		TLONG|TULONG,
+		NBREG,	RLEFT,
+		"	lda 2,UR\n"
+		"	addz 2,1,szc\n"
+		"	inc 0,0\n"
+		"	lda 2,AR\n"
+		"	add 2,0\n", },
+
+{ LS,		INAREG|INBREG,
+	SAREG|SBREG,	TWORD|TPOINT,
+	SAREG|SBREG,	TINT,
+		NAREG,	RLEFT,
+		"	neg AR,A1,snr\n"
+		"	  jmp .+4\n"
+		"	movzl AL,AL\n"
+		"	inc A1,A1,szr\n"
+		"	  jmp .-2\n", },
+
+{ LS,		INCREG,
+	SCREG,	TLONG|TULONG,
+	SAREG,	TANY,
+		0,	RLEFT,
+		"	neg AR,3,snr\n"
+		"	  jmp .+5\n"
+		"	movzl UL,UL\n"
+		"	movl AL,AL\n"
+		"	inc 3,3,szr\n"
+		"	  jmp .-3\n"
+		"	lda 3,fp\n", },
+
+/* indirection */
+{ UMUL,	INCREG,
+	SANY,	TANY,
+	SOREG,	TLONG|TULONG,
+		NCREG,	RESC1,
+		"	lda A1,AL\n	lda U1,UL\n", },
+
+
 
 { OPSIMP,	INBREG|INAREG|FOREFF,
 	SAREG|SBREG,	TWORD|TPOINT,
@@ -206,6 +342,15 @@ struct optab table[] = {
 		0,	RNOP,
 		"	sub# AL,AR,szr\n	jmp LC\n", },
 
+/* test >= by subtracting and then looking at the sign bit */
+{ GE,	FOREFF,
+	SAREG|SBREG,	TANY,
+	SAREG|SBREG,	TANY,
+		0,	RNOP,
+		"	subl# AL,AR,snc\n	jmp LC\n", },
+
+
+
 /*
  * Subroutine calls.
  */
@@ -222,13 +367,13 @@ struct optab table[] = {
 		0,	0,
 		"	jsr CL\n", },
 
-{ CALL,		INAREG|FOREFF,
+{ CALL,		INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
 		NAREG|NASL,	RESC1,
 		"	jsr CL\n", },
 
-{ UCALL,	INAREG|FOREFF,
+{ UCALL,	INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
 		NAREG|NASL,	RESC1,
@@ -244,7 +389,14 @@ struct optab table[] = {
 	SAREG|SBREG,	TCHAR|TUCHAR|TWORD|TPOINT,
 	SANY,		TCHAR|TUCHAR|TWORD|TPOINT,
 		0,	RNULL,
-		"	sta AL,@spref\n", },
+		"	sta AL,@sp\n", },
+
+{ FUNARG,	FOREFF,
+	SCREG,	TLONG|TULONG,
+	SANY,	TLONG|TULONG,
+		0,	RNULL,
+		"	sta AL,@sp\n"
+		"	sta UL,@sp\n" },
 
 # define DF(x) FORREW,SANY,TANY,SANY,TANY,REWRITE,x,""
 

@@ -174,7 +174,6 @@ bfcode(struct symtab **a, int n)
 			a[i]->stype = INT;
 		if (a[i]->stype == UCHAR)
 			a[i]->stype = UNSIGNED;
-		a[i]->soffset = -a[i]->soffset; /* stack goes upward */
 	}
 
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
