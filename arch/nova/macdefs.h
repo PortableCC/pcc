@@ -93,6 +93,7 @@
 #define TARGET_ENDIAN	TARGET_BE
 #define	AUTOINIT	16	/* first var one word above offset */
 #define	ARGINIT		16	/* start args one word below fp */
+#define FINDMOPS		/* can in/decrement memory directly. */
 
 /*
  * Use large-enough types.
@@ -158,7 +159,7 @@ int COLORMAP(int c, int *r);
 #define ENCRA1(x)	((x) << 6)	/* A1 */
 #define ENCRA2(x)	((x) << 12)	/* A2 */
 #define ENCRA(x,y)	((x) << (6+y*6))	/* encode regs in int */
-#define	RETREG(t)	(t==LONG || t==ULONG ? LC0 : AC0)
+#define	RETREG(t)	(t==LONG || t==ULONG ? LC0 : ISPTR(t) ? 4 : AC0)
 
 #define FPREG	5	/* frame pointer */
 #define STKREG	7	/* stack pointer */

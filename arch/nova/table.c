@@ -75,18 +75,29 @@ struct optab table[] = {
  * All ASSIGN entries.
  */
 /* reg->reg */
-{ ASSIGN,	FOREFF|INAREG|INBREG,
-	SAREG|SBREG,	TWORD|TPOINT,
-	SAREG|SBREG,	TWORD|TPOINT,
+{ ASSIGN,	FOREFF|INAREG,
+	SAREG,	TWORD,
+	SAREG,	TWORD,
+		0,	RDEST,
+		"	mov AR,AL\n", },
+{ ASSIGN,	FOREFF|INBREG,
+	SBREG,	TPOINT,
+	SBREG,	TPOINT,
 		0,	RDEST,
 		"	mov AR,AL\n", },
 
 /* reg->mem */
-{ ASSIGN,	FOREFF|INAREG|INBREG,
-	SNAME|SOREG,	TWORD|TPOINT,
-	SAREG|SBREG,	TWORD|TPOINT,
+{ ASSIGN,	FOREFF|INAREG,
+	SNAME|SOREG,	TWORD,
+	SAREG,		TWORD,
 		0,	RDEST,
 		"	sta AR,AL\n", },
+{ ASSIGN,	FOREFF|INBREG,
+	SNAME|SOREG,	TPOINT,
+	SBREG,	TPOINT,
+		0,	RDEST,
+		"	sta AR,AL\n", },
+
 /* mem->reg */
 { ASSIGN,	FOREFF|INAREG|INBREG,
 	SAREG|SBREG,	TWORD|TPOINT,
@@ -233,6 +244,34 @@ struct optab table[] = {
 		0,	RLEFT,
 		"	inc AL,AL\n", },
 
+/*
+ * Memory OPS. note that the extra mov is just to avoid a skip 
+ * if passing 0.
+ */
+{ PLUS,		FOREFF,
+	SNAME|SOREG,	TWORD,
+	SONE,		TANY,
+		0,	RLEFT,
+		"	isz AL\n	mov 0,0\n", },
+
+{ PLUS,		FOREFF,
+	SNAME|SOREG,	TPOINT,
+	SONE,		TANY,
+		0,	RLEFT,
+		"	isz AL\n", },
+
+{ MINUS,	FOREFF,
+	SNAME|SOREG,	TWORD,
+	SONE,		TANY,
+		0,	RLEFT,
+		"	dsz AL\n	mov 0,0\n", },
+
+{ MINUS,	FOREFF,
+	SNAME|SOREG,	TPOINT,
+	SONE,		TANY,
+		0,	RLEFT,
+		"	dsz AL\n", },
+
 /* long add, 5 word */
 { PLUS,		INCREG,
 	SCREG,		TLONG|TULONG,
@@ -254,10 +293,13 @@ struct optab table[] = {
 		"	inc A1,A1,szr\n"
 		"	  jmp .-2\n", },
 
+/* long left shft.  left in ac0-1 and right in ac2 */
 { LS,		INCREG,
 	SCREG,	TLONG|TULONG,
 	SAREG,	TANY,
 		0,	RLEFT,
+		"	jsr lsh32\n", },
+#if 0
 		"	neg AR,3,snr\n"
 		"	  jmp .+5\n"
 		"	movzl UL,UL\n"
@@ -265,6 +307,7 @@ struct optab table[] = {
 		"	inc 3,3,szr\n"
 		"	  jmp .-3\n"
 		"	lda 3,fp\n", },
+#endif
 
 /* indirection */
 { UMUL,	INCREG,
@@ -370,13 +413,25 @@ struct optab table[] = {
 { CALL,		INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,
+		NAREG|NASL|NASR,	RESC1,
 		"	jsr CL\n", },
 
 { UCALL,	INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,
+		NAREG|NASL|NASR,	RESC1,
+		"	jsr CL\n", },
+
+{ CALL,		INBREG,
+	SCON,	TANY,
+	SANY,	TANY,
+		NBREG|NBSL|NBSR,	RESC1,
+		"	jsr CL\n", },
+
+{ UCALL,	INBREG,
+	SCON,	TANY,
+	SANY,	TANY,
+		NBREG|NBSL|NBSR,	RESC1,
 		"	jsr CL\n", },
 
 { GOTO,		FOREFF,
