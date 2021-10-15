@@ -539,6 +539,7 @@ else
 	fi
 	preprocessor="${BINPREFIX}cpp"
 	compiler="${BINPREFIX}ccom"
+	cc2="${BINPREFIX}cc2"
 	AC_DEFINE(CROSS_COMPILING, 1, [Cross-compiling.])
 fi
 AC_SUBST(BINPREFIX)
@@ -566,6 +567,10 @@ fi
 if test -n "$compiler"; then
 	AC_DEFINE_UNQUOTED(COMPILER, "$compiler",
 		[Define path to alternate compiler])
+fi
+if test -n "$cc2"; then
+	AC_DEFINE_UNQUOTED(CC2, "$cc2",
+		[Define path to alternate cc2])
 fi
 
 case $wchar_type in

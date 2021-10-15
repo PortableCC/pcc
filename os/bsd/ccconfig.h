@@ -52,6 +52,7 @@
 #error defines for arch missing
 #endif
 
+#if defined(mach_pdp11)
 #define PCC_EARLY_AS_ARGS		\
 	strlist_append(&args, "-V");	\
 	strlist_append(&args, "-u");
@@ -62,4 +63,9 @@
 #define PCC_SETUP_LD_ARGS				\
 	strlist_append(&early_linker_flags, "-X");
 #define STARTLABEL      "start"
+#endif /* mach_pdp11 */
 
+#if defined(mach_nova)
+#define	HAVE_CC2	/* compile cc2 as well */
+#define	NEED_CC2	/* always use cc2 */
+#endif /* if mach_nova */

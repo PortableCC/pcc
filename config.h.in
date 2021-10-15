@@ -18,6 +18,9 @@
 /* Define path to alternate compiler */
 #undef COMPILER
 
+/* Define path to alternate cc2 */
+#undef CC2
+
 /* Using ECOFF ABI */
 #undef ECOFFABI
 

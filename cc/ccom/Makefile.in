@@ -37,6 +37,9 @@ INSTALL_DATA = @INSTALL_DATA@
 CCOM=$(BINPREFIX)ccom$(EXEEXT)
 CC0=$(BINPREFIX)cc0$(EXEEXT)
 CC1=$(BINPREFIX)cc1$(EXEEXT)
+CC2=$(BINPREFIX)cc2$(EXEEXT)
+CC2MSRC=$(top_srcdir)/cc2/cc2.$(TARGMACH).c
+CC2SRC=$(top_srcdir)/cc2/cc2.none.c
 CF0=@CF0@
 CF1=@CF1@
 
@@ -48,7 +51,7 @@ DEST=@CCNAMES@
 MANPAGE=$(BINPREFIX)ccom
 MKEXT=mkext$(EXEEXT)
 
-all: $(DEST)
+all: $(DEST) $(CC2)
 
 OBJS=	builtins.o cgram.o code.o common.o compat.o dwarf.o external.o	\
 	gcc_compat.o init.o inline.o local.o local2.o main.o \
@@ -208,6 +211,14 @@ $(CC0):	$(OBJS0)
 $(CC1):	$(OBJS1)
 	$(CC) $(LDFLAGS) $(OBJS1) -o $@ $(LIBS)
 
+$(CC2): $(CC2OBJS)
+	@if [ -e $(CC2MSRC) ]; then			\
+		$(CC) $(LDFLAGS) $(CC2MSRC) -o $@ ;	\
+	else						\
+		touch $@ ;				\
+	fi
+
+
 install: $(DEST)
 	test -z "$(DESTDIR)$(libexecdir)" || mkdir -p "$(DESTDIR)$(libexecdir)"
 	$(INSTALL_PROGRAM) $(DEST) $(DESTDIR)$(libexecdir)
@@ -215,7 +226,7 @@ install: $(DEST)
 	$(INSTALL_DATA) $(srcdir)/ccom.1 $(DESTDIR)$(mandir)/man1/$(MANPAGE).1
 
 clean:
-	rm -f $(DEST) $(OBJS0) $(OBJS1) $(MKEXT) $(LOBJS) \
+	rm -f $(DEST) $(OBJS0) $(OBJS1) $(MKEXT) $(LOBJS) $(CC2) \
 	$(LEX_OUTPUT_ROOT).c scan.c y.tab.[ch] cgram.[ch] external.[ch]
 
 distclean: clean
