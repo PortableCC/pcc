@@ -39,15 +39,10 @@ int canaddr(NODE *);
 int
 notoff(TWORD t, int r, CONSZ off, char *cp)
 {
-//printf("notoff: t %x r %d off %ld\n", t, r, off);
-	if (r < 2 || r > 7)
+	if (x2debug)
+		printf("notoff: t %x r %d off %ld\n", t, r, off);
+	if (r < 2 || r > 3)
 		return 1; /* can only index ac2/3 */
-#if 0
-	if (t == CHAR || t == UCHAR) {
-		if (off < -256 || off > 254)
-			return 1;
-	} else
-#endif
 	if (off < -128 || off > 127)
 		return 1;
 	return(0);  /* YES */
@@ -65,17 +60,14 @@ offstar(NODE *p, int shape)
 	if (x2debug)
 		printf("offstar(%p)\n", p);
 
-//	if (regno(p) == 4 || regno(p) == 5)
-//		return; /* Is already OREG */
-
 	r = p->n_right;
-	if ((p->n_op == PLUS || p->n_op == MINUS) && r->n_op == ICON) {
-		if (!isreg(p->n_left) ||
-		    (regno(p->n_left) < 2 && regno(p->n_left) > 7))
-			(void)geninsn(p->n_left, INBREG);
+	if ((p->n_op == PLUS || p->n_op == MINUS) &&
+	    r->n_op == ICON && (getlval(r) >= -128 && getlval(r) <= 127)) {
+		if (!isreg(p->n_left))
+			(void)geninsn(p->n_left, INAREG);
 		return;
 	}
-	(void)geninsn(p, INBREG);
+	(void)geninsn(p, INAREG);
 }
 
 /*
@@ -132,26 +124,6 @@ int
 setuni(NODE *p, int cookie)
 {
 	return 0;
-}
-
-/*
- * Special handling of some instruction register allocation.
- */
-struct rspecial *
-nspecial(struct optab *q)
-{
-	switch (q->op) {
-	case UMUL:
-		{
-			static struct rspecial s[] = {
-				{ NLEFT, 4 }, { NRES, AC0 },
-				{ NEVER, AC3 }, { NEVER, AC0 },  };
-			return s;
-		}
-
-	}
-	comperr("nspecial entry %d", q - table);
-	return 0; /* XXX gcc */
 }
 
 /*

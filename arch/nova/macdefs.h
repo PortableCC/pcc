@@ -90,10 +90,11 @@
 #define	BOOL_TYPE	UCHAR
 #define	MYALIGN		/* provide private alignment function */
 #undef	FIELDOPS	/* no bit-field instructions */
-#define TARGET_ENDIAN	TARGET_BE
+#define TARGET_ENDIAN	TARGET_LE /* XXX should be both */
 #define	AUTOINIT	16	/* first var one word above offset */
 #define	ARGINIT		16	/* start args one word below fp */
 #define FINDMOPS		/* can in/decrement memory directly. */
+#define NEWNEED			/* new-style needs definitions */
 
 /*
  * Use large-enough types.
@@ -116,53 +117,52 @@ typedef long OFFSZ;
 	((t) == LONG || (t) == ULONG || (t) == FLOAT) ? 2 : 1)
 
 /*
- * The Nova has two register classes.
- * Register 6 and 7 are FP and SP (in zero page).
+ * The Nova has three register classes.
+ * Register 6 and 7 are FP and SP (in zero page or HW regs).
  *
  * The classes used on Nova are:
- *	A - AC0-AC2 (as non-index registers)	: reg 0-2
- *	B - AC2		(as index registers)	: reg 4
- * FP/SP as 5/7.
- *	C - LC0 (long, AC0-1 concatenated)	: reg 8
- *	D - FP0-3 (floating point)		: 9-12
+ *	A - AC0-AC3 (AC3 not available)		: reg 0-3
+ *	B - LC0 (long, AC0-1 concatenated)	: reg 4
+ *	C - FP0 (floating point)		: 5
  */
 #define	AC0	0
 #define	AC1	1
 #define	AC2	2
 #define	AC3	3
-#define	LC0	8
+#define	LC0	4
+#define	FP0	5
+#define	FP	6
+#define	SP	7
 
-#define	MAXREGS	12	/* 0-29 */
+#define	MAXREGS	8	/* 0-5 */
 
 #define	RSTATUS	\
 	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, 0,	\
-	SBREG|TEMPREG, 0, 0, 0, SCREG, \
-	SDREG|TEMPREG, SDREG|TEMPREG, SDREG|TEMPREG, SDREG|TEMPREG
+	SBREG|TEMPREG, 0, SCREG|TEMPREG, 0, 0
 	
 
 #define	ROVERLAP \
-	{ LC0, -1 }, { LC0, -1 }, { 4, -1 }, { -1 }, \
-	{ 2, -1 }, { -1 }, { -1 }, { -1 }, \
-	{ 0, 1, -1 }, { -1 }, { -1 }, { -1 }
+	{ LC0, -1 }, { LC0, -1 }, { -1 }, { -1 },	\
+	{ 0, 1, -1 }, { -1 }, { -1 }, { -1 },
 
 /* Return a register class based on the type of the node */
 /* Used in tshape, avoid matching fp/sp as reg */
-#define PCLASS(p) (ISPTR(p->n_type) ? \
-	SBREG : p->n_type >= LONG ? SCREG : SAREG)
+#define PCLASS(p) \
+	(p->n_type == LONG || p->n_type == ULONG ? SBREG : SAREG) /* XXX FP */
 
 #define	NUMCLASS 	3	/* highest number of reg classes used */
 
 int COLORMAP(int c, int *r);
-#define	GCLASS(x) (x < 4 ? CLASSA : x == LC0 ? CLASSC : CLASSB)
+#define	GCLASS(x) (x < 4 ? CLASSA : x == LC0 ? CLASSB : CLASSC)
 #define DECRA(x,y)	(((x) >> (y*6)) & 63)	/* decode encoded regs */
 #define	ENCRD(x)	(x)		/* Encode dest reg in n_reg */
 #define ENCRA1(x)	((x) << 6)	/* A1 */
 #define ENCRA2(x)	((x) << 12)	/* A2 */
 #define ENCRA(x,y)	((x) << (6+y*6))	/* encode regs in int */
-#define	RETREG(t)	(t==LONG || t==ULONG ? LC0 : ISPTR(t) ? 4 : AC0)
+#define	RETREG(t)	(t==LONG || t==ULONG ? LC0 : ISPTR(t) ? AC2 : AC0)
 
-#define FPREG	5	/* frame pointer */
-#define STKREG	7	/* stack pointer */
+#define FPREG	AC3	/* frame pointer, kept in AC3 */
+#define STKREG	SP	/* stack pointer */
 
 #ifdef os_none
 #define	MYINSTRING

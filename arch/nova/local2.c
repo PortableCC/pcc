@@ -58,6 +58,7 @@ prologue(struct interpass_prolog *ipp)
 	printf("	sta 3,@csp\n");	/* put ret pc on stack */
 	printf("	jsr @prolog\n");	/* jump to prolog */
 #else
+	printf("#BEGFTN\n");
 	if (ipp->ipp_vis)
 		printf("	.globl %s\n", ipp->ipp_name);
 	printf("%s:\n", ipp->ipp_name);
@@ -73,6 +74,7 @@ eoftn(struct interpass_prolog *ipp)
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return; /* no code needs to be generated */
 	printf("	jmp @cret\n");
+	printf("#ENDFTN\n");
 }
 
 /*
@@ -227,11 +229,102 @@ starg(NODE *p)
 }
 #endif
 
+/*
+ * Compare long against 0.
+ * Value is in AC0/AC1.
+ */
+static void
+lzero(NODE *p)
+{
+	int l = 0;
+
+	switch (p->n_op) {
+	case EQ:
+		expand(p, 0, "	add# 0,1,snr\n");
+		break;
+	case NE:
+		expand(p, 0, "	add# 0,1,szr\n");
+		break;
+	case GE:
+		expand(p, 0, "	movl# 0,0,snc\n");
+		break;
+	case LT:
+		expand(p, 0, "	movl# 0,0,szc\n");
+		break;
+	case GT:
+		l = getlab2();
+		expand(p, 0, "	movl# 0,0,szc\n"); /* high word */
+		printf("	jmp " LABFMT "\n", l);
+		expand(p, 0, "	add# 0,1,szr\n");
+		break;
+	case LE:
+		expand(p, 0, "	movl# 0,0,szc\n	jmp LC\n"); /* high word */
+		expand(p, 0, "	add# 0,1,snr\n");
+		break;
+	default:
+		comperr("lzero %d", p->n_op);
+	}
+	expand(p, 0, "	jmp LC\n");
+	if (l)
+		printf(LABFMT ":\n", l);
+}
+
+/*
+ * Compare two long values.
+ * Left value is in AC0/AC1, right in memory.
+ * AC2 is available for use.
+ */
+static void
+lcmp(NODE *p)
+{
+
+	expand(p, 0, "	lda 2,AR\n");
+	expand(p, 0, "	sta 2,@sp\n");
+	expand(p, 0, "	lda 2,UR\n");
+	expand(p, 0, "	sta 2,@sp\n");
+
+	switch (p->n_op) {
+	case LE:
+		expand(p, 0, "	jsr __pcc_lle\n");
+		expand(p, 0, "	jmp LC\n");
+		break;
+
+	default:
+		comperr("lcmp %d", p->n_op);
+	}
+}
+
 void
 zzzcode(NODE *p, int c)
 {
+	struct attr *ap;
+	NODE *l;
 
 	switch (c) {
+	case 'N': /* compare two long */
+		lcmp(p);
+		break;
+
+	case 'Q': /* struct assign */
+		/* right is in ac2, left is name or oreg */
+		l = getlr(p, 'L');
+		if (l->n_op == NAME) {
+			l->n_op = ICON;
+			expand(p, 0, "	lda 0,AL\n");
+			l->n_op = NAME;
+		} else { /* in OREG */
+			printf("	lda 0,[.word %d]\n", (int)getlval(l));
+			printf("	add 3,0\n");
+		}
+		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		printf("	lda 1,[.word %d]\n", -(ap->iarg(0) >> 1));
+		printf("	jsr __stcpy\n");
+		break;
+
+	case 'Z': /* compare long against 0 */
+		lzero(p);
+		break;
+
 
 	default:
 		comperr("zzzcode %c", c);
@@ -324,13 +417,14 @@ conput(FILE *fp, NODE *p)
 	int val = getlval(p);
 
 	switch (p->n_op) {
+	case NAME:
 	case ICON:
 		if (p->n_name[0] != '\0') {
 			fprintf(fp, "%s", p->n_name);
 			if (val)
-				fprintf(fp, "+0%o", val);
+				fprintf(fp, "+0%o", val & 0177777);
 		} else
-			fprintf(fp, "0%o", val);
+			fprintf(fp, "0%o", val & 0177777);
 		return;
 
 	default:
@@ -366,7 +460,7 @@ upput(NODE *p, int size)
 		setlval(p, getlval(p) - 1);
 		break;
 	case ICON:
-		printf("[ " CONFMT " ]", getlval(p) >> 16);
+		printf("[ .word " CONFMT " ]", getlval(p) & 0177777);
 		break;
 	default:
 		comperr("upput bad op %d size %d", p->n_op, size);
@@ -390,23 +484,20 @@ if (looping == 0) {
 		p = p->n_left;
 
 	switch (p->n_op) {
+	case NAME:
+		fputc('@', io);
+		/* FALLTHROUGH */
 	case ICON:
 		fputc('[', io);
 		if (p->n_type == INCREF(CHAR) || p->n_type == INCREF(UCHAR))
-			printf(".byteptr ");
+			fprintf(io, ".byteptr ");
 		else
-			printf(".word ");
-		conput(io, p);
+			fprintf(io, ".word ");
+		if (p->n_type == LONG || p->n_type == ULONG)
+			printf(CONFMT, getlval(p) >> 16);
+		else
+			conput(io, p);
 		fputc(']', io);
-		break;
-
-	case NAME:
-		if (p->n_name[0] != '\0') {
-			fputs(p->n_name, io);
-			if (getlval(p) != 0)
-				fprintf(io, "+" CONFMT, getlval(p));
-		} else
-			fprintf(io, CONFMT, getlval(p));
 		break;
 
 	case OREG:
@@ -417,6 +508,8 @@ if (looping == 0) {
 			putchar('-');
 			i = -i;
 		}
+		if (regno(p) != AC2 && regno(p) != AC3)
+			comperr("bad index reg %d", regno(p));
 		printf("0%o,%s", i, rnames[regno(p)]);
 		break;
 
@@ -494,31 +587,22 @@ COLORMAP(int c, int *r)
 	switch (c) {
 	case CLASSA:
 		/* must have at least one reg free to guarantee */
-		if (r[CLASSC]*2+r[CLASSA]+r[CLASSB] < 3)
+		if (r[CLASSB]*2+r[CLASSA] < 3)
 			num = 1;
 		break;
 	case CLASSB:
-		/* no A/B regs can be in use to guarantee */
-		if (r[CLASSB]+r[CLASSA] == 0)
-			num = 1;
-		break;
-	case CLASSC:
-		if (r[CLASSC] || r[CLASSA])
+		if (r[CLASSB] || r[CLASSA])
 			num = 0;
 		break;
-	case CLASSD:
-		num = r[CLASSD] < DREGCNT;
-		break;
-	case CLASSE:
-		num = r[CLASSE] < EREGCNT;
+	case CLASSC:
+		num = r[CLASSC] < CREGCNT;
 		break;
 	}
 	return num;
 }
 
 char *rnames[] = {
-	"0", "1", "2", "3", "2", "3", "cfp", "csp",
-	"lc0", "fp0", "fp1", "fp2"
+	"0", "1", "2", "3", "lc0", "fp0", "cfp", "csp",
 };
 
 /*
@@ -527,7 +611,7 @@ char *rnames[] = {
 int
 gclass(TWORD t)
 {
-	return ISPTR(t) ? CLASSB : (t==LONG||t==ULONG) ? CLASSC : CLASSA;
+	return (t==LONG||t==ULONG) ? CLASSB : CLASSA;
 }
 
 /*

@@ -37,6 +37,10 @@
 # define TSWORD TINT
 # define TWORD TUWORD|TSWORD
 
+#define XSL(c)	NEEDS(NREG(c, 1), NSL(c))
+#define	XNEEDA	NEEDS(NREG(A, 1))
+#define	XNEEDB	NEEDS(NREG(B, 1))
+
 struct optab table[] = {
 /* First entry must be an empty entry */
 { -1, FOREFF, SANY, TANY, SANY, TANY, 0, 0, "", },
@@ -52,23 +56,51 @@ struct optab table[] = {
 		"",	},
 
 { SCONV,	INAREG,
-	SAREG,	TINT|TUNSIGNED,
+	SAREG,	TINT|TUNSIGNED|TPOINT,
 	SAREG,	TINT|TUNSIGNED,
 		0,	RLEFT,
 		"",	},
 
 { SCONV,	INAREG,
+	SAREG,	TINT|TUNSIGNED,
+	SAREG,	TCHAR,
+		NEEDS(NLEFT(AC0)),	RLEFT,
+		"	jsr __pcc_itoc\n",	},
+
+{ SCONV,	INAREG,
 	SOREG,	TLONG|TULONG,
 	SAREG,	TINT|TUNSIGNED,
-		NAREG,	RESC1,
+		NEEDS(NREG(A, 1)),	RESC1,
 		"	lda A1,UL\n",	},
 
+/* int/unsigned to long/ulong */
+/* XXX kolla */
+{ SCONV,	INBREG,
+	SOREG|SNAME,	TWORD,
+	SBREG,		TLONG|TULONG,
+		NEEDS(NREG(B, 1), NSL(B)),	RESC1,
+		"	lda U1,AL\n	subo A1,A1\n",	},
 
-{ PCONV,	INBREG,
+/* (reg) (u)long to unsigned */
+{ SCONV,	INAREG,
+	SBREG,	TLONG|TULONG,
+	SAREG,	TINT|TUNSIGNED,
+		NEEDS(NREG(A,1), NSL(A), NRES(AC1)),	RESC1,
+		"",	},
+
+
+{ PCONV,	INAREG,
 	SAREG,	TSHORT|TUSHORT|TINT|TUNSIGNED,
-	SBREG,	TPOINT,
-		NBREG|NBSL,	RESC1,
+	SAREG,	TPOINT,
+		XSL(A),	RESC1,
 		"	mov AL,A1\n",	},
+
+/* word ptr to char ptr */
+{ PCONV,	INAREG,
+	SAREG,	TPTRTO|TSHORT|TUSHORT|TINT|TUNSIGNED|TSTRUCT,
+	SAREG,	TPTRTO|TCHAR|TUCHAR,
+		0,	RLEFT,
+		"	movl AL,AL\n",	},
 
 
 /*
@@ -76,58 +108,61 @@ struct optab table[] = {
  */
 /* reg->reg */
 { ASSIGN,	FOREFF|INAREG,
-	SAREG,	TWORD,
-	SAREG,	TWORD,
-		0,	RDEST,
-		"	mov AR,AL\n", },
-{ ASSIGN,	FOREFF|INBREG,
-	SBREG,	TPOINT,
-	SBREG,	TPOINT,
+	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD|TPOINT,
 		0,	RDEST,
 		"	mov AR,AL\n", },
 
 /* reg->mem */
 { ASSIGN,	FOREFF|INAREG,
-	SNAME|SOREG,	TWORD,
-	SAREG,		TWORD,
-		0,	RDEST,
-		"	sta AR,AL\n", },
-{ ASSIGN,	FOREFF|INBREG,
-	SNAME|SOREG,	TPOINT,
-	SBREG,	TPOINT,
-		0,	RDEST,
+	SNAME|SOREG,	TCHAR|TUCHAR,
+	SAREG,		TCHAR|TUCHAR,
+		NEEDS(NOLEFT(AC0), NOLEFT(AC1), NRIGHT(AC0)),	RDEST,
+		"	jsr __pcc_le_sbyt	# AR,AL\n", },
+
+/* reg->mem */
+{ ASSIGN,	FOREFF|INAREG,
+	SNAME|SOREG,	TWORD|TPOINT,
+	SAREG,		TWORD|TPOINT,
+		NEEDS(NOLEFT(AC0), NOLEFT(AC1)),	RDEST,
 		"	sta AR,AL\n", },
 
 /* mem->reg */
-{ ASSIGN,	FOREFF|INAREG|INBREG,
-	SAREG|SBREG,	TWORD|TPOINT,
+{ ASSIGN,	FOREFF|INAREG,
+	SAREG,		TWORD|TPOINT,
 	SNAME|SOREG,	TWORD|TPOINT,
-		0,	RDEST,
+		NEEDS(NORIGHT(AC0), NORIGHT(AC1)),	RDEST,
 		"	lda AL,AR\n", },
 
 /* reg->mem */
-{ ASSIGN,	FOREFF|INCREG,
+{ ASSIGN,	FOREFF|INBREG,
 	SNAME|SOREG,	TLONG|TULONG,
-	SCREG,		TLONG|TULONG,
+	SBREG,		TLONG|TULONG,
 		0,	RDEST,
 		"	sta AR,AL\n"
 		"	sta UR,UL\n", },
 
 /* mem->reg */
-{ ASSIGN,	FOREFF|INCREG,
-	SCREG,		TLONG|TULONG,
+{ ASSIGN,	FOREFF|INBREG,
+	SBREG,		TLONG|TULONG,
 	SNAME|SOREG,	TLONG|TULONG,
 		0,	RDEST,
 		"	lda AL,AR\n"
 		"	lda UL,UR\n", },
 
 /* reg->reg */
-/* this should be end up as a NOP since there is only one CREG */
-{ ASSIGN,	FOREFF|INCREG,
-	SCREG,		TLONG|TULONG,
-	SCREG,		TLONG|TULONG,
+/* this should be end up as a NOP since there is only one BREG */
+{ ASSIGN,	FOREFF|INBREG,
+	SBREG,		TLONG|TULONG,
+	SBREG,		TLONG|TULONG,
 		0,	RDEST,
 		"	XXX - cannot happen\n", },
+
+{ STASG,	INAREG|FOREFF,
+	SOREG|SNAME,	TANY,
+	SAREG,		TPTRTO|TANY,
+		NEEDS(NRIGHT(AC2), NEVER(AC0), NEVER(AC1)),	RDEST,
+		"ZQ", },
 
 /*
  * LEAF type movements.
@@ -136,111 +171,85 @@ struct optab table[] = {
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SZERO,	TWORD,
-		NAREG,	RESC1,
+		XNEEDA,	RESC1,
 		"	subo A1,A1\n", },
 
-/* 0 -> Creg */
-{ OPLTYPE,	INCREG,
+/* 0 -> Breg */
+{ OPLTYPE,	INBREG,
 	SANY,	TANY,
 	SZERO,	TWORD,
-		NCREG,	RESC1,
+		XNEEDB,	RESC1,
 		"	subo A1,A1\n	subo U1,U1\n", },
 
 /* 1 -> Areg */
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SONE,	TWORD,
-		NAREG,	RESC1,
+		XNEEDA,	RESC1,
 		"	subzl A1,A1\n", },
 
-/* 1 -> Creg */
-{ OPLTYPE,	INCREG,
+/* 1 -> Breg */
+{ OPLTYPE,	INBREG,
 	SANY,	TANY,
 	SONE,	TLONG|TULONG,
-		NCREG,	RESC1,
+		XNEEDB,	RESC1,
 		"	subo A1,A1\n	subzl U1,U1\n", },
 
 /* constant -> Areg */
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
-	SCON,	TWORD|TPOINT,
-		NAREG,	RESC1,
+	SCON,	TCHAR|TUCHAR|TWORD|TPOINT,
+		XNEEDA,	RESC1,
 		"	lda A1,AR\n", },
 
 /* constant -> Breg */
 { OPLTYPE,	INBREG,
 	SANY,	TANY,
-	SCON,	TWORD|TPOINT,
-		NBREG,	RESC1,
-		"	lda A1,AR\n", },
+	SCON,	TLONG|TULONG,
+		XNEEDB,	RESC1,
+		"	lda A1,AR\n	lda U1,UR\n", },
 
 /* mem -> reg */
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SNAME|SOREG,	TWORD,
-		NAREG,	RESC1,
+	SNAME|SOREG,	TWORD|TPOINT,
+		XNEEDA,	RESC1,
 		"	lda A1,AR\n", },
 
 /* reg -> A-reg */
 { OPLTYPE,	INAREG,
-	SANY,		TANY,
-	SAREG|SBREG,	TWORD,
-		NAREG,	RESC1,
-		"	mov AR,A1\n", },
-
-/* reg -> B-reg */
-{ OPLTYPE,	INBREG,
-	SANY,		TANY,
-	SAREG|SBREG,	TWORD|TPOINT,
-		NBREG,	RESC1,
+	SANY,	TANY,
+	SAREG,	TWORD,
+		XSL(A),	RESC1,
 		"	mov AR,A1\n", },
 
 /* temp -> reg */
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SAREG,	TWORD|TPOINT,
-		NAREG,	RESC1,
+		XNEEDA,	RESC1,
 		"	mov AR,A1\n", },
 
-/* temp -> reg */
+/* temp -> Breg */
 { OPLTYPE,	INBREG,
 	SANY,	TANY,
-	SBREG,	TWORD|TPOINT,
-		NBREG,	RESC1,
-		"	mov AR,A1\n", },
-
-/* temp -> Creg */
-{ OPLTYPE,	INCREG,
-	SANY,	TANY,
-	SCREG,	TLONG|TULONG,
-		NCREG,	RESC1,
+	SBREG,	TLONG|TULONG,
+		XNEEDB,	RESC1,
 		"	mov AR,A1\n	mov UR,U1\n", },
 
 { OPLTYPE,	INBREG,
-	SANY,		TANY,
-	SNAME|SOREG,	TPOINT,
-		NBREG,	RESC1,
-		"	lda A1,AR\n", },
-
-{ OPLTYPE,	INBREG,
-	SANY,		TANY,
-	SLDFPSP,	TANY,
-		NBREG,	RESC1,
-		"	lda A1,AR\n", },
-
-{ OPLTYPE,	INCREG,
 	SANY,		TLONG|TULONG,
 	SNAME|SOREG,	TLONG|TULONG,
-		NCREG,	RESC1,
+		XNEEDB,	RESC1,
 		"	lda A1,AR\n"
 		"	lda U1,UR\n", },
 
 /*
  * Simple ops.
  */
-{ PLUS,		INBREG|INAREG,
-	SAREG|SBREG,	TWORD|TPOINT,
-	SONE,		TANY,
+{ PLUS,		INAREG,
+	SAREG,	TWORD|TPOINT,
+	SONE,	TANY,
 		0,	RLEFT,
 		"	inc AL,AL\n", },
 
@@ -273,126 +282,148 @@ struct optab table[] = {
 		"	dsz AL\n", },
 
 /* long add, 5 word */
-{ PLUS,		INCREG,
-	SCREG,		TLONG|TULONG,
-	SOREG,		TLONG|TULONG,
-		NBREG,	RLEFT,
+{ PLUS,		INBREG,
+	SBREG,		TLONG|TULONG,
+	SOREG|SCON,	TLONG|TULONG,
+		XNEEDA,	RLEFT,
 		"	lda 2,UR\n"
 		"	addz 2,1,szc\n"
 		"	inc 0,0\n"
 		"	lda 2,AR\n"
 		"	add 2,0\n", },
 
-{ LS,		INAREG|INBREG,
-	SAREG|SBREG,	TWORD|TPOINT,
-	SAREG|SBREG,	TINT,
-		NAREG,	RLEFT,
-		"	neg AR,A1,snr\n"
-		"	  jmp .+4\n"
-		"	movzl AL,AL\n"
-		"	inc A1,A1,szr\n"
-		"	  jmp .-2\n", },
+/* basic entry of multiply */
+{ MUL,		INAREG,
+	SAREG,	TSWORD,
+	SAREG,	TSWORD,
+		0,	RLEFT,
+		"	jsr @__pcc_smul\n", },
+
+{ LS,		INAREG,
+	SAREG,	TWORD|TPOINT,
+	SAREG,	TINT,
+		NEEDS(NLEFT(AC0), NRIGHT(AC2)),	RLEFT,
+		"	jsr @__pcc_ls\n", },
+
+{ RS,		INAREG,
+	SAREG,	TUNSIGNED,
+	SAREG,	TINT,
+		NEEDS(NLEFT(AC0), NRIGHT(AC2)),	RLEFT,
+		"	jsr @__pcc_urs\n", },
+
+{ RS,		INAREG,
+	SAREG,	TINT,
+	SAREG,	TINT,
+		NEEDS(NLEFT(AC0), NRIGHT(AC2)),	RLEFT,
+		"	jsr @__pcc_rs\n", },
 
 /* long left shft.  left in ac0-1 and right in ac2 */
-{ LS,		INCREG,
-	SCREG,	TLONG|TULONG,
+{ LS,		INBREG,
+	SBREG,	TLONG|TULONG,
 	SAREG,	TANY,
 		0,	RLEFT,
-		"	jsr lsh32\n", },
-#if 0
-		"	neg AR,3,snr\n"
-		"	  jmp .+5\n"
-		"	movzl UL,UL\n"
-		"	movl AL,AL\n"
-		"	inc 3,3,szr\n"
-		"	  jmp .-3\n"
-		"	lda 3,fp\n", },
-#endif
+		"	jsr @__pcc_lsh32\n", },
 
 /* indirection */
-{ UMUL,	INCREG,
+{ UMUL,	INBREG,
 	SANY,	TANY,
 	SOREG,	TLONG|TULONG,
-		NCREG,	RESC1,
+		XNEEDB,	RESC1,
 		"	lda A1,AL\n	lda U1,UL\n", },
 
+{ OR,	INAREG|FOREFF,
+	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD|TPOINT,
+		NEEDS(NTR),	RLEFT,
+		"	com AR,AR\n	and AR,AL\n	adc AR,AL\n", },
 
-
-{ OPSIMP,	INBREG|INAREG|FOREFF,
-	SAREG|SBREG,	TWORD|TPOINT,
-	SAREG|SBREG,	TWORD|TPOINT,
+{ OPSIMP,	INAREG|FOREFF,
+	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD|TPOINT,
 		0,	RLEFT,
 		"	O AR,AL\n", },
 
 /*
  * Indirections
  */
-#ifdef nova4
-{ UMUL,	INAREG,
-	SANY,				TPTRTO|TCHAR|TUCHAR,
-	SOREG|SAREG|SBREG|SNAME,	TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
-		"	ldb A1,AL\n", },
-#endif
 { UMUL,	INAREG,
 	SANY,	TPTRTO|TUCHAR,
 	SOREG,	TUCHAR,
-		NSPECIAL|NAREG,	RESC1,
-		"	jsr @lbyt\n", },
+		NEEDS(NREG(A, 1), NOLEFT(AC0), NOLEFT(AC1)), RESC1,
+		"	jsr @__pcc_le_lbyt\n", },
 
 { UMUL,	INAREG,
 	SANY,	TPTRTO|TCHAR,
 	SOREG,	TCHAR,
-		NSPECIAL|NAREG,	RESC1,
-		"	jsr @lsbyt\n", },
+		NEEDS(NREG(A, 1), NSL(A), NLEFT(AC2)), RESC1,
+		"	jsr @__pcc_le_lsbyt\n", },
 
 { UMUL,	INAREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TPOINT|TWORD,
-		NAREG|NASL,	RESC1,
-		"	lda A1,AL\n", },
-
-{ UMUL,	INBREG,
-	SANY,	TPOINT|TWORD,
-	SOREG,	TPOINT|TWORD,
-		NBREG|NBSL,	RESC1,
+		NEEDS(NOLEFT(AC0), NOLEFT(AC1), NREG(A,1)),	RESC1,
 		"	lda A1,AL\n", },
 
 /*
  * logops
  */
 { EQ,	FOREFF,
-	SAREG|SBREG,	TANY,
-	SZERO,		TANY,
+	SAREG,		TINT|TUNSIGNED|TPOINT,
+	SZERO,		TINT|TUNSIGNED|TPOINT,
 		0,	RNOP,
 		"	mov# AL,AL,snr\n	jmp LC\n", },
 
 { EQ,	FOREFF,
-	SAREG|SBREG,	TANY,
-	SAREG|SBREG,	TANY,
+	SAREG,	TINT|TUNSIGNED|TPOINT,
+	SAREG,	TINT|TUNSIGNED|TPOINT,
 		0,	RNOP,
 		"	sub# AL,AR,snr\n	jmp LC\n", },
 
 { NE,	FOREFF,
-	SAREG|SBREG,	TANY,
-	SZERO,		TANY,
+	SAREG,	TINT|TUNSIGNED|TPOINT,
+	SZERO,		TINT|TUNSIGNED|TPOINT,
 		0,	RNOP,
 		"	mov# AL,AL,szr\n	jmp LC\n", },
 
 { NE,	FOREFF,
-	SAREG|SBREG,	TANY,
-	SAREG|SBREG,	TANY,
+	SAREG,	TINT|TUNSIGNED|TPOINT,
+	SAREG,	TINT|TUNSIGNED|TPOINT,
 		0,	RNOP,
 		"	sub# AL,AR,szr\n	jmp LC\n", },
 
+{ UGE,	FOREFF,
+	SAREG,	TUNSIGNED|TPOINT,
+	SAREG,	TUNSIGNED|TPOINT,
+		0,	RNOP,
+		"	adcz# AL,AR,snc\n	jmp LC\n", },
+
+{ UGT,	FOREFF,
+	SAREG,	TUNSIGNED|TPOINT,
+	SAREG,	TUNSIGNED|TPOINT,
+		0,	RNOP,
+		"	subz# AL,AR,snc\n	jmp LC\n", },
+
 /* test >= by subtracting and then looking at the sign bit */
+/* XXX double/check */
 { GE,	FOREFF,
-	SAREG|SBREG,	TANY,
-	SAREG|SBREG,	TANY,
+	SAREG,	TINT,
+	SAREG,	TINT,
 		0,	RNOP,
 		"	subl# AL,AR,snc\n	jmp LC\n", },
 
+/* Compare long against 0 */
+{ OPLOG,	FORCC,
+	SBREG,	TLONG,
+	SZERO,	TANY,
+		0,	RNOP,
+		"ZZ",	},
 
+/* Compare long against right side in memory */
+{ OPLOG,	FORCC,
+	SBREG,		TLONG,
+	SOREG|SCON,	TLONG,
+		NEEDS(NREG(A, 1)),	RNOP,
+		"ZN",	},
 
 /*
  * Subroutine calls.
@@ -410,29 +441,77 @@ struct optab table[] = {
 		0,	0,
 		"	jsr CL\n", },
 
+{ CALL,		FOREFF,
+	SAREG,	TANY,
+	SANY,	TANY,
+		0,	0,
+		"	jsr 0,AL\n", },
+
+{ UCALL,	FOREFF,
+	SAREG,	TANY,
+	SANY,	TANY,
+		0,	0,
+		"	jsr 0,AL\n", },
+
 { CALL,		INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
-		NAREG|NASL|NASR,	RESC1,
+		XSL(A),	RESC1,
 		"	jsr CL\n", },
 
 { UCALL,	INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
-		NAREG|NASL|NASR,	RESC1,
+		XSL(A),	RESC1,
+		"	jsr CL\n", },
+
+{ CALL,		INAREG,
+	SAREG,	TANY,
+	SANY,	TANY,
+		XSL(A),	RESC1,
+		"	jsr 0,AL\n", },
+
+{ UCALL,	INAREG,
+	SAREG,	TANY,
+	SANY,	TANY,
+		XSL(A),	RESC1,
+		"	jsr 0,AL\n", },
+
+{ CALL,		INAREG,
+	SCON,	TANY,
+	SANY,	TANY,
+		XSL(A),	RESC1,
+		"	jsr CL\n", },
+
+{ UCALL,	INAREG,
+	SCON,	TANY,
+	SANY,	TANY,
+		XSL(A),	RESC1,
 		"	jsr CL\n", },
 
 { CALL,		INBREG,
 	SCON,	TANY,
 	SANY,	TANY,
-		NBREG|NBSL|NBSR,	RESC1,
+		XSL(B),	RESC1,
 		"	jsr CL\n", },
 
 { UCALL,	INBREG,
 	SCON,	TANY,
 	SANY,	TANY,
-		NBREG|NBSL|NBSR,	RESC1,
+		XSL(B),	RESC1,
 		"	jsr CL\n", },
+
+{ CALL,		INBREG,
+	SAREG,	TANY,
+	SANY,	TANY,
+		XSL(B),	RESC1,
+		"	jsr 0,AL\n", },
+
+{ UCALL,	INBREG,
+	SAREG,	TANY,
+	SANY,	TANY,
+		XSL(B),	RESC1,
+		"	jsr 0,AL\n", },
 
 { GOTO,		FOREFF,
 	SCON,	TANY,
@@ -441,19 +520,19 @@ struct optab table[] = {
 		"	jmp LL\n", },
 
 { FUNARG,	FOREFF,
-	SAREG|SBREG,	TCHAR|TUCHAR|TWORD|TPOINT,
+	SAREG,	TCHAR|TUCHAR|TWORD|TPOINT,
 	SANY,		TCHAR|TUCHAR|TWORD|TPOINT,
 		0,	RNULL,
 		"	sta AL,@sp\n", },
 
 { FUNARG,	FOREFF,
-	SCREG,	TLONG|TULONG,
+	SBREG,	TLONG|TULONG,
 	SANY,	TLONG|TULONG,
 		0,	RNULL,
 		"	sta AL,@sp\n"
 		"	sta UL,@sp\n" },
 
-# define DF(x) FORREW,SANY,TANY,SANY,TANY,REWRITE,x,""
+# define DF(x) FORREW,SANY,TANY,SANY,TANY,NEEDS(NREWRITE),x,""
 
 { UMUL, DF( UMUL ), },
 
@@ -469,7 +548,7 @@ struct optab table[] = {
 
 { OPANY, DF(BITYPE), },
 
-{ FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	"help; I'm in trouble\n" },
+{ FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	0,	FREE,	"help; I'm in trouble\n" },
 };
 
 int tablesize = sizeof(table)/sizeof(table[0]);

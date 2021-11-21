@@ -1,25 +1,20 @@
 Calling conventions, stack frame and zero page:
 
-The variables that normally are placed on the stack or in registers in C
-are instead allocated in the zero page and saved on a (fictive) stack
-when calling functions.  Some locations have predefined functions though.
-
 The stack will first increment, then store values.
 Frame pointer is kept in AC3 and ZP "fp" (or HW FP).
 Stack pointer is kept in ZP "sp".
 Stack reference pointer is kept in ZP "spref".
 Stack reference pointer is the top of stack and used to restore stack
 after a function call.  This offset on the stack is unallocated and used
-when calling subroutines.
+when calling subroutines (usually to store return address).
 
 #ifdef 2bsd
-0-7	Unused (by us)
-11	Frame pointer	(if lacking HW stack)
-12	Stack pointer
+0-17	Unused (by us)
 20-26	(Auto-increment), scratch
+27	Stack pointer
 30-37	(Auto-decrement), scratch
 40-47	Used by HW stack and MMPU
-100-377	Addresses for subroutines, written by the linker
+50-377	Addresses for subroutines, written by the linker
 #elif rdos
 0-17	Unused (by us)
 20-27	(Auto-increment), scratch
@@ -30,10 +25,16 @@ when calling subroutines.
 
 The normal registers (AC0-AC2) are all considered scratch registers.
 
+#ifdef 2bsd
+long data type is "pdp-endian", which means that the low address 
+contains the high word, and the high address is the low word.
+The word itself is little-endian, as opposed to the HW addressing
+used on nova with byte instructions (nova3/nova4).
+#endif
+
 Register classes are assigned as:
 	AC0-AC2: AREGs.
-	AC2: BREGs.
-	...and eventually register pairs/floats as EREGs, double in FREGs.
+	AC0/AC1: BREG (long, concatenated).
 
 In byte code the right half of a word is the first byte (little-endian).
 This is different to how the hardware handle it.
@@ -138,4 +139,21 @@ shl:	sta 3,@spref
 	jmp .-2
 out:
 	lda 3,fp
+	jmp @spref
+
+# struct assignment
+# on entry: src in ac2, dst in ac0, negative cnt in ac1
+__stcpy:
+	sta 3,@spref
+	lda 3,fp
+	sta 2,20	# dest
+	sta 0,21	# src
+	dsz 20
+	dsz 21
+
+again:
+	lda 0,@20	# inc first, then load
+	sta 0,@21	# inc first, then store
+	inc 1,1,szr
+	jmp again
 	jmp @spref
