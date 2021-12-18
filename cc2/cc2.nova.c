@@ -29,6 +29,7 @@
 #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "manifest.h"
 
@@ -50,7 +51,7 @@ struct symtab {
 	int off;	/* position in memory */
 };
 
-/* read instruction lines */
+/* Definistion for exactly one word, as linked list in function */
 struct mblk {
 	DLIST_ENTRY(mblk) link;
 	char *name;	/* input string */
@@ -58,28 +59,50 @@ struct mblk {
 	int base;	/* long address position in memory (if needed) */
 	struct symtab *sp;	/* symbol this jmp wants */
 	int flags;
+#define	INSERTD		001	/* Is an inserted symbol */
+#define	FIRST		002	/* First block in function (before moves) */
+#define	LAST		004	/* Last block in function (before moves) */
 };
 
-struct mblk mpole, mfirst, mlast;
+struct mblk mpole;
 struct symtab spole;
 
-int lnum;
-int curaddr;
+int lnum, vflag;
+int curaddr, offb, offe;
+
+#define	VPRINT(...)	if (vflag) fprintf(stderr, __VA_ARGS__)
 
 static void readftn(void);
 static void movecon(void);
+static void renum(void);
+static void jmpdist(void);
 static void printftn(void);
 
 int
 main(int argc, char *argv[])
 {
-	char buf[BUFLEN], *b;
+	char buf[BUFLEN], *b, *pname;
+	int ch;
 
-	if (argc > 1)
-		if (freopen(argv[1], "r", stdin) == NULL)
+	pname = argv[0];
+	while ((ch = getopt(argc, argv, "v")) != -1) {
+		switch (ch) {
+		case 'v':
+			vflag++;
+			break;
+		default:
+			fprintf(stderr,
+			    "usage: %s [-v] [infile [outfile]]\n", pname);
+		}
+	}
+	argc -= optind;
+	argv += optind;
+
+	if (argc > 0)
+		if (freopen(argv[0], "r", stdin) == NULL)
 			err(1, "reopen stdin");
-	if (argc > 2)
-		if (freopen(argv[2], "w", stdout) == NULL)
+	if (argc > 1)
+		if (freopen(argv[1], "w", stdout) == NULL)
 			err(1, "reopen stdout");
 
 	for (;;) {
@@ -93,12 +116,12 @@ main(int argc, char *argv[])
 
 		DLIST_INIT(&mpole,link);
 		DLIST_INIT(&spole,link);
-		DLIST_INIT(&mfirst,link);
-		DLIST_INIT(&mlast,link);
 		curaddr = 0;
 
 		readftn();	/* fetch all function lines until end */
 		movecon();	/* move constants to before/after functions */
+		renum();	/* recalculate all offsets in mblk list */
+		jmpdist();	/* insert indirect jmp length words */
 
 		printftn();
 	}
@@ -114,7 +137,7 @@ static struct im {
 	int code;
 	int type;
 } imatch[] = {
-	{ IMCODE('j','m'), IJMP }, { IMCODE('j','s'), IJSR },
+	{ IMCODE('j','m'), IJMP }, { IMCODE('j','s'), IMREF },
 	{ IMCODE('l','d'), IMREF }, { IMCODE('s','t'), IMREF },
 	{ IMCODE('i','s'), IMREF }, { IMCODE('d','s'), IMREF },
 	{ IMCODE('m','o'), IALC },
@@ -179,7 +202,7 @@ readftn(void)
 		if ((b = fgets(buf, BUFLEN, stdin)) == NULL)
 			err(1, "fgets");
 		if (strncmp(b, ENDFTN, sizeof(ENDFTN)-1) == 0)
-			return;
+			break;
 		while (*b == ' ' || *b == '\t')
 			b++;
 		for (e = b; *e; e++)
@@ -201,12 +224,27 @@ readftn(void)
 			savedsp = sp;
 			DLIST_INSERT_BEFORE(&spole, sp, link);
 		} else {
-			mb = mkmblk(strdup(b), curaddr++);
+			mb = mkmblk(strdup(b), curaddr);
 			mb->sp = savedsp;
+			if (curaddr == 0)
+				mb->flags |= FIRST;
+			curaddr++;
 			savedsp = NULL;
 			DLIST_INSERT_BEFORE(&mpole, mb, link);
 		}
 	}
+	DLIST_PREV(&mpole, link)->flags |= LAST;
+}
+
+static struct symtab *
+findsym(char *s)
+{
+	struct symtab *sp;
+
+	DLIST_FOREACH(sp, &spole, link)
+		if (strcmp(sp->name, s) == 0)
+			return sp;
+	return NULL;
 }
 
 static struct mblk *
@@ -242,12 +280,14 @@ isskip(char *s)
 static void
 movecon(void)
 {
+	struct mblk mfirst, mlast;
 	struct mblk *mb, *mb2, *mblow, *mbhigh, mtemp, *mbpout;
 	struct symtab *sp;
 	char buf[BUFLEN];
 	char *b, *s;
 	int curcnt;
 
+	DLIST_INIT(&mfirst,link);
 	if (curaddr > 128) {
 		DLIST_FOREACH(mb, &mpole, link)
 			if (mb->off == 128)
@@ -266,6 +306,7 @@ movecon(void)
 			s[strlen(s)-1] = 0; /* remove trailing ] */
 			if ((mb2 = findw(s, &mfirst)) == 0) {
 				mb2 = mkmblk(s, 0);
+				mb2->flags = INSERTD;
 				DLIST_INSERT_AFTER(&mfirst, mb2, link);
 			}
 			if (mb2->sp == 0) {
@@ -277,12 +318,19 @@ movecon(void)
 			strcpy(b, mb2->sp->name);
 		}
 	}
+	/* move to main list */
+	while (!DLIST_ISEMPTY(&mfirst, link)) {
+		mb = DLIST_PREV(&mfirst, link);
+		DLIST_REMOVE(mb, link);
+		DLIST_INSERT_AFTER(&mpole, mb, link);
+	}
 	if (curaddr <= 128)
 		return; /* <= 128 entries */
 //printf("movecon2: mblow %p curaddr %d\n", mblow, curaddr);
 	/*
 	 * Second; move constants at the end of the function.
 	 */
+	DLIST_INIT(&mlast,link);
 	if (curaddr <= 255) {
 		mb = DLIST_NEXT(mblow, link);
 	} else {
@@ -298,6 +346,7 @@ movecon(void)
 			s[strlen(s)-1] = 0; /* remove trailing ] */
 			if ((mb2 = findw(s, &mlast)) == 0) {
 				mb2 = mkmblk(s, 0);
+				mb2->flags = INSERTD;
 				DLIST_INSERT_BEFORE(&mlast, mb2, link);
 			}
 			if (mb2->sp == 0) {
@@ -308,6 +357,12 @@ movecon(void)
 			}
 			strcpy(b, mb2->sp->name);
 		}
+	}
+	/* move to main list */
+	while (!DLIST_ISEMPTY(&mlast, link)) {
+		mb = DLIST_NEXT(&mlast, link);
+		DLIST_REMOVE(mb, link);
+		DLIST_INSERT_BEFORE(&mpole, mb, link);
 	}
 //printf("movecon5: mb %p curaddr %d\n", mb, curaddr);
 	if (curaddr <= 255)
@@ -339,6 +394,7 @@ movecon(void)
 			s[strlen(s)-1] = 0;	/* remove trailing ] */
 			if ((mb2 = findw(s, &mtemp)) == 0) {
 				mb2 = mkmblk(s, 0);
+				mb2->flags = INSERTD;
 				DLIST_INSERT_AFTER(&mtemp, mb2, link);
 			}
 			if (mb2->sp == 0) {
@@ -382,6 +438,92 @@ movecon(void)
 }
 
 /*
+ * Update offset numbering in both words and symbols.
+ */
+static void
+renum()
+{
+	struct symtab *sp;
+	struct mblk *mb;
+	int n = 0;
+
+	DLIST_FOREACH(mb, &mpole, link) {
+		if (mb->flags & FIRST)
+			offb = n;
+		if (mb->flags & LAST)
+			offe = n;
+		for (sp = mb->sp; sp; sp = sp->next)
+			sp->off = n;
+		mb->off = n++;
+	}
+}
+
+/*
+ * Check for all local jumps that the distance is inside offsets.
+ * If it is not, insert an indirect word at a reasonable place.
+ */
+static void
+jmpdist()
+{
+	struct symtab *sp;
+	struct mblk *mb, *mb2, *mb3;
+	char buf[80];
+	int ityp;
+
+	DLIST_FOREACH(mb, &mpole, link) {
+		ityp = itype(mb->name);
+		if (ityp != IJMP)
+			continue;
+		if (mb->name[4] != 'L')
+			continue; /* not local jmp */
+		if ((sp = findsym(&mb->name[4])) == NULL)
+			errx(1, "sym '%s' undefined", &mb->name[4]);
+		if (sp->off < mb->off && mb->off-sp->off < 128)
+			continue;
+		if (sp->off > mb->off && sp->off-mb->off < 127)
+			continue;
+		VPRINT("symbol %s too far away from %s: s=%d m=%d\n",
+		    sp->name, mb->name, sp->off, mb->off);
+
+		/* find where to insert the indirect word */
+		if (DLIST_NEXT(mb, link)->flags & INSERTD) {
+			/* hereafter */
+			mb2 = mb;
+			VPRINT("insert directly after\n");
+		} else {
+			/* search backwards for some place to insert word */
+			for (mb2 = DLIST_PREV(mb, link); mb2 != &mpole;
+			    mb2 = DLIST_PREV(mb2, link))
+				if (mb2->flags & INSERTD)
+					break;
+			if (mb2 == &mpole || mb->off-mb2->off > 128) {
+				for (mb2 = DLIST_NEXT(mb, link); mb2 != &mpole;
+				    mb2 = DLIST_NEXT(mb2, link))
+					if (mb2->flags & INSERTD)
+						break;
+				if (mb2 == &mpole || mb2->off-mb->off > 127) {
+					errx(1,"FIXME: too long distance %d %d",
+					    mb->off, mb2->off);
+					continue;
+				}
+			}
+		}
+		sprintf(buf, ".word %s", &mb->name[4]);
+		mb3 = mkmblk(strdup(buf), 0);
+		mb3->flags = INSERTD;
+		DLIST_INSERT_AFTER(mb2, mb3, link);
+		sprintf(buf, "LP%d", lnum);
+		mb3->sp = mksp(strdup(buf));
+		sprintf(buf, "jmp @LP%d", lnum++);
+		mb->name = strdup(buf);
+		if (vflag)
+			fprintf(stderr, "inserted %s at %d\n",
+			    mb3->sp->name, mb2->off);
+	}
+
+}
+
+/*
  * When everything is modified; print out the new function.
  */
 static void
@@ -390,9 +532,6 @@ printftn(void)
 	struct symtab *sp;
 	struct mblk *mb;
 
-	DLIST_FOREACH(mb, &mfirst, link)
-		printf("%s:\t%s\n", mb->sp->name, mb->name);
-
 	DLIST_FOREACH(mb, &mpole, link) {
 		while ((sp = mb->sp) != NULL) {
 			printf("%s:\n", sp->name);
@@ -400,8 +539,4 @@ printftn(void)
 		}
 		printf("	%s\n", mb->name);
 	}
-
-	DLIST_FOREACH(mb, &mlast, link)
-		printf("%s:\t%s\n", mb->sp->name, mb->name);
-
 }
