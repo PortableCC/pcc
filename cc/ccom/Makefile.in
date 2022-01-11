@@ -39,7 +39,6 @@ CC0=$(BINPREFIX)cc0$(EXEEXT)
 CC1=$(BINPREFIX)cc1$(EXEEXT)
 CC2=$(BINPREFIX)cc2$(EXEEXT)
 CC2MSRC=$(top_srcdir)/cc2/cc2.$(TARGMACH).c
-CC2SRC=$(top_srcdir)/cc2/cc2.none.c
 CF0=@CF0@
 CF1=@CF1@
 
@@ -211,9 +210,10 @@ $(CC0):	$(OBJS0)
 $(CC1):	$(OBJS1)
 	$(CC) $(LDFLAGS) $(OBJS1) -o $@ $(LIBS)
 
-$(CC2): $(CC2OBJS)
+$(CC2): $(CC2MSRC)
 	@if [ -e $(CC2MSRC) ]; then			\
-		$(CC) $(LDFLAGS) $(CC2MSRC) -o $@ ;	\
+		echo $(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
+		$(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
 	else						\
 		touch $@ ;				\
 	fi
@@ -222,6 +222,7 @@ $(CC2): $(CC2OBJS)
 install: $(DEST)
 	test -z "$(DESTDIR)$(libexecdir)" || mkdir -p "$(DESTDIR)$(libexecdir)"
 	$(INSTALL_PROGRAM) $(DEST) $(DESTDIR)$(libexecdir)
+	$(INSTALL_PROGRAM) $(CC2) $(DESTDIR)$(libexecdir)
 	test -z "$(DESTDIR)$(mandir)/man1" || mkdir -p "$(DESTDIR)$(mandir)/man1"
 	$(INSTALL_DATA) $(srcdir)/ccom.1 $(DESTDIR)$(mandir)/man1/$(MANPAGE).1
 

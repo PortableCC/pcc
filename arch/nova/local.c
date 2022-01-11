@@ -333,9 +333,21 @@ ninval(CONSZ off, int fsz, P1ND *p)
 char *
 exname(char *p)
 {
+#define NCHNAM	256
+	static char text[NCHNAM+1];
+	int i;
+
 	if (p == NULL)
 		return "";
-	return p;
+
+	text[0] = '_';
+	for (i=1; *p && i<NCHNAM; ++i)
+		text[i] = *p++;
+
+	text[i] = '\0';
+	text[NCHNAM] = '\0';  /* truncate */
+
+	return (text);
 }
 
 /*
