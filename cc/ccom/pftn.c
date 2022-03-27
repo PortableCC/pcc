@@ -2251,6 +2251,8 @@ doacall(struct symtab *sp, NODE *f, NODE *a)
 			fwalk(a, eprint, 0);
 	}
 #endif
+	if (ISARY(f->n_type))
+		goto build; /* something bad happened */
 
 	/* First let MD code do something */
 	calldec(f, a);
