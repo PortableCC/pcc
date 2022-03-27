@@ -211,12 +211,15 @@ $(CC1):	$(OBJS1)
 	$(CC) $(LDFLAGS) $(OBJS1) -o $@ $(LIBS)
 
 $(CC2): $(CC2MSRC)
-	@if [ -e $(CC2MSRC) ]; then			\
+	@if [ -s $(CC2MSRC) ]; then			\
 		echo $(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
 		$(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
 	else						\
 		touch $@ ;				\
 	fi
+
+$(CC2MSRC):
+	touch $@
 
 
 install: $(DEST)
