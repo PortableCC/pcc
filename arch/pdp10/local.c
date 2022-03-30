@@ -245,22 +245,8 @@ rmpc:			l->n_type = p->n_type;
 			return l;
 		}
 		o = l->n_op;
-		if (ml == FLOAT || ml == DOUBLE) {
-			if (o != FCON)
-				break;
-			ml = ISUNSIGNED(m) ? UNSIGNED : INT; /* LONG? */
-			r = xbcon(ml == INT ? (int)p->n_left->n_dcon :
-			                      (unsigned)p->n_left->n_dcon,
-			          NULL, ml);
-			nfree(p->n_left);
-			p->n_left = r;
-			o = ICON;
-			if (m == ml) {
-				r = p->n_left;
-				nfree(p);
-				return r;
-			}
-		}
+		if (ml == FLOAT || ml == DOUBLE)
+			cerror("SCONV FCON");
 		if (o == ICON) {
 			CONSZ val = glval(l);
 
@@ -294,11 +280,6 @@ rmpc:			l->n_type = p->n_type;
 				slval(l, val);
 				break;
 			case VOID:
-				break;
-			case DOUBLE:
-			case FLOAT:
-				l->n_op = FCON;
-				l->n_dcon = 0;
 				break;
 			default:
 				cerror("unknown type %d", m);
@@ -798,27 +779,6 @@ defzero(struct symtab *sp)
 		printf("%s,0%o\n", getexname(sp), off);
 	else
 		printf(LABFMT ",0%o\n", sp->soffset, off);
-}
-
-/*
- * set fsz bits in sequence to zero.
- */
-void
-zbits(OFFSZ off, int fsz)
-{
-	cerror("zbits");
-}
-
-/*
- * Initialize a bitfield.
- */
-void
-infld(CONSZ off, int fsz, CONSZ val)
-{
-//	if (idebug)
-//		printf("infld off %lld, fsz %d, val %lld inbits %d\n",
-//		    off, fsz, val, inbits);
-	cerror("infld");
 }
 
 /*

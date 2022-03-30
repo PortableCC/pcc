@@ -240,3 +240,9 @@ typedef long long OFFSZ;
 #define ENCRA(x,y)      ((x) << (6+y*6))        /* encode regs in int */
 #define GCLASS(x)	(x < 16 ? CLASSA : CLASSB)
 int COLORMAP(int c, int *r);
+
+/* floating point definitions */
+/* XXX needs fixing for pdp10 */
+#define FDFLOAT
+#define DEFAULT_FPI_DEFS { &fpi_ffloat, &fpi_dfloat, &fpi_dfloat }
+

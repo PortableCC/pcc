@@ -174,7 +174,8 @@ myormake(NODE *p)
 int *
 livecall(NODE *p)
 {
-	static int r[8], *s = r;
+	static int r[8];
+	int *s = r;
 
 	*s = -1;
 	if (p->n_op == UCALL || p->n_op == UFORTCALL || p->n_op == USTCALL ||

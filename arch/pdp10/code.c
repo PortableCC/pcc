@@ -37,6 +37,28 @@
 #define talloc p1alloc
 #endif
 
+/*
+ * Print out assembler segment name.
+ */
+void
+setseg(int seg, char *name)
+{
+	switch (seg) {
+	case PROG: name = ".text"; break;
+	case DATA:
+	case LDATA: name = ".data"; break;
+	case UDATA: break;
+	case STRNG:
+	case RDATA: name = ".section .rodata"; break;
+	case NMSEG: 
+		printf(PRTPREF "\t.section %s,\"a%c\",@progbits\n", name,
+		    cftnsp ? 'x' : 'w');
+		return;
+	default:
+		cerror("bad seg %d", seg);
+	}
+	printf(PRTPREF "\t%s\n", name);
+}
 
 /*
  * Define everything needed to print out some data (or text).
@@ -45,25 +67,7 @@
 void
 defloc(struct symtab *sp)
 {
-	char *nextsect = NULL;	/* notyet */
-	static char *loctbl[] = { "text", "data", "section .rodata" };
-	static int lastloc = -1;
-	TWORD t;
-	int s;
 
-	if (sp == NULL) {
-		lastloc = -1;
-		return;
-	}
-	t = sp->stype;
-	s = ISFTN(t) ? PROG : ISCON(cqual(t, sp->squal)) ? RDATA : DATA;
-	if (nextsect) {
-		printf("	.section %s\n", nextsect);
-		nextsect = NULL;
-		s = -1;
-	} else if (s != lastloc)
-		printf("	.%s\n", loctbl[s]);
-	lastloc = s;
 	if (sp->sclass == EXTDEF)
 		printf("	.globl %s\n", getexname(sp));
 	if (sp->slevel == 0)
@@ -211,3 +215,28 @@ mygenswitch(int num, TWORD type, struct swents **p, int n)
 {
 	return 0;
 }
+
+/*
+ * Return "canonical frame address".
+ */
+NODE *
+builtin_cfa(const struct bitable *bt, NODE *a)
+{
+	uerror(__func__);
+	return bcon(0);
+}
+
+NODE *
+builtin_return_address(const struct bitable *bt, NODE *a)
+{
+	uerror(__func__);
+	return bcon(0);
+}
+
+NODE *
+builtin_frame_address(const struct bitable *bt, NODE *a)
+{
+	uerror(__func__);
+	return bcon(0);
+}
+
