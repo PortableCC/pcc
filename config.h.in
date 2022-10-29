@@ -9,6 +9,9 @@
 /* Define path to alternate assembler */
 #undef ASSEMBLER
 
+/* Define path to alternate cc2 */
+#undef CC2
+
 /* Using Classic 68k ABI */
 #undef CLASSIC68K
 
@@ -18,14 +21,32 @@
 /* Define path to alternate compiler */
 #undef COMPILER
 
-/* Define path to alternate cc2 */
-#undef CC2
+/* Define to one of `_getb67', `GETB67', `getb67' for Cray-2 and Cray-YMP
+   systems. This function is required for `alloca.c' support on those systems.
+   */
+#undef CRAY_STACKSEG_END
+
+/* Cross-compiling. */
+#undef CROSS_COMPILING
+
+/* Define to 1 if using `alloca.c'. */
+#undef C_ALLOCA
+
+/* Enable DWARF debugging output */
+#undef DWARF
 
 /* Using ECOFF ABI */
 #undef ECOFFABI
 
 /* Using ELF ABI */
 #undef ELFABI
+
+/* Define to 1 if you have `alloca', as a function or macro. */
+#undef HAVE_ALLOCA
+
+/* Define to 1 if you have <alloca.h> and it should be used (not on Ultrix).
+   */
+#undef HAVE_ALLOCA_H
 
 /* Define to 1 if printf supports C99 size specifiers */
 #undef HAVE_C99_FORMAT
@@ -96,6 +117,9 @@
 /* Define alternate standard lib directory */
 #undef LIBDIR
 
+/* Use libvmf. */
+#undef LIBVMF
+
 /* Define path to alternate linker */
 #undef LINKER
 
@@ -138,11 +162,19 @@
 /* Define path to alternate preprocessor */
 #undef PREPROCESSOR
 
+/* The size of `int *', as computed by sizeof. */
+#undef SIZEOF_INT_P
+
 /* Enable STABS debugging output */
 #undef STABS
 
-/* Enable DWARF debugging output */
-#undef DWARF
+/* If using the C implementation of alloca, define if you know the
+   direction of stack growth for your system; otherwise it will be
+   automatically deduced at runtime.
+	STACK_DIRECTION > 0 => grows toward higher addresses
+	STACK_DIRECTION < 0 => grows toward lower addresses
+	STACK_DIRECTION = 0 => direction of growth unknown */
+#undef STACK_DIRECTION
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
@@ -156,29 +188,20 @@
 /* Define if target defaults to LITTLE endian */
 #undef TARGET_LITTLE_ENDIAN
 
+/* Target string */
+#undef TARGSTR
+
 /* Enable thread-local storage (TLS). */
 #undef TLS
 
 /* Version string */
 #undef VERSSTR
 
-/* Target string */
-#undef TARGSTR
-
 /* Size of wide-character type in chars */
 #undef WCHAR_SIZE
 
 /* Type to use for wide characters */
 #undef WCHAR_TYPE
-
-/* determine whether 16, 32 or 64 bit host */
-#undef SIZEOF_INT_P
-
-/* Compile for use of libvmf */
-#undef LIBVMF
-
-/* are we cross-compiling? */
-#undef CROSS_COMPILING
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -195,3 +218,6 @@
 /* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
    `char[]'. */
 #undef YYTEXT_POINTER
+
+/* Define to `unsigned int' if <sys/types.h> does not define. */
+#undef size_t

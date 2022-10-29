@@ -97,11 +97,11 @@ case "$target_os" in
 	case "$target_cpu" in
 	    arm*) targmach=arm ;;
 	    i?86) targmach=i386 ;;
-	    x86_64) targmach=amd64 ;;
 	    mips64el) targmach=mips64 ;;
 	    mips64) targmach=mips64 endian=big ;;
 	    mipseb) targmach=mips endian=big ;;
 	    mips*) targmach=mips ;;
+	    x86_64) targmach=amd64 ;;
 	esac
 	;;
 
@@ -110,15 +110,16 @@ case "$target_os" in
 	abi=elf
 	stabs=yes
 	case "$target_cpu" in
-	    arm*) targmach=arm ;;
 	    aarch64) targmach=aarch64 ;;
+	    arm*) targmach=arm ;;
 	    i?86) targmach=i386 ;;
-	    powerpc*) targmach=powerpc endian=big ;;
-	    x86_64) targmach=amd64 ;;
+	    m68k) targmach=m68k endian=big target_alias=m68k-linux-gnu ;;
 	    mips64el) targmach=mips64 ;;
 	    mips64) targmach=mips64 endian=big ;;
 	    mipseb) targmach=mips endian=big ;;
 	    mips*) targmach=mips ;;
+	    powerpc*) targmach=powerpc endian=big ;;
+	    x86_64) targmach=amd64 ;;
 	esac
 	case "$target_os" in
 	    *-musl*) ADD_CPPFLAGS="$ADD_CPPFLAGS -DUSE_MUSL" ;;
@@ -279,9 +280,10 @@ case "$target_os" in
         targos="$target_os"
 	case "$target_cpu" in
 	    arm) targmach=arm targos=none abi=$target_os ;;
-	    m16c) targmach=m16c ;;
-	    nova) targmach=nova ;;
 	    i86) targmach=i86 ;;
+	    m16c) targmach=m16c ;;
+	    m68k) targmach=m68k endian=big targos=none abi=$target_os ;;
+	    nova) targmach=nova ;;
 	    pdp7) targmach=pdp7 ;;
 	esac
 	;;
@@ -313,7 +315,7 @@ case "$host_os" in
         hostos=freebsd
 	;;
     linux*)
-	ADD_CPPFLAGS="$ADD_CPPFLAGS -D_BSD_SOURCE"
+	ADD_CPPFLAGS="$ADD_CPPFLAGS -D_DEFAULT_SOURCE"
         hostos=linux
 	;;
     litebsd*)

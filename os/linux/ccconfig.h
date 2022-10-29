@@ -66,6 +66,8 @@
 #elif defined(mach_aarch64)
 #define CPPMDADD        { "-D__aarch64__", NULL, }
 #define MUSL_DYLIB      "/lib/ld-musl-aarch64.so.1"
+#elif defined(mach_m68k)
+#define CPPMDADD        { "-D__m68k__", NULL, }
 #else
 #error defines for arch missing
 #endif

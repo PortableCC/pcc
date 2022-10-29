@@ -48,10 +48,11 @@
 #elif defined(mach_m16c)
 #define	CPPMDADD { "-D__m16c__", NULL, }
 #elif defined(mach_nova)
+#define	CPPMDADD { "-D__m68k__", NULL, }
+#elif defined(mach_m68k)
 #define	CPPMDADD { "-D__nova__", NULL, }
 #elif defined(mach_pdp7)
 #define	CPPMDADD { "-D__pdp7__", "-Dpdp7", NULL, }
 #else
 #error defines for arch missing
 #endif
-
