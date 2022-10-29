@@ -27,6 +27,7 @@
 # include "pass2.h"
 # include <ctype.h>
 # include <string.h>
+# include <stdlib.h>
 
 static int stkpos;
 
@@ -64,11 +65,11 @@ prologue(struct interpass_prolog *ipp)
 			} else
 				comperr("bad reg range");
 		}
-	printf("	link.%c %%fp,#%d\n", fpsub > 32768 ? 'l' : 'w', -fpsub);
+	printf("	link.%c %%a6,#%d\n", fpsub > 32768 ? 'l' : 'w', -fpsub);
 	if (regm)
-		printf("	movem.l #%d,%d(%%fp)\n", regm, -fpsub + nfp);
+		printf("	movem.l #%d,%d(%%a6)\n", regm, -fpsub + nfp);
 	if (regf)
-		printf("	fmovem #%d,%d(%%fp)\n", regf, -fpsub);
+		printf("	fmovem.x #%d,%d(%%a6)\n", regf, -fpsub);
 }
 
 void
@@ -78,10 +79,10 @@ eoftn(struct interpass_prolog *ipp)
 		return; /* no code needs to be generated */
 
 	if (regm)
-		printf("	movem.l %d(%%fp),#%d\n", -fpsub + nfp, regm);
+		printf("	movem.l %d(%%a6),#%d\n", -fpsub + nfp, regm);
 	if (regf)
-		printf("	fmovem %d(%%fp),#%d\n", -fpsub, regf);
-	printf("	unlk %%fp\n	rts\n");
+		printf("	fmovem.x %d(%%a6),#%d\n", -fpsub, regf);
+	printf("	unlk %%a6\n	rts\n");
 }
 
 /*
@@ -240,7 +241,7 @@ zzzcode(NODE *p, int c)
 		break;
 
 	case 'P':
-		printf("	lea -%d(%%fp),%%a0\n", stkpos);
+		printf("	lea -%d(%%a6),%%a0\n", stkpos);
 		break;
 
 	case 'Q': /* struct assign */
@@ -344,11 +345,11 @@ conput(FILE *fp, NODE *p)
 
 	switch (p->n_op) {
 	case ICON:
-		fprintf(fp, "%ld", val);
+		if (val || !p->n_name[0])
+			fprintf(fp, "%ld", val);
 		if (p->n_name[0])
-			printf("+%s", p->n_name);
+			fprintf(fp, "%s%s", val ? "+" : "", p->n_name);
 		break;
-
 	default:
 		comperr("illegal conput, p %p", p);
 	}
@@ -401,8 +402,6 @@ adrput(FILE *io, NODE *p)
 			    *p->n_name ? "+" : "");
 		if (p->n_name[0])
 			printf("%s", p->n_name);
-		else
-			comperr("adrput");
 		return;
 
 	case OREG:
@@ -515,6 +514,10 @@ fixcalls(NODE *p, void *arg)
 			mkcall2(p, "__divdi3");
 		else if (p->n_type == ULONGLONG)
 			mkcall2(p, "__udivdi3");
+		else if (p->n_type == INT && !features(FEATURE_LONGDIV))
+			mkcall2(p, "__divsi3");
+		else if (p->n_type == UNSIGNED && !features(FEATURE_LONGDIV))
+			mkcall2(p, "__udivsi3");
 		break;
 
 	case MOD:
@@ -522,11 +525,17 @@ fixcalls(NODE *p, void *arg)
 			mkcall2(p, "__moddi3");
 		else if (p->n_type == ULONGLONG)
 			mkcall2(p, "__umoddi3");
+		else if (p->n_type == INT && !features(FEATURE_LONGDIV))
+			mkcall2(p, "__modsi3");
+		else if (p->n_type == UNSIGNED && !features(FEATURE_LONGDIV))
+			mkcall2(p, "__umodsi3");
 		break;
 
 	case MUL:
 		if (p->n_type == LONGLONG || p->n_type == ULONGLONG)
 			mkcall2(p, "__muldi3");
+		else if ((p->n_type == INT || p->n_type == UNSIGNED) && !features(FEATURE_LONGDIV))
+			mkcall2(p, "__mulsi3");
 		break;
 
 	case LS:
@@ -761,9 +770,39 @@ special(NODE *p, int shape)
 /*
  * Target-dependent command-line options.
  */
+
+#define FEATURES_68000	(FEATURE_HARDFLOAT)
+#define FEATURES_68010	(FEATURES_68000)
+#define FEATURES_68020	(FEATURE_LONGDIV|FEATURE_EXTB|FEATURES_68010)
+#define FEATURES_68030	(FEATURES_68020)
+#define FEATURES_68040	(FEATURES_68030)
+#define FEATURES_68060	(FEATURES_68040)
+
+int fset = FEATURES_68020;
+
 void
 mflags(char *str)
 {
+	if (strcasecmp(str, "arch=68000") == 0) {
+		fset |= FEATURES_68000;
+	} else if (strcasecmp(str, "arch=68010") == 0) {
+		fset |= FEATURES_68010;
+	} else if (strcasecmp(str, "arch=68020") == 0) {
+		fset |= FEATURES_68020;
+	} else if (strcasecmp(str, "soft-float") == 0) {
+		fset &= ~FEATURE_HARDFLOAT;
+	} else if (strcasecmp(str, "hard-float") == 0) {
+		fset |= FEATURE_HARDFLOAT;
+	} else {
+		fprintf(stderr, "unknown -m option '%s'\n", str);
+		exit(1);
+	}
+}
+
+int
+features(int mask)
+{
+	return ((fset & mask) == mask);
 }
 
 /*

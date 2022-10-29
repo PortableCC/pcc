@@ -87,7 +87,7 @@ typedef long long CONSZ;
 typedef unsigned long long U_CONSZ;
 typedef long long OFFSZ;
 
-#define CONFMT	"%lld"		/* format for printing constants */
+#define CONFMT	"0x%llx"	/* format for printing constants */
 #define LABFMT	".L%d"		/* format for printing labels */
 #define STABLBL ".LL%d"		/* format for stab (debugging) labels */
 #ifdef LANG_F77
@@ -242,6 +242,12 @@ int COLORMAP(int c, int *r);
 #define HAVE_WEAKREF
 #define TARGET_FLT_EVAL_METHOD	2	/* all as long double */
 
+int features(int f);
+
+#define FEATURE_HARDFLOAT	0x00010000
+#define FEATURE_LONGDIV		0x00020000
+#define FEATURE_EXTB		0x00040000
+
 /*
  * Extended assembler macros.
  */
@@ -254,4 +260,4 @@ int targarg(char *w, void *arg);
 #define USE_IEEEFP_64
 #define DBL_PREFIX	IEEEFP_64
 #define LDBL_PREFIX	IEEEFP_64
-
+#define DEFAULT_FPI_DEFS { &fpi_binary32, &fpi_binary64, &fpi_binary64 }

@@ -64,6 +64,13 @@ struct optab table[] = {
 		NBREG,	RESC1,
 		"	move.l AL,A1\n", },
 
+/* constant -> pointer */
+{ PCONV,	INBREG,
+	SCON,		TANY,
+	SBREG,		TPOINT,
+		NBREG,	RESC1,
+		"	lea AL,A1\n", },
+
 /* pointer to int/unsigned */
 { SCONV,	INAREG,
 	SBREG,		TPOINT,
@@ -93,11 +100,18 @@ struct optab table[] = {
 		"	and.l #255,AL\n", },
 
 /* char -> (u)int */
-{ SCONV,	INAREG,
+{ SCONV,	INAREG | FEATURE_EXTB,
 	SAREG,		TCHAR,
 	SAREG,		TINT|TUNSIGNED,
 		0,	RLEFT,
 		"	extb.l AL\n", },
+
+/* char -> (u)int */
+{ SCONV,	INAREG,
+	SAREG,		TCHAR,
+	SAREG,		TINT|TUNSIGNED,
+		0,	RLEFT,
+		"	ext.w AL\n	ext.l AL\n", },
 
 /* uchar -> (u)int */
 { SCONV,	INAREG,
@@ -107,12 +121,20 @@ struct optab table[] = {
 		"	and.l #255,AL\n", },
 
 /* char -> (u)longlong */
-{ SCONV,	INCREG,
+{ SCONV,	INCREG | FEATURE_EXTB,
 	SAREG|SNAME|SOREG,	TCHAR,
 	SCREG,			TLL,
 		NCREG,	RESC1,
 		"	move.b AL,U1\n	extb.l U1\n"
 		"	smi A1\n	extb.l A1\n", },
+
+/* char -> (u)longlong */
+{ SCONV,	INCREG,
+	SAREG|SNAME|SOREG,	TCHAR,
+	SCREG,			TLL,
+		NCREG,	RESC1,
+		"	move.b AL,U1\n	ext.w U1\n	ext.l U1\n"
+		"	smi A1\n	ext.w A1\n	ext.l U1\n", },
 
 /* uchar -> (u)longlong */
 { SCONV,	INCREG,
@@ -164,12 +186,20 @@ struct optab table[] = {
 		"	and.l #65535,AL\n", },
 
 /* short -> (u)longlong */
-{ SCONV,	INCREG,
+{ SCONV,	INCREG | FEATURE_EXTB,
 	SAREG,		TSHORT,
 	SCREG,		TLL,
 		NCREG,	RESC1,
 		"	move AL,U1\n	ext.l U1\n"
 		"	smi A1\n	extb.l A1\n", },
+
+/* short -> (u)longlong */
+{ SCONV,	INCREG,
+	SAREG,		TSHORT,
+	SCREG,		TLL,
+		NCREG,	RESC1,
+		"	move AL,U1\n	ext.l U1\n"
+		"	smi A1\n	ext.w A1\n	ext.l A1\n", },
 
 /* ushort -> (u)longlong */
 { SCONV,	INCREG,
@@ -215,11 +245,18 @@ struct optab table[] = {
 		"", },
 
 /* int -> (u)longlong */
-{ SCONV,	INCREG,
+{ SCONV,	INCREG | FEATURE_EXTB,
 	SAREG|SOREG|SNAME,	TINT,
 	SCREG,			TLL,
 		NCREG,	RESC1,
 		"	move.l AL,U1\n	smi A1\n	extb.l A1\n", },
+
+/* int -> (u)longlong */
+{ SCONV,	INCREG,
+	SAREG|SOREG|SNAME,	TINT,
+	SCREG,			TLL,
+		NCREG,	RESC1,
+		"	move.l AL,U1\n	smi A1\n	ext.w A1\n	ext.l A1\n", },
 
 /* (u)int -> (u)longlong */
 { SCONV,	INCREG,
@@ -684,19 +721,19 @@ struct optab table[] = {
 		0,	RLEFT,
 		"	fsgldiv.ZA AR,AL\n", },
 
-{ MOD,	INAREG,
+{ MOD,	INAREG | FEATURE_LONGDIV,
 	SAREG,			TINT,
 	SAREG|SNAME|SOREG,	TINT,
 		NAREG*2,	RESC1,
-		"mov.l AL,A2\n	divsl.l AR,A1:A2\n", },
+		"	move.l AL,A2\n	divsl.l AR,A1:A2\n", },
 
-{ MOD,	INAREG,
+{ MOD,	INAREG | FEATURE_LONGDIV,
 	SAREG,			TUNSIGNED,
 	SAREG|SNAME|SOREG,	TUNSIGNED,
 		NAREG*2,	RESC1,
-		"mov.l AL,A2\n	divul.l AR,A1:A2\n", },
+		"	move.l AL,A2\n	divul.l AR,A1:A2\n", },
 
-{ MUL,	INAREG,
+{ MUL,	INAREG | FEATURE_LONGDIV,
 	SAREG|SNAME|SOREG,	TWORD,
 	SAREG,			TWORD,
 		0,	RLEFT,
@@ -939,6 +976,30 @@ struct optab table[] = {
 	SCREG,	TLL,
 		0,	RESCC|RLEFT, /* trash left nodes */
 		"	sub.l UR,UL\n	subx.l AR,AL\n", },
+
+{ OPLOG,	FORCC,
+	SAREG,			TCHAR|TUCHAR,
+	SZERO, 			TCHAR|TUCHAR,
+		0,	RESCC,
+		"	tst.b AL\n", },
+
+{ OPLOG,	FORCC,
+	SAREG,			TCHAR|TUCHAR,
+	SCON|SAREG|SOREG|SNAME, TCHAR|TUCHAR,
+		0,	RESCC,
+		"	cmp.b AR,AL\n", },
+
+{ OPLOG,	FORCC,
+	SAREG,			TSHORT|TUSHORT,
+	SCON|SAREG|SOREG|SNAME, TSHORT|TUSHORT,
+		0,	RESCC,
+		"	cmp.w AR,AL\n", },
+
+{ OPLOG,	FORCC,
+	SAREG,			TWORD,
+	SZERO, 			TWORD,
+		0,	RESCC,
+		"	tst.l AL\n", },
 
 { OPLOG,	FORCC,
 	SAREG,			TWORD,

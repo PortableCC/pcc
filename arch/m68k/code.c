@@ -49,21 +49,21 @@ setseg(int seg, char *name)
 	case DATA:
 	case LDATA: name = ".data"; break;
 	case STRNG:
-	case RDATA: name = ".section .rodata"; break;
+	case RDATA: name = ".rodata"; break;
 	case UDATA: break;
 	case PICLDATA:
-	case PICDATA: name = ".section .data.rel.rw,\"aw\",@progbits"; break;
-	case PICRDATA: name = ".section .data.rel.ro,\"aw\",@progbits"; break;
-	case TLSDATA: name = ".section .tdata,\"awT\",@progbits"; break;
-	case TLSUDATA: name = ".section .tbss,\"awT\",@nobits"; break;
-	case CTORS: name = ".section\t.ctors,\"aw\",@progbits"; break;
-	case DTORS: name = ".section\t.dtors,\"aw\",@progbits"; break;
+	case PICDATA: name = ".data.rel.rw,\"aw\",@progbits"; break;
+	case PICRDATA: name = ".data.rel.ro,\"aw\",@progbits"; break;
+	case TLSDATA: name = ".tdata,\"awT\",@progbits"; break;
+	case TLSUDATA: name = ".tbss,\"awT\",@nobits"; break;
+	case CTORS: name = ".ctors,\"aw\",@progbits"; break;
+	case DTORS: name = ".dtors,\"aw\",@progbits"; break;
 	case NMSEG: 
 		printf("\t.section %s,\"a%c\",@progbits\n", name,
 		    cftnsp ? 'x' : 'w');
 		return;
 	}
-	printf("\t%s\n", name);
+	printf("\t.section %s\n", name);
 }
 
 /*
