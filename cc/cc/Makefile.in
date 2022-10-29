@@ -45,7 +45,7 @@ MIPDIR=$(top_srcdir)/mip
 MDIR=$(top_srcdir)/arch/$(TARGMACHDIR)
 COMMONDIR=$(top_srcdir)/common
 
-DEST=cc$(EXEEXT)
+DEST=$(BINPREFIX)cc$(EXEEXT)
 DRIVERS=pcc pcpp p++
 
 all: $(DEST)
@@ -72,7 +72,7 @@ install:
 	test -z "$(DESTDIR)$(mandir)/man1" || mkdir -p "$(DESTDIR)$(mandir)/man1"
 	@for driver in $(DRIVERS); do \
 		$(INSTALL_PROGRAM) $(DEST) $(DESTDIR)$(bindir)/$(BINPREFIX)$$driver$(EXEEXT); \
-		$(INSTALL_DATA) $(srcdir)/cc.1 $(DESTDIR)$(mandir)/man1/$$driver.1; \
+		$(INSTALL_DATA) $(srcdir)/cc.1 $(DESTDIR)$(mandir)/man1/$(BINPREFIX)$$driver.1; \
 	done
 	test -z "$(DESTDIR)$(PCCINCDIR)" || mkdir -p "$(DESTDIR)$(PCCINCDIR)"
 	test -z "$(DESTDIR)$(PCCLIBDIR)" || mkdir -p "$(DESTDIR)$(PCCLIBDIR)"
