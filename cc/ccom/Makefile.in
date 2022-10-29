@@ -215,12 +215,11 @@ $(CC2): $(CC2MSRC)
 		echo $(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
 		$(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
 	else						\
-		touch $@ ;				\
+		echo "int main() { return 1; }" > $@ ;	\
 	fi
 
 $(CC2MSRC):
-	touch $@
-
+	echo "int main() { return 1; }" > $@
 
 install: $(DEST)
 	test -z "$(DESTDIR)$(libexecdir)" || mkdir -p "$(DESTDIR)$(libexecdir)"
