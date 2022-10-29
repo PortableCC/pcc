@@ -97,7 +97,7 @@ setseg(int seg, char *name)
 	default:
 		cerror("unknown seg %d", seg);
 	}
-	printf("\t%s\n", name);
+	printf(PRTPREF "\t%s\n", name);
 }
 
 #else
@@ -105,9 +105,9 @@ void
 setseg(int seg, char *name)
 {
 	switch (seg) {
-	case PROG: name = ".text"; break;
+	case PROG: name = ".section .text"; break;
 	case DATA:
-	case LDATA: name = ".data"; break;
+	case LDATA: name = ".section .data"; break;
 	case STRNG:
 	case RDATA: name = ".section .rodata"; break;
 	case UDATA: break;
@@ -119,11 +119,11 @@ setseg(int seg, char *name)
 	case CTORS: name = ".section\t.ctors,\"aw\",@progbits"; break;
 	case DTORS: name = ".section\t.dtors,\"aw\",@progbits"; break;
 	case NMSEG: 
-		printf("\t.section %s,\"a%c\",@progbits\n", name,
+		printf(PRTPREF "\t.section %s,\"a%c\",@progbits\n", name,
 		    cftnsp ? 'x' : 'w');
 		return;
 	}
-	printf("\t%s\n", name);
+	printf(PRTPREF "\t%s\n", name);
 }
 #endif
 
@@ -139,21 +139,21 @@ defloc(struct symtab *sp)
 	name = getexname(sp);
 
 	if (sp->sclass == EXTDEF) {
-		printf("\t.globl %s\n", name);
+		printf(PRTPREF "\t.globl %s\n", name);
 #ifndef MACHOABI
 		if (ISFTN(sp->stype)) {
-			printf("\t.type %s,@function\n", name);
+			printf(PRTPREF "\t.type %s,@function\n", name);
 		} else {
-			printf("\t.type %s,@object\n", name);
-			printf("\t.size %s,%d\n", name,
+			printf(PRTPREF "\t.type %s,@object\n", name);
+			printf(PRTPREF "\t.size %s,%d\n", name,
 			    (int)tsize(sp->stype, sp->sdf, sp->sap)/SZCHAR);
 		}
 #endif
 	}
 	if (sp->slevel == 0)
-		printf("%s:\n", name);
+		printf(PRTPREF "%s:\n", name);
 	else
-		printf(LABFMT ":\n", sp->soffset);
+		printf(PRTPREF LABFMT ":\n", sp->soffset);
 }
 
 /*
@@ -406,10 +406,10 @@ ejobcode(int flag)
 #ifdef MACHOABI
 #define PT(x)
 #else
-#define	PT(x) printf(".type __pcc_" x ",@function\n")
+#define	PT(x) printf(PRTPREF ".type __pcc_" x ",@function\n")
 #endif
 
-#define	P(x) printf(x "\n")
+#define	P(x) printf(PRTPREF x "\n")
 	/* printout varargs routines if used */
 	if (varneeds & NEED_STRFI) {	/* struct with one float and then int */
 		P(".text\n.align 4");
@@ -447,35 +447,35 @@ ejobcode(int flag)
 		P("leaq 24(%%rdi),%%rax\nret");
 	}
 	if (varneeds & NEED_1FPREF) {
-		printf(".text\n.align 4\n");
+		printf(PRTPREF ".text\n.align 4\n");
 		PT("1fpref");
-		printf("__pcc_1fpref:\n");
-		printf("cmpl $176,4(%%rdi)\njae .Ladd8\n");
-		printf("movl 4(%%rdi),%%eax\naddq 16(%%rdi),%%rax\n");
-		printf("addl $16,4(%%rdi)\nret\n");
+		P("__pcc_1fpref:");
+		P("cmpl $176,4(%%rdi)\njae .Ladd8");
+		P("movl 4(%%rdi),%%eax\naddq 16(%%rdi),%%rax");
+		P("addl $16,4(%%rdi)\nret");
 	}
 	if (varneeds & NEED_1REGREF) {
 		printf(".text\n.align 4\n");
 		PT("1regref");
-		printf("__pcc_1regref:\n");
-		printf("cmpl $48,(%%rdi)\njae .Ladd8\n");
-		printf("movl (%%rdi),%%eax\naddq 16(%%rdi),%%rax\n");
-		printf("addl $8,(%%rdi)\nret\n");
+		P("__pcc_1regref:");
+		P("cmpl $48,(%%rdi)\njae .Ladd8");
+		P("movl (%%rdi),%%eax\naddq 16(%%rdi),%%rax");
+		P("addl $8,(%%rdi)\nret");
 	}
 	if (varneeds & NEED_2REGREF) {
 		printf(".text\n.align 4\n");
 		PT("2regref");
-		printf("__pcc_2regref:\n");
-		printf("cmpl $40,(%%rdi)\njae .Ladd16\n");
-		printf("movl (%%rdi),%%eax\naddq 16(%%rdi),%%rax\n");
-		printf("addl $16,(%%rdi)\nret\n");
+		P("__pcc_2regref:");
+		P("cmpl $40,(%%rdi)\njae .Ladd16");
+		P("movl (%%rdi),%%eax\naddq 16(%%rdi),%%rax");
+		P("addl $16,(%%rdi)\nret");
 	}
 	if (varneeds & NEED_MEMREF) {
 		printf(".text\n.align 4\n");
 		PT("memref");
-		printf("__pcc_memref:\n");
-		printf("movq 8(%%rdi),%%rax\n");
-		printf("addq %%rsi,8(%%rdi)\nret\n");
+		P("__pcc_memref:");
+		P("movq 8(%%rdi),%%rax");
+		P("addq %%rsi,8(%%rdi)\nret");
 	}
 
 	if (varneeds & (NEED_1FPREF|NEED_1REGREF)) {
@@ -491,11 +491,7 @@ ejobcode(int flag)
 		P("ret");
 	}
 
-#ifdef MACHOABI
-	printf("\t.ident \"PCC: %s\"\n", VERSSTR);
-#else
-	printf("\t.ident \"PCC: %s\"\n\t.end\n", VERSSTR);
-#endif
+	printf(PRTPREF "\t.ident \"PCC: %s\"\n\t.end\n", VERSSTR);
 }
 
 /*

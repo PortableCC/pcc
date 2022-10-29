@@ -530,9 +530,9 @@ myp2tree(NODE *p)
 			sps.soffset = dblxor;
 			locctr(DATA, &sps);
 			defloc(&sps);
-			printf("\t.long 0,0x80000000,0,0\n");
-			printf(LABFMT ":\n", fltxor);
-			printf("\t.long 0x80000000,0,0,0\n");
+			printf(PRTPREF "\t.long 0,0x80000000,0,0\n");
+			printf(PRTPREF LABFMT ":\n", fltxor);
+			printf(PRTPREF "\t.long 0x80000000,0,0,0\n");
 		}
 		p->n_ap = attr_add(p->n_ap,
 		    ap = attr_new(ATTR_AMD64_XORLBL, 1));
@@ -740,26 +740,26 @@ defzero(struct symtab *sp)
 #ifdef MACHOABI
 	if (sp->sclass == STATIC) {
 		al = ispow2(al);
-		printf("\t.zerofill __DATA,__bss,");
+		printf(PRTPREF "\t.zerofill __DATA,__bss,");
 		if (sp->slevel == 0) {
 			printf("%s", name);
 		} else
 			printf(LABFMT, sp->soffset);
 		printf(",%lld,%d\n", off, al);
 	} else {
-		printf("\t.comm %s,0%llo,%d\n", name, off, al);
+		printf(PRTPREF "\t.comm %s,0%llo,%d\n", name, off, al);
 	}
 #else
 	if (sp->sclass == STATIC) {
 		if (sp->slevel == 0) {
-			printf("\t.local %s\n", name);
+			printf(PRTPREF "\t.local %s\n", name);
 		} else
-			printf("\t.local " LABFMT "\n", sp->soffset);
+			printf(PRTPREF "\t.local " LABFMT "\n", sp->soffset);
 	}
 	if (sp->slevel == 0) {
-		printf("\t.comm %s,0%llo,%d\n", name, off, al);
+		printf(PRTPREF "\t.comm %s,0%llo,%d\n", name, off, al);
 	} else
-		printf("\t.comm " LABFMT ",0%llo,%d\n", sp->soffset, off, al);
+		printf(PRTPREF "\t.comm " LABFMT ",0%llo,%d\n", sp->soffset, off, al);
 #endif
 }
 
@@ -844,9 +844,9 @@ fixdef(struct symtab *sp)
 			}
 		}
 		if (wr == NULL)
-			printf("\t.weak %s\n", sn);
+			printf(PRTPREF "\t.weak %s\n", sn);
 		else
-			printf("\t.weakref %s,%s\n", sn, wr);
+			printf(PRTPREF "\t.weakref %s,%s\n", sn, wr);
 	} else
 #endif
 		if ((ga = attr_find(sp->sap, GCC_ATYP_ALIAS)) != NULL) {
@@ -855,13 +855,13 @@ fixdef(struct symtab *sp)
 		char *v;
 
 		v = attr_find(sp->sap, GCC_ATYP_WEAK) ? "weak" : "globl";
-		printf("\t.%s %s\n", v, sn);
-		printf("\t.set %s,%s\n", sn, an);
+		printf(PRTPREF "\t.%s %s\n", v, sn);
+		printf(PRTPREF "\t.set %s,%s\n", sn, an);
 	}
 #endif
 	if (alias != NULL && (sp->sclass != PARAM)) {
-		printf("\t.globl %s\n", getexname(sp));
-		printf("%s = ", getexname(sp));
+		printf(PRTPREF "\t.globl %s\n", getexname(sp));
+		printf(PRTPREF "%s = ", getexname(sp));
 		printf("%s\n", exname(alias));
 		alias = NULL;
 	}
