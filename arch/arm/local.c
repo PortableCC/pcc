@@ -161,6 +161,7 @@ clocal(NODE *p)
 		}
 		break;
 
+#if 0
 	case STNAME:
 		if ((q = p->n_sp) == NULL)
 			return p;
@@ -171,6 +172,7 @@ clocal(NODE *p)
 		    p->n_df, p->n_ap);
 		p = block(UMUL, p, NIL, ty, p->n_df, p->n_ap);
 		break;
+#endif
 
 	case FORCE:
 		/* put return value in return reg */

@@ -215,8 +215,10 @@ eoftn(struct interpass_prolog *ipp)
 		    rnames[SP], rnames[PC]);
 		printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], 16);
 	}
+#ifdef ELFABI
 	printf("\t.size %s,.-%s\n", exname(ipp->ipp_name),
 	    exname(ipp->ipp_name));
+#endif
 }
 
 
