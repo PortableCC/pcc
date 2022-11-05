@@ -281,10 +281,17 @@ inval(CONSZ off, int fsz, NODE *p)
 		int i, nbits;
 
 		ufp = soft_toush(p->n_scon, t, &nbits);
+#if TARGET_ENDIAN == TARGET_BE
+		for (i = sztable[t] - 1; i >= 0; i -= SZINT) {
+			printf(PRTPREF "%s %u\n", astypnames[INT], 
+			    (i < nbits ? ufp[i/SZINT] : 0));
+		}
+#else
 		for (i = 0; i < sztable[t]; i += SZINT) {
 			printf(PRTPREF "%s %u\n", astypnames[INT], 
 			    (i < nbits ? ufp[i/SZINT] : 0));
 		}
+#endif
 	} else
 		cerror("inval: unhandled type %d", (int)t);
 }

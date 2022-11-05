@@ -24,7 +24,6 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #include "pass1.h"
 
 #undef NIL
@@ -42,8 +41,7 @@
 #define	fwalk p1fwalk
 #endif
 
-
-/*	this file contains code which is dependent on the target machine */
+/* this file contains code which is dependent on the target machine */
 
 int gotnr;
 
@@ -179,6 +177,12 @@ clocal(NODE *p)
 
 		case PARAM:
 		case AUTO:
+#if TARGET_ENDIAN == TARGET_BE
+			if (q->stype == SHORT || q->stype == USHORT)
+				q->soffset += 2*8;
+			else if (q->stype < SHORT)
+				q->soffset += 3*8;
+#endif
 			/* fake up a structure reference */
 			r = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
 			slval(r, 0);
@@ -342,12 +346,11 @@ myp2tree(NODE *p)
 
 	locctr(DATA, sp);
 	defloc(sp);
-	ninval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
 
 	p->n_op = NAME;
 	slval(p, 0);
 	p->n_sp = sp;
-
 }
 
 /*
@@ -419,8 +422,8 @@ ninval(CONSZ off, int fsz, NODE *p)
 	switch (p->n_type) {
 	case LONGLONG:
 	case ULONGLONG:
-		printf("\t.long\t0x%x\n", (int)(off >> 32) & 0xffffffff);
-		printf("\t.long\t0x%x\n", (int)(off) & 0xffffffff);
+		printf(PRTPREF "\t.long\t0x%x\n", (int)(off >> 32) & 0xffffffff);
+		printf(PRTPREF "\t.long\t0x%x\n", (int)(off) & 0xffffffff);
 		break;
 	default:
 		return 0;
@@ -478,14 +481,14 @@ defzero(struct symtab *sp)
 
 	if (sp->sclass == STATIC) {
 		if (sp->slevel == 0) {
-			printf("\t.local %s\n", name);
+			printf(PRTPREF "\t.local %s\n", name);
 		} else
-			printf("\t.local " LABFMT "\n", sp->soffset);
+			printf(PRTPREF "\t.local " LABFMT "\n", sp->soffset);
 	}
 	if (sp->slevel == 0) {
-		printf("\t.comm %s,0%o,%d\n", name, off, al);
+		printf(PRTPREF "\t.comm %s,0%o,%d\n", name, off, al);
 	} else
-		printf("\t.comm " LABFMT ",0%o,%d\n", sp->soffset, off, al);
+		printf(PRTPREF "\t.comm " LABFMT ",0%o,%d\n", sp->soffset, off, al);
 }
 
 char *nextsect;
@@ -521,9 +524,9 @@ fixdef(struct symtab *sp)
 			}
 		}
 		if (wr == NULL)
-			printf("\t.weak %s\n", sn);
+			printf(PRTPREF "\t.weak %s\n", sn);
 		else
-			printf("\t.weakref %s,%s\n", sn, wr);
+			printf(PRTPREF "\t.weakref %s,%s\n", sn, wr);
 	} else
 	       if ((ga = attr_find(sp->sap, GCC_ATYP_ALIAS)) != NULL) {
 		char *an = ga->sarg(0);
@@ -531,14 +534,14 @@ fixdef(struct symtab *sp)
 		char *v;
 
 		v = attr_find(sp->sap, GCC_ATYP_WEAK) ? "weak" : "globl";
-		printf("\t.%s %s\n", v, sn);
-		printf("\t.set %s,%s\n", sn, an);
+		printf(PRTPREF "\t.%s %s\n", v, sn);
+		printf(PRTPREF "\t.set %s,%s\n", sn, an);
 	}
 	if (alias != NULL && (sp->sclass != PARAM)) {
 		char *name = getexname(sp);
-		printf("\t.globl %s\n", name);
-		printf("%s = ", name);
-		printf("%s\n", exname(alias));
+		printf(PRTPREF "\t.globl %s\n", name);
+		printf(PRTPREF "%s = ", name);
+		printf(PRTPREF "%s\n", exname(alias));
 		alias = NULL;
 	}
 	if ((constructor || destructor) && (sp->sclass != PARAM)) {
