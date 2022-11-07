@@ -1181,19 +1181,19 @@ reverse(NODE *p)
 static NODE *
 pusharg(NODE *p, int *regp)
 {
-        NODE *q;
-        int sz;
+	NODE *q;
+	int sz;
 	int off;
 
-        /* convert to register size, if smaller */
-        sz = tsize(p->n_type, p->n_df, p->n_ap);
-        if (sz < SZINT)
-                p = block(SCONV, p, NIL, INT, 0, 0);
+	/* convert to register size, if smaller */
+	sz = tsize(p->n_type, p->n_df, p->n_ap);
+	if (sz < SZINT)
+			p = block(SCONV, p, NIL, INT, 0, 0);
 
-        q = block(REG, NIL, NIL, INCREF(p->n_type), p->n_df, p->n_ap);
-        regno(q) = SPREG;
+	q = block(REG, NIL, NIL, INCREF(p->n_type), p->n_df, p->n_ap);
+	regno(q) = SPREG;
 
-	off = ARGINIT/SZCHAR + 4 * (*regp - R3);
+	off = ARGINIT/SZCHAR + 4 * (*regp - R11);
 	q = block(PLUS, q, bcon(off), INT, 0, 0);
         q = block(UMUL, q, NIL, p->n_type, p->n_df, p->n_ap);
 	(*regp) += szty(p->n_type);
@@ -1448,44 +1448,48 @@ movearg_struct(NODE *p, int *regp)
 static NODE *
 moveargs(NODE *p, int *regp, int *fregp)
 {
-        NODE *r, **rp;
-        int reg, freg;
+	NODE *r, **rp;
+	int reg, freg;
 
-        if (p->n_op == CM) {
-                p->n_left = moveargs(p->n_left, regp, fregp);
-                r = p->n_right;
-                rp = &p->n_right;
-        } else {
-                r = p;
-                rp = &p;
-        }
+	if (p->n_op == CM) {
+			p->n_left = moveargs(p->n_left, regp, fregp);
+			r = p->n_right;
+			rp = &p->n_right;
+	} else {
+			r = p;
+			rp = &p;
+	}
 
-        reg = *regp;
+    reg = *regp;
 	freg = *fregp;
 
 #define	ISFLOAT(p)	(p->n_type == FLOAT || \
 			p->n_type == DOUBLE || \
 			p->n_type == LDOUBLE)
 
-        if (reg > R10 && r->n_op != STARG) {
-                *rp = pusharg(r, regp);
+    if (reg > R10 && r->n_op != STARG) {
+        *rp = pusharg(r, regp);
+                
 	} else if (r->n_op == STARG) {
 		*rp = movearg_struct(r, regp);
-        } else if (DEUNSIGN(r->n_type) == LONGLONG) {
-                *rp = movearg_64bit(r, regp);
+		
+    } else if (DEUNSIGN(r->n_type) == LONGLONG) {
+        *rp = movearg_64bit(r, regp);
+                
 	} else if (r->n_type == DOUBLE || r->n_type == LDOUBLE) {
 		if (features(FEATURE_HARDFLOAT))
 			*rp = movearg_double(r, fregp, regp);
 		else
-                	*rp = movearg_64bit(r, regp);
+            *rp = movearg_64bit(r, regp);
+            
 	} else if (r->n_type == FLOAT) {
 		if (features(FEATURE_HARDFLOAT))
 			*rp = movearg_float(r, fregp, regp);
 		else
-                	*rp = movearg_32bit(r, regp);
-        } else {
-                *rp = movearg_32bit(r, regp);
-        }
+            *rp = movearg_32bit(r, regp);
+	} else {
+		*rp = movearg_32bit(r, regp);
+	}
 
 	return straighten(p);
 }
