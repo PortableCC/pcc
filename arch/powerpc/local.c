@@ -216,7 +216,6 @@ picstatic(NODE *p)
 	return q;
 }
 
-#if 0
 static NODE *
 convert_ulltof(NODE *p)
 {
@@ -246,8 +245,10 @@ convert_ulltof(NODE *p)
 	q = block(SCONV, q, NIL, ty, 0, 0);
 	t = block(FCON, NIL, NIL, ty, 0, 0);
 #ifndef LANG_CXX
+#if 0
 	t->n_dcon = fltallo();
 	FLOAT_INT2FP(p->n_dcon, 2, INT);
+#endif
 #else
 	cerror("convert_ulltof");
 #endif
@@ -262,7 +263,6 @@ convert_ulltof(NODE *p)
 	return clocal(buildtree(QUEST, l, r));
 
 }
-#endif
 
 
 /* clocal() is called to do local transformations on
@@ -488,7 +488,6 @@ clocal(NODE *p)
 			return l;
 		}
 
-#if 0
 		/*
 		 * if converting ULONGLONG to FLOAT/(L)DOUBLE,
 		 * replace ___floatunsdidf() with ___floatdidf()
@@ -497,7 +496,6 @@ clocal(NODE *p)
 		    p->n_type <= LDOUBLE) {
 			return convert_ulltof(p);
 		}
-#endif
 
 		o = l->n_op;
 		m = p->n_type;
@@ -598,7 +596,7 @@ fixnames(NODE *p, void *arg)
         if (q->n_op == UMUL)
                 q = q->n_left, isu = 1;
 
-#if defined(ELFABI)
+#if defined(ELFABI) || defined(AOUTABI)
 
         if (q->n_op == ICON) {
                 sp = q->n_sp;
@@ -679,9 +677,10 @@ myp2tree(NODE *p)
 	sp->sflags = 0;
 	sp->stype = p->n_type;
 	sp->squal = (CON >> TSHIFT);
+	sp->sname = NULL;
 
 	defloc(sp);
-	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	ninval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
 
 	p->n_op = NAME;
 	slval(p, 0);	
@@ -892,7 +891,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 char *
 exname(char *p)
 {
-#if defined(ELFABI)
+#if defined(ELFABI) || defined(AOUTABI)
 
 	return (p == NULL ? "" : p);
 
