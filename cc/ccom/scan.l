@@ -285,7 +285,7 @@ kwdecode(struct symtab *s)
 {
 	struct keywords *kw = &keywords[s->soffset];
 
-	if (inattr && kw->cword != C_SIZEOF)
+	if (inattr && kw->cword != C_SIZEOF && kw->cword != C_ALIGNOF)
 		return C_NAME;
 
 	switch (kw->wclass) {

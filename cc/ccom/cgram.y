@@ -146,7 +146,7 @@
 %left '+' '-'
 %left '*' C_DIVOP
 %right C_UNOP
-%right C_INCOP C_SIZEOF
+%right C_INCOP C_SIZEOF C_ALIGNOF
 %left '[' '(' C_STROP
 %{
 # include "pass1.h"
