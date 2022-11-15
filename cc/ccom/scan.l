@@ -257,7 +257,7 @@ struct keywords {
 	{ "_Static_assert", C_STATICASSERT, DEFKW },
 	{ "struct", STNAME, C_STRUCT },
 	{ "switch", C_SWITCH, DEFKW },
-	{ "_Thread_local", THLOCAL, C_CLASS },
+	{ "_Thread_local", /* THLOCAL */ 0, C_CLASS },
 	{ "typedef", TYPEDEF, C_CLASS },
 	{ "union", UNAME, C_STRUCT },
 	{ "unsigned", UNSIGNED, C_TYPE },
@@ -295,8 +295,6 @@ kwdecode(struct symtab *s)
 		break;
 
 	case C_CLASS:
-		if (kw->cword == THLOCAL)
-			uerror("_Thread_local not supported");
 		yylval.type = kw->cword;
 		break;
 
