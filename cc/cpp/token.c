@@ -1506,10 +1506,15 @@ again:		switch (ch) {
 			ifiles->lineno++;
 			while ((ch = qcchar()) == ' ' || ch == '\t')
 				;
-			if (ch == '#')
-				return;
-			if (ch == '%' && (ch = qcchar()) == ':')
-				return;
+			if ((ch == '#') ||
+			    (ch == '%' && (ch = qcchar()) == ':')) {
+				while ((ch = qcchar()) == ' ' || ch == '\t')
+					;
+				if (ISID0(ch)) {
+					unch(ch);
+					return;
+				}
+			}
 			goto again;
 		case '\'':
 			while ((ch = qcchar()) != '\'') {
