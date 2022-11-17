@@ -566,6 +566,8 @@ ucn(register usch *p, register usch *q)
 		error("universal character name out of range");
 #endif
 
+	if (cp == 0)
+		return q; /* ignore zeroes */
 	n = 0;
 	m = 0x7f;
 	p = bs;
