@@ -1233,8 +1233,10 @@ static void
 chknl(int ignore)
 {
 	register void (*f)(const char *, ...);
-	register int t;
+	register int t, c;
 
+	c = Cflag;
+	Cflag = 0;
 	f = ignore ? warning : error;
 	if ((t = fastspc()) != '\n') {
 		if (t) {
@@ -1247,6 +1249,7 @@ chknl(int ignore)
 		} else
 			f("no newline at end of file");
 	}
+	Cflag = c;
 	unch(t);
 }
 
