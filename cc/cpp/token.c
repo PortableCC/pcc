@@ -652,7 +652,9 @@ bufid(int ch, register struct iobuf *ob)
 	return ob->buf+n;
 }
 
-usch idbuf[MAXIDSZ+1];
+static usch *idbuf;
+static int maxidsz;
+
 /*
  * readin chars and store in buf. Warn about too long names.
  */
@@ -663,9 +665,10 @@ readid(int ch)
 
 	do {
 		if (p == MAXIDSZ)
-			warning("identifier exceeds C99 5.2.4.1, truncating");
-		if (p < MAXIDSZ)
-			idbuf[p++] = ch;
+			warning("identifier exceeds C99 5.2.4.1");
+		if (p == maxidsz)
+			idbuf = xrealloc(idbuf, maxidsz += MAXIDSZ);
+		idbuf[p++] = ch;
 	} while (ISID(ch = qcchar()));
 	idbuf[p] = 0;
 	unch(ch);
