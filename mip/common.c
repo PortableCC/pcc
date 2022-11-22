@@ -985,6 +985,16 @@ attr_dup(struct attr *ap)
 }
 
 void *
+xrealloc(void p, int size)
+{
+	void *rv;
+
+	if ((rv = realloc(p, size)) == NULL)
+		cerror("out of memory!");
+	return rv;
+}
+
+void *
 xmalloc(int size)
 {
 	void *rv;
