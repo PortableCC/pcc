@@ -985,7 +985,7 @@ attr_dup(struct attr *ap)
 }
 
 void *
-xrealloc(void p, int size)
+xrealloc(void *p, int size)
 {
 	void *rv;
 
