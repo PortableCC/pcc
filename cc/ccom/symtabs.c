@@ -484,7 +484,7 @@ savch(int ch)
 {
 	if (csbufp == cssz) {
 		cssz += STCHNK;
-		csbuf = realloc(csbuf, cssz);
+		csbuf = xrealloc(csbuf, cssz);
 	}
 	csbuf[csbufp++] = ch;
 }
