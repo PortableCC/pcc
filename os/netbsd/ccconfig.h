@@ -77,6 +77,8 @@
 #elif defined(mach_powerpc)
 #define	CPPMDADD { "-D__ppc__", NULL, }
 #define STARTLABEL "_start"
+#elif defined(mach_riscv32)
+#define CPPMDADD { "-D__riscv__", "-D__riscv32__", NULL, }
 #elif defined(mach_vax)
 #define CPPMDADD { "-D__vax__", NULL, }
 #define	PCC_EARLY_SETUP { kflag = 1; }
