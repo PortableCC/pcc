@@ -256,57 +256,57 @@ typedef long long OFFSZ;
 #endif
 
 #define		RSTATUS	\
-/* x0, ra, sp, gp, tp */	0, SAREG|PREMREG, 0, 0, 0,				\
-/* t0, t1, t2 */			SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
-/* fp, s1 */				0, SAREG|PERMREG, \
+/* x0, ra, sp, gp, tp */0, SAREG|PERMREG, 0, 0, 0,	\
+/* t0, t1, t2 */	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, \
+/* fp, s1 */		0, SAREG|PERMREG, \
 \
-/* a0, a1, a2, a3 */		SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
-/* a4, a5, a6, a7 */		SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
-/* s2, s3, s4, s5 */		SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG,	\
-/* s6, s7, s8, s9 */		SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG,	\
-/* s10, s11 */				SAREG|PERMREG, SAREG|PERMREG,  \
-/* t3, t4, t5, t6 */ 		SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, \
+/* a0, a1, a2, a3 */	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
+/* a4, a5, a6, a7 */	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
+/* s2, s3, s4, s5 */	SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG,	\
+/* s6, s7, s8, s9 */	SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG,	\
+/* s10, s11 */		SAREG|PERMREG, SAREG|PERMREG,  \
+/* t3, t4, t5, t6 */ 	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, \
 \
-/* ft0, ft1, ft2, ft3 */	SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
-/* ft4, ft5, ft6, ft7 */	SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
-/* fs0, fs1 */				SBREG|PERMREG, SBREG|PERMREG, \
-/* fa0, fa1, fa2, fa3 */	SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
-/* fa4, fa5, fa6, fa7 */	SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
-/* fs2, fs3, fs4, fs5 */	SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, 	\
-/* fs6, fs7, fs8, fs9 */	SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, 	\
-/* fs10, fs11 */			SBREG|PERMREG, SBREG|PERMREG,	\
+/* ft0, ft1, ft2, ft3 */SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
+/* ft4, ft5, ft6, ft7 */SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
+/* fs0, fs1 */		SBREG|PERMREG, SBREG|PERMREG, \
+/* fa0, fa1, fa2, fa3 */SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
+/* fa4, fa5, fa6, fa7 */SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG,	\
+/* fs2, fs3, fs4, fs5 */SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, 	\
+/* fs6, fs7, fs8, fs9 */SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, SBREG|PERMREG, 	\
+/* fs10, fs11 */	SBREG|PERMREG, SBREG|PERMREG,	\
 /* ft8, ft9, ft10, ft11 bug in mkext */	SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, 0, \
 \
-/* a0a1, a2a3 */			SCREG, SCREG, \
-/* a4a5, a6a7 */ 			SCREG, SCREG, \
-/* s0s1, s2s3, */			0, SCREG, \
-/* s4s5, s6s7*/		 		SCREG, SCREG, \
-/* s8s9, s10s11 */		SCREG, SCREG, \
+/* a0a1, a2a3 */	SCREG, SCREG, \
+/* a4a5, a6a7 */ 	SCREG, SCREG, \
+/* s0s1, s2s3, */	0, SCREG, \
+/* s4s5, s6s7*/		SCREG, SCREG, \
+/* s8s9, s10s11 */	SCREG, SCREG, \
 \
-/*  t0t1, t2t3, t4t5 */		SCREG, SCREG, SCREG				
+/*  t0t1, t2t3, t4t5 */	SCREG, SCREG, SCREG				
 
 		
 #define	ROVERLAP \
 /* x0, ra, sp, gp, tp */	{ -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
-/* t0, t1, t2 */					{DT0,  -1 }, { DT0,  -1 }, { DT1, -1 }, \
-/* fp, s1 */						{ -1 }, {-1}, \
+/* t0, t1, t2 */		{DT0,  -1 }, { DT0,  -1 }, { DT1, -1 }, \
+/* fp, s1 */			{ -1 }, {-1}, \
 \
-/* a0, a1, a2, a3 */ 		{ DA0, -1 }, { DA0, -1 }, { DA1, -1 }, { DA1, -1 }, \
-/* a4, a5, a6, a7 */		{ DA2, -1 }, { DA2, -1 }, { DA3, -1 }, { DA3, -1 }, \
-/* s2, s3, s4, s5 */		{ DS1, -1 }, { DS1, -1 }, { DS2, -1 }, { DS2, -1 }, \
-/* s6, s7, s8, s9 */		{ DS3, -1 }, { DS3, -1 }, { DS4, -1 }, { DS4, -1 }, \
-/* s10, s11 */				{ DS5, -1 }, { DS5, -1 }, \
-/* t3, t4, t5, t6 */			{ DT1, -1 }, { DT2, -1 }, { DT2, -1 }, { -1 }, \
+/* a0, a1, a2, a3 */ 	{ DA0, -1 }, { DA0, -1 }, { DA1, -1 }, { DA1, -1 }, \
+/* a4, a5, a6, a7 */	{ DA2, -1 }, { DA2, -1 }, { DA3, -1 }, { DA3, -1 }, \
+/* s2, s3, s4, s5 */	{ DS1, -1 }, { DS1, -1 }, { DS2, -1 }, { DS2, -1 }, \
+/* s6, s7, s8, s9 */	{ DS3, -1 }, { DS3, -1 }, { DS4, -1 }, { DS4, -1 }, \
+/* s10, s11 */		{ DS5, -1 }, { DS5, -1 }, \
+/* t3, t4, t5, t6 */	{ DT1, -1 }, { DT2, -1 }, { DT2, -1 }, { -1 }, \
 \
 	{ -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
 	{ -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
 	{ -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
 	{ -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 },	\
 \
-/* a0a1, a2a3 */			{ A0, A1, -1 }, { A2, A3, -1 }, 	\
-/* a4a5, a6a7 */			{ A4, A5, -1 },{ A6, A7, -1 }, \
-/* s0s1, s2s3, */			{ -1 }, { S2, S3, -1 }, \
-/* s4s5, s6s7, */			{ S4, S5, -1 }, { S6, S7, -1 }, \
+/* a0a1, a2a3 */		{ A0, A1, -1 }, { A2, A3, -1 }, 	\
+/* a4a5, a6a7 */		{ A4, A5, -1 },{ A6, A7, -1 }, \
+/* s0s1, s2s3, */		{ -1 }, { S2, S3, -1 }, \
+/* s4s5, s6s7, */		{ S4, S5, -1 }, { S6, S7, -1 }, \
 /* s8s9, s10, s11 */		{S8, S9, -1}, { S10, S11, -1 }, \
 /* t0t1, t2t3, t4t5 */		{ T0, T1, -1 }, { T2, T3, -1 }, { T2, T3, -1 }
 	
@@ -366,19 +366,17 @@ int numconv(void *ip, void *p, void *q);
 /*
  * builtins.
  */
- #if 0
 #define TARGET_VALIST
 #define TARGET_STDARGS
 #define TARGET_BUILTINS							\
-	{ "__builtin_stdarg_start", riscv32_builtin_stdarg_start, 	\
+	{ "__builtin_stdarg_start", riscv_builtin_stdarg_start, 	\
 						0, 2, 0, VOID },	\
-	{ "__builtin_va_start", riscv32_builtin_stdarg_start,		\
+	{ "__builtin_va_start", riscv_builtin_stdarg_start,		\
 						0, 2, 0, VOID },	\
-	{ "__builtin_va_arg", riscv32_builtin_va_arg, BTNORVAL|BTNOPROTO,	\
+	{ "__builtin_va_arg", riscv_builtin_va_arg, BTNORVAL|BTNOPROTO, \
 							2, 0, 0 },	\
-	{ "__builtin_va_end", riscv32_builtin_va_end, 0, 1, 0, VOID },	\
-	{ "__builtin_va_copy", riscv32_builtin_va_copy, 0, 2, 0, VOID }
-#endif
+	{ "__builtin_va_end", riscv_builtin_va_end, 0, 1, 0, VOID },	\
+	{ "__builtin_va_copy", riscv_builtin_va_copy, 0, 2, 0, VOID }
 
 #ifdef LANG_CXX
 #define P1ND struct node
@@ -387,10 +385,10 @@ int numconv(void *ip, void *p, void *q);
 #endif
 struct node;
 struct bitable;
-P1ND *riscv32_builtin_stdarg_start(const struct bitable *, P1ND *a);
-P1ND *riscv32_builtin_va_arg(const struct bitable *, P1ND *a);
-P1ND *riscv32_builtin_va_end(const struct bitable *, P1ND *a);
-P1ND *riscv32_builtin_va_copy(const struct bitable *, P1ND *a);
+P1ND *riscv_builtin_stdarg_start(const struct bitable *, P1ND *a);
+P1ND *riscv_builtin_va_arg(const struct bitable *, P1ND *a);
+P1ND *riscv_builtin_va_end(const struct bitable *, P1ND *a);
+P1ND *riscv_builtin_va_copy(const struct bitable *, P1ND *a);
 #undef P1ND
 
 extern int msettings;

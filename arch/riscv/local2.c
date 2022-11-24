@@ -115,10 +115,12 @@ char *rnames[] = {
 };
 
 static int argsize(NODE *p);
+static void fpconv(NODE *p);
+static void twollcomp(NODE *p);
+static void shiftop(NODE *p);
 
 static int p2calls;
 static int p2temps;		/* TEMPs which aren't autos yet */
-static int p2framesize;
 static int p2maxstacksize;
 
 extern int p2maxautooff;
@@ -137,7 +139,7 @@ static TWORD ftype;
 void
 prologue(struct interpass_prolog *ipp)
 {
-	int i, r, sz = 0, idx = 1, addto = p2maxautooff;
+	int i, sz = 0, addto = p2maxautooff;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
@@ -183,7 +185,7 @@ prologue(struct interpass_prolog *ipp)
 	} else {
 		printf(TAB "addi %s, %s, %d\n", rnames[T1], rnames[ZERO], (addto) >> 16);
 		printf(TAB "sll %s,%s,%d\n", rnames[T1], rnames[T1], 16);
-		printf(TAB "addi %s,%d\n", rnames[T1], rnames[ZERO], (addto) & 0xffff);
+		printf(TAB "addi %s,%s,%d\n", rnames[T1], rnames[ZERO], (addto) & 0xffff);
 		printf(TAB "sub %s,%s,%s\n", rnames[SP], rnames[SP], rnames[T1]);
 	}
 	
@@ -368,6 +370,7 @@ hopcode(int f, int o)
 			
 	default:
 		comperr("hopcode2: %d", o);
+		return; /* XXX */
 	}
 
 	if (f == 'i')
@@ -550,6 +553,7 @@ shiftop(NODE *p)
 	}
 }
 
+#if 0
 /*
  * Structure assignment.
  */
@@ -593,7 +597,7 @@ printf(" ; stasg\n");
 	        printf(TAB "jalr ra,%s\n", EXPREFIX "memcpy");
 	}
 }
-
+#endif
 
 /*
  *  Floating-point conversions (int -> float/double & float/double -> int)
@@ -658,10 +662,12 @@ ftoi(NODE *p)
 static void
 ftou(NODE *p)
 {
+#ifdef notyet
 	static int lab = 0;
 	NODE *l = p->n_left;
 	int lab1 = getlab2();
 	int lab2 = getlab2();
+#endif
 
 	printf(COM "start conversion of float/(l)double to unsigned\n");
 
@@ -671,10 +677,12 @@ ftou(NODE *p)
 static void
 itof(NODE *p)
 {
+#ifdef notyet
 	static int labu = 0;
 	static int labi = 0;
 	int lab;
 	NODE *l = p->n_left;
+#endif
 
 	printf(COM "start conversion (u)int to float/(l)double\n");
 
@@ -867,6 +875,7 @@ reg64name(int reg, int hi)
 	
 	if (reg > MAXREGS) {
 		cerror("maxregs exceeded in reg64name");
+		return; /* XXX */
 	}
 	else if (reg >= DS1) {
 		switch (reg) {
@@ -893,7 +902,7 @@ reg64name(int reg, int hi)
 		idx = reg;
 	} else {
 		printf("bad reg64name: (%d) \n", reg);
-		user_stacktrace();
+	//	user_stacktrace();
 		return;
 	}
 		
@@ -994,7 +1003,7 @@ adrput(FILE *io, NODE *p)
 			return;
 	
 		default:
-			user_stacktrace();
+	//		user_stacktrace();
 			comperr("illegal address, op %d, node %p", p->n_op, p);
 			return;
 
@@ -1287,7 +1296,9 @@ gclass(TWORD t)
 	return CLASSA;
 }
 
-int p2arg_overflow(NODE* r) {
+static int
+p2arg_overflow(NODE* r)
+{
 
   NODE* q = r;
   int sz, off = 0, last = 0, n_regs = 0, n_fregs = 0;
@@ -1361,7 +1372,6 @@ return off;
 void
 lastcall(NODE *p)
 {
-	NODE *op = p;
 	int off = 0;
 
 #ifdef PCC_DEBUG

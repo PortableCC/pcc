@@ -1212,7 +1212,7 @@ struct optab table[] = {
 	"be A1, x0, done" \
 	"j four_bytes" COM "loop until no more bytes\n" \
 	".done:\n" \
-	"subi U2, U2, ZQ\n" COM "structs must be < 2^12 in size\n" \, },
+	"subi U2, U2, ZQ\n" COM "structs must be < 2^12 in size\n", },
 
 	
 #if 0

@@ -45,6 +45,7 @@
 #endif
 
 static void genswitch_bintree(int num, TWORD ty, struct swents **p, int n);
+static int p1arg_overflow(NODE* r);
 
 #if 0
 static void genswitch_table(int num, struct swents **p, int n);
@@ -144,6 +145,7 @@ param_64bit(struct symtab *sym, int *argofsp, int dotemps)
 	if (navail < 2) {
 		/* half in and half out of the registers */
 		cerror("too many arguments, do something intelligent");
+		return; /* Quiet llvm */
 	} else {
 		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
 		if ((DA0 + argofs) > MAXREGS)
@@ -189,7 +191,7 @@ param_32bit(struct symtab *sym, int *argofsp, int dotemps)
 static void
 param_double(struct symtab *sym, int *argofsp, int dotemps)
 {
-	NODE *p, *q, *t;
+	NODE *p, *q;
 	int tmpnr, r = *argofsp;;
 
 		if (r < 8) {
@@ -220,12 +222,13 @@ param_double(struct symtab *sym, int *argofsp, int dotemps)
 	}
 }
 
+#if 0
 /* setup a float param on the stack
  * used by bfcode() */
 static void
 param_float(struct symtab *sym, int *argofsp, int dotemps)
 {
-	NODE *p, *q, *t;
+	NODE *p, *q;
 	int tmpnr, r = *argofsp;
 
 	/*
@@ -260,6 +263,7 @@ param_float(struct symtab *sym, int *argofsp, int dotemps)
 	}
 
 }
+#endif
 
 /* setup the hidden pointer to struct return parameter
  * used by bfcode() */
@@ -422,9 +426,7 @@ bfcode(struct symtab **sp, int cnt)
 	
 /* profiling */
 	if (pflag) {
-		NODE *p;
-	
-	#if defined(ELFABI) || defined(AOUTABI)
+#if defined(ELFABI) || defined(AOUTABI)
 	
 		sp2 = lookup("_mcount", 0);
 		sp2->stype = EXTERN;
@@ -435,7 +437,7 @@ bfcode(struct symtab **sp, int cnt)
 		p = block(UCALL, p, NIL, INT, 0, 0);
 		ecomp(funcode(p));
 	
-	#endif
+#endif
 	}
 }
 
@@ -645,6 +647,7 @@ straighten(NODE *p)
 	return r;
 }
 
+#if 0
 static NODE *
 reverse1(NODE *p, NODE *a)
 {
@@ -680,6 +683,7 @@ reverse(NODE *p)
 
 	return p;
 }
+#endif
 
 /* push arg onto the stack */
 /* called by moveargs() */
@@ -793,9 +797,9 @@ movearg_double(NODE *p, int *fregp, int *regp)
 static NODE *
 movearg_struct(NODE *p, int *regp)
 {
-  int off, reg = *regp;
-  NODE *l, *q, *t, *r;
-  int tmpnr, navail, num, sz, ty, i;
+	int off;
+	NODE *l, *q, *t, *r;
+	int sz;
 
 #if 1
 
@@ -813,7 +817,6 @@ movearg_struct(NODE *p, int *regp)
 	/* remove STARG node */
 	l = p->n_left;
 	p1nfree(p);
-	ty = l->n_type;
 			printf("2 walking \n");
 			p1fwalk(l, eprint, 0); 
 
@@ -884,6 +887,7 @@ movearg_struct(NODE *p, int *regp)
 	}
 
 #else
+	int tmpnr, i, num, navail, reg = *regp;
 
 	assert(p->n_op == STARG);
 
@@ -941,9 +945,9 @@ movearg_struct(NODE *p, int *regp)
 int recursion_level = 0;
 
 static NODE *
-moveargs(NODE *p, int *regp, int *fregp, int **llregp)
+moveargs(NODE *p, int *regp, int *fregp, int *llregp)
 {
-	NODE *r, **rp, *sp;
+	NODE *r, **rp;
 	int reg, freg, llreg, bottom = 0, top = 0;
 	int numregs;
 	
@@ -1035,7 +1039,9 @@ retstruct(NODE *p)
 	return p;
 }
 
-int p1arg_overflow(NODE* r) {
+int
+p1arg_overflow(NODE* r)
+{
 
   NODE* q = r;
   int sz, off = 0, last = 0, n_regs = 0, n_fregs = 0;
@@ -1043,11 +1049,11 @@ int p1arg_overflow(NODE* r) {
 	if (! r->n_left)
 		last = 1;
 
-printf("; r: 0x%x, op: %d, n_left: 0x%x n_right: 0x%x last = %d\n", 
+printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n", 
 					r, r->n_op, r->n_left, r->n_right, last);
 return 0;		
 	while (1)  {
-printf("; r: 0x%x, op: %d, n_left: 0x%x n_right: 0x%x last = %d\n", 
+printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n", 
 					r, r->n_op, r->n_left, r->n_right, last);
 		if (q->n_op == STARG) {
 		//printf("STARG\n");
@@ -1117,9 +1123,8 @@ funcode(NODE *p)
 	int regnum = A0;
 	int fregnum = FA0;
 	int llregnum = DA0;
- 	int reg = A0;
- 	NODE *r, *q, *sp;
-	int sz, off = 0;
+ 	NODE *r, *q;
+	int off = 0;
 	
 	if (DECREF(p->n_left->n_type) == STRTY+FTN ||
 		DECREF(p->n_left->n_type) == UNIONTY+FTN)

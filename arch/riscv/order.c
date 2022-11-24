@@ -86,7 +86,7 @@ offstar(NODE *p, int shape)
 void
 myormake(NODE *q)
 {
-	NODE *p, *r, *l;
+	NODE *p, *r;
 
 	if (x2debug) {
 		printf("myormake(%p)\n", q);
@@ -95,7 +95,6 @@ myormake(NODE *q)
 	
 	p = q->n_left;
 	r = p->n_right;
-	l = p->n_left;
 
 //printf("l->n_op %s, r->n_op %s\n", opst[l->n_op], opst[r->n_op]);
 
@@ -117,7 +116,7 @@ shumul(NODE *p, int shape)
 {
 
 	if (x2debug)
-		printf("shumul 0x%x shape 0x%x %s\n", p, shape,
+		printf("shumul %p shape 0x%x %s\n", p, shape,
 			shape & SOREG ? "SOREG" : 
 			shape & SROREG ? "SROREG" : 
 			shape & SRDIR ? "SRDIR" :

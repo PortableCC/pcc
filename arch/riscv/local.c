@@ -201,7 +201,6 @@ clocal(NODE *p)
 	struct symtab *q;
 	NODE *r, *l;
 	int o;
-	int m;
 	TWORD t;
 	int isptrvoid = 0;
 	int tmpnr;
@@ -418,7 +417,6 @@ clocal(NODE *p)
 		}
 
 		o = l->n_op;
-		m = p->n_type;
 
 		if (DEUNSIGN(p->n_type) == SHORT &&
 		    DEUNSIGN(l->n_type) == SHORT) {
@@ -502,7 +500,7 @@ static void
 fixnames(NODE *p, void *arg)
 {
         struct symtab *sp;
-        struct attr *ap, *ap2;
+        struct attr *ap2;
         NODE *q;
         char *c;
         int isu;
@@ -512,7 +510,6 @@ fixnames(NODE *p, void *arg)
 
         isu = 0;
         q = p->n_left;
-        ap = q->n_ap;
         if (q->n_op == UMUL)
                 q = q->n_left, isu = 1;
 
@@ -696,7 +693,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 	TWORD t;
 	int i, nbits;
 	uint32_t *ufp;
-	union { float f; double d; long double l; int i[3]; } u;
+//	union { float f; double d; long double l; int i[3]; } u;
         
 	t = p->n_type;
 	if (t > BTMASK)
