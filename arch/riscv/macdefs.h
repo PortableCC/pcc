@@ -256,7 +256,7 @@ typedef long long OFFSZ;
 #endif
 
 #define		RSTATUS	\
-/* x0, ra, sp, gp, tp */0, SAREG|PERMREG, 0, 0, 0,	\
+/* x0, ra, sp, gp, tp */0, SAREG|PREMREG, 0, 0, 0,	\
 /* t0, t1, t2 */	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, \
 /* fp, s1 */		0, SAREG|PERMREG, \
 \

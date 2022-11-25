@@ -78,6 +78,10 @@ struct checks {
 int rstatus[] = { RSTATUS };
 int roverlay[MAXREGS][MAXREGS] = { ROVERLAP };
 int regclassmap[CLASSG][MAXREGS]; /* CLASSG is highest class */
+int rtemp[CLASSG][MAXREGS], rperm[CLASSG][MAXREGS], rprem[CLASSG][MAXREGS], runk[CLASSG][MAXREGS];
+int ntemp[CLASSG], nperm[CLASSG], nprem[CLASSG], nunk[CLASSG];
+int total_temp = 0, total_perm = 0, total_prem = 0, total_unk = 0;
+
 
 static void
 compl(struct optab *q, char *str)
@@ -231,7 +235,37 @@ main(int argc, char *argv[])
 
 	/* register class definitions, used by graph-coloring */
 	/* TODO */
-
+	 
+	 /* have to do some bookkeeping to use temp regs first and prem regs last */
+	for (j = 0; j < NUMCLASS; j++) {
+		int cl = SAREG << j;
+		if (j > 3)
+			cl = SEREG << (j - 4);
+		for (i = 0; i < MAXREGS; i++) {
+			if (rstatus[i] & cl) {
+#if 0
+printf("reg %d rstatus 0x%x %s\n", i, rstatus[i],
+	((rstatus[i] & PREMREG) == PREMREG) ? "prem" : 
+	rstatus[i] & PERMREG ? "perm" : 
+	rstatus[i] & TEMPREG ? "temp" : "unk");
+#endif
+				if ((rstatus[i] & PREMREG) == PREMREG)
+					rprem[j][nprem[j]++] = i;
+				else if (rstatus[i] & PERMREG)
+					rperm[j][nperm[j]++] = i;
+				else if (rstatus[i] & TEMPREG)	
+					rtemp[j][ntemp[j]++] = i;
+				else
+					runk[j][nunk[j]++] = i;					
+			}
+		}
+		total_temp += ntemp[j];
+		total_perm += nperm[j];
+		total_prem += nprem[j];
+		total_unk += nunk[j];
+	}
+	
+	
 	/* Sanity-check the table */
 	rval = 0;
 	for (q = table; q->op != FREE; q++) {
@@ -272,18 +306,23 @@ main(int argc, char *argv[])
 	/* print out list of scratched and permanent registers */
 	fprintf(fh, "extern int tempregs[], permregs[];\n");
 	fprintf(fc, "int tempregs[] = { ");
-	for (i = j = 0; i < MAXREGS; i++)
-		if (rstatus[i] & TEMPREG)
-			fprintf(fc, "%d, ", i), j++;
+	for (j = 0; j < NUMCLASS; j++) {
+		for (i = 0; i < ntemp[j]; i++)
+			fprintf(fc, "%d, ", rtemp[j][i]);
+	}
 	fprintf(fc, "-1 };\n");
-	fprintf(fh, "#define NTEMPREG %d\n", j+1);
-	fprintf(fh, "#define FREGS %d\n", j);	/* XXX - to die */
+	fprintf(fh, "#define NTEMPREG %d\n", total_temp+1);
+	fprintf(fh, "#define FREGS %d\n", total_temp);	/* XXX - to die */
 	fprintf(fc, "int permregs[] = { ");
-	for (i = j = 0; i < MAXREGS; i++)
-		if (rstatus[i] & PERMREG)
-			fprintf(fc, "%d, ", i), j++;
+	for (j = 0; j < NUMCLASS; j++) {
+		for (i = 0; i < nperm[j]; i++)
+			fprintf(fc, "%d, ", rperm[j][i]);
+		for (i = 0; i < nprem[j]; i++)
+			fprintf(fc, "%d, ", rprem[j][i]);
+	}
 	fprintf(fc, "-1 };\n");
-	fprintf(fh, "#define NPERMREG %d\n", j+1);
+	fprintf(fc, "\n");
+	fprintf(fh, "#define NPERMREG %d\n", total_perm+1);
 	fprintf(fc, "bittype validregs[] = {\n");
 
 if (bitsz == 64) {
@@ -316,17 +355,55 @@ if (bitsz == 64) {
 	/*
 	 * The register allocator uses bitmasks of registers for each class.
 	 */
+ 
 	areg = breg = creg = dreg = ereg = freg = greg = 0;
+	int atempc = 0, apermc = 0, apremc = 0;
+	int btempc = 0, bpermc = 0, bpremc = 0;
+	int ctempc = 0, cpermc = 0, cpremc = 0;
+	int dtempc = 0, dpermc = 0, dpremc = 0;
+	int etempc = 0, epermc = 0, epremc = 0;
+	int ftempc = 0, fpermc = 0, fpremc = 0;
+	int gtempc = 0, gpermc = 0, gpremc = 0;
 	for (i = 0; i < MAXREGS; i++) {
 		for (j = 0; j < NUMCLASS; j++)
 			regclassmap[j][i] = -1;
-		if (rstatus[i] & SAREG) regclassmap[0][i] = areg++;
-		if (rstatus[i] & SBREG) regclassmap[1][i] = breg++;
-		if (rstatus[i] & SCREG) regclassmap[2][i] = creg++;
-		if (rstatus[i] & SDREG) regclassmap[3][i] = dreg++;
-		if (rstatus[i] & SEREG) regclassmap[4][i] = ereg++;
-		if (rstatus[i] & SFREG) regclassmap[5][i] = freg++;
-		if (rstatus[i] & SGREG) regclassmap[6][i] = greg++;
+		if (rstatus[i] & SAREG) { 
+			areg++;
+			regclassmap[0][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[0] + nperm[0] + (apremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[0] + (apermc++) : (atempc++));
+		}
+		if (rstatus[i] & SBREG) { 
+			breg++;
+			regclassmap[1][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[1] + nperm[1] + (bpremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[1] + (bpermc++) : (btempc++));
+		}
+
+		if (rstatus[i] & SCREG) { 
+			creg++;
+			regclassmap[2][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[2] + nperm[2] + (cpremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[2] + (cpermc++) : (ctempc++));
+		}
+		if (rstatus[i] & SDREG) { 
+			dreg++;
+			regclassmap[3][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[3] + nperm[3] + (dpremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[4] + (dpermc++) : (dtempc++));
+		}
+		if (rstatus[i] & SEREG) { 
+			ereg++;
+			regclassmap[4][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[4] + nperm[4] + (epremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[4] + (epermc++) : (etempc++));
+		}
+		if (rstatus[i] & SFREG) { 
+			freg++;
+			regclassmap[5][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[5] + nperm[5] + (fpremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[5] + (fpermc++) : (ftempc++));
+		}
+		if (rstatus[i] & SGREG) { 
+			greg++;
+			regclassmap[6][i] =  ((rstatus[i] & PREMREG) == PREMREG) ? ntemp[6] + nperm[6] + (gpremc++) : 
+											((rstatus[i] & PERMREG) ? ntemp[6] + (gpermc++) : (gtempc++));
+		}
+
 	}
 	fprintf(fh, "#define AREGCNT %d\n", areg);
 	fprintf(fh, "#define BREGCNT %d\n", breg);
@@ -410,15 +487,21 @@ if (bitsz == 64) {
 #endif
 		rval++;
 	}
+#ifdef PCC_DEBUG
+printf("TEMPREG 0x%x PERMREG 0x%x PREMREG 0x%x\n", TEMPREG, PERMREG, PREMREG);
+#endif
 	fprintf(fc, "static int rmap[NUMCLASS][%d] = {\n", mx);
 	for (j = 0; j < NUMCLASS; j++) {
-		int cl = SAREG << j;
-		if (j > 3)
-			cl = SEREG << (j - 4);
 		fprintf(fc, "\t{ ");
-		for (i = 0; i < MAXREGS; i++)
-			if (rstatus[i] & cl) fprintf(fc, "%d, ", i);
-		fprintf(fc, "},\n");
+		for (i = 0; i < ntemp[j]; i++)
+				fprintf(fc, "%d, ", rtemp[j][i]);
+		for (i = 0; i < nperm[j]; i++)
+				fprintf(fc, "%d, ", rperm[j][i]);
+		for (i = 0; i < nprem[j]; i++)
+					fprintf(fc, "%d, ", rprem[i][i]);
+		for (i = 0; i <nunk[j]; i++)
+					fprintf(fc, "%d, ", runk[j][i]);
+			fprintf(fc, "},\n");
 	}
 	fprintf(fc, "};\n\n");
 
