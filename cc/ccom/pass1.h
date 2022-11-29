@@ -736,10 +736,10 @@ void dwarf_end(void);
  */
 #if defined(__PCC__) || defined(__GNUC__)
 #define	FUNALLO(x)	__builtin_alloca(x)
-#define	FUNFREE(x)
+#define	FUNFREE(x)	((void)0)
 #elif defined(HAVE_ALLOCA)
 #define FUNALLO(x)      alloca(x)
-#define FUNFREE(x)
+#define FUNFREE(x)	((void)0)
 #else
 #define FUNALLO(x)	malloc(x)
 #define FUNFREE(x)	free(x)
