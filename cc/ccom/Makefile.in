@@ -51,7 +51,7 @@ DEST=@CCNAMES@
 MANPAGE=$(BINPREFIX)ccom
 MKEXT=mkext$(EXEEXT)
 
-all: $(DEST) $(CC2)
+all: $(DEST)
 
 OBJS=	builtins.o cgram.o code.o common.o compat.o dwarf.o external.o	\
 	gcc_compat.o init.o inline.o local.o local2.o main.o \
@@ -212,15 +212,7 @@ $(CC1):	$(OBJS1)
 	$(CC) $(LDFLAGS) $(OBJS1) -o $@ $(LIBS)
 
 $(CC2): $(CC2MSRC)
-	@if [ -s $(CC2MSRC) ]; then			\
-		echo $(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
-		$(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) -o $@ ; \
-	else						\
-		echo "int main() { return 1; }" > $@ ;	\
-	fi
-
-$(CC2MSRC):
-	echo "int main() { return 1; }" > $@
+	$(CC) $(LDFLAGS) $(CFLAGS) $(CPPFLAGS) $(CC2MSRC) $(LIBS) -o $@
 
 install: $(DEST)
 	test -z "$(DESTDIR)$(libexecdir)" || mkdir -p "$(DESTDIR)$(libexecdir)"

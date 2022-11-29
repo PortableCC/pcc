@@ -456,6 +456,10 @@ else
 	CCNAMES='$(BINPREFIX)ccom$(EXEEXT)'
 fi
 
+if test "$targmach" = "nova"; then
+	CCNAMES="`echo $CCNAMES` \$(BINPREFIX)cc2\$(EXEEXT)"
+fi
+
 AC_ARG_ENABLE(stripping,
 	AS_HELP_STRING([--disable-stripping],
 		[Disable stripping of symbols in installed binaries]),
@@ -611,7 +615,7 @@ done
 AC_MSG_CHECKING([for a C compiler for mkext])
 if test $cross_compiling = yes; then
         AC_MSG_RESULT([cross compiling])
-        AC_CHECK_PROGS(CC_FOR_BUILD, [pcc gcc cc])
+        AC_CHECK_PROGS(CC_FOR_BUILD, [pcc clang gcc cc])
 else
         AC_MSG_RESULT([not cross compiling])
         CC_FOR_BUILD=${CC-cc}
