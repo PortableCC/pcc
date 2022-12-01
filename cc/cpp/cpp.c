@@ -1755,8 +1755,9 @@ kfind(struct symtab *sp)
 	register struct iobuf *ib, *ob, *outb, *ab;
 	const usch *argary[MAXARGS+1];
 	int c, n = 0;
-	int l;
+	int l, oldused;
 
+	oldused = nbufused;
 	blkidp = 1;
 	outb = NULL;
 	DPRINT(("%d:enter kfind(%s)\n",0,sp->namep));
@@ -1837,7 +1838,7 @@ again:		if ((ab = readargs(NULL, sp, argary)) == 0)
 
 	for (ifiles->lineno += n; n; n--)
 		putob(outb, '\n');
-	if (nbufused != 1)
+	if (nbufused - oldused != 1)
 		error("lost buffer");
 	return outb;
 }
