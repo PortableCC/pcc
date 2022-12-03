@@ -202,7 +202,7 @@ packbuf(void)
 	static usch pbb[10];
 	register usch *p, *q;
 	register int l;
-	usch *rq;
+	usch *rq, *r;
 
 #ifdef PCC_DEBUG
 	if (*inp == 0 && pend > inp)
@@ -284,16 +284,14 @@ slow:		q = p;
 			if (l == '\n') {
 				p += 2;
 				numnl++;
-			} else if (l == 'u') {
-				if (pend-p < 6)
+			} else if (l == 'u' || l == 'U') {
+				if (pend-p < 10) /* max len of UCN */
 					goto psave2;
-				q = ucn(p, q);
-				p += 6;
-			} else if (l == 'U') {
-				if (pend-p < 10)
-					goto psave2;
-				q = ucn(p, q);
-				p += 10;
+				if ((r = ucn(p, q)) != q) {
+					p += (l == 'u' ? 6 : 10);
+					q = r;
+				} else
+					p++, q++;
 			} else
 				p++, q++;
 			break;
