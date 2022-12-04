@@ -119,6 +119,8 @@ static void fpconv(NODE *p);
 static void twollcomp(NODE *p);
 static void shiftop(NODE *p);
 
+int msettings;
+
 static int p2calls;
 static int p2temps;		/* TEMPs which aren't autos yet */
 static int p2maxstacksize;
@@ -283,11 +285,27 @@ int i, sz, idx = 0, addto = p2maxautooff;
 
 }
 
+static char *acomp[] = {
+    "beq", "bne", "ble", "blt", "bge", "bgt", "bleu", "bltu", "bgeu", "bgtu",
+};
+static char *acompz[] = {
+    "beqz", "bnez", "blez", "bltz", "bgez", "bgtz",
+    "bleuX", "bltuX", "bgeuX", "bgtuX", /* These should never be emitted */
+};
+static char *fcomp[] = { "feq", "feq", "fgt", "fge", "flt", "fle" };
 
 void
 zzzcode(NODE *p, int c)
 {
 	switch (c) {
+
+	case 'A': /* AREG comparisons 2-reg */
+		printf("%s", acomp[p->n_op-EQ]);
+		break;
+
+	case 'B': /* AREG comparisons against zero */
+		printf("%s", acompz[p->n_op-EQ]);
+		break;
 
 	case 'C': /* floating-point conversions */
 		fpconv(p);
@@ -300,7 +318,15 @@ zzzcode(NODE *p, int c)
 	case 'E': /* generate and error */
 		comperr("zzzcode received ZE macro");
 		break;
-	
+
+	case 'F': /* floating-point comparision */
+		printf("	%s.%c ", fcomp[p->n_op-EQ],
+		    p->n_left->n_type == DOUBLE ? 'd' : 's');
+		expand(p, 0, "A1, AL, AR\n");
+		printf("	%s ", p->n_op == EQ ? "bnez" : "beqz");
+		expand(p, 0, "A1, LC\n");
+		break;
+
 	case 'O': /* 64-bit left and right shift operators */
 		shiftop(p);
 		break;

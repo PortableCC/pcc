@@ -916,203 +916,25 @@ struct optab table[] = {
 /*
  * Logical/branching operators
  */
-
-
-/* EQ, NE, LE, LT, GE, GT, ULE, ULT, UGE, UGT */
-{	EQ, 	FORCC|INTEMP, 
+{ OPLOG, FORCC, 
 	SAREG, 	TWORD|TPOINT, 
 	SAREG, 	TWORD|TPOINT, 
 	0, 	RNOP, 
-	"	beq AR, AL, LC" COM "rleft (rs1) == rright (rs2)\n", }, 
-	
-{	EQ, 	FORCC|INTEMP, 
+	"	ZA AL, AR, LC\n", }, 
+
+/* Compare against zero - recommended special syntax */
+{ OPLOG, FORCC, 
 	SAREG, 	TWORD|TPOINT, 
 	SZERO, 	TWORD|TPOINT, 
 	0, 	RNOP, 
-	"	beq AL, x0, LC" COM "rleft (rs1) == 0\n", }, 
+	"	ZB AL, LC\n", }, 
 
-{	NE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bne AL, AR, LC" COM "rleft (rs1) != rright (rs2)\n", }, 
-
-{	NE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SZERO, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bne AL, x0, LC" COM "rleft (rs1) != 0\n", }, 
-	
-{	LE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bge AL, AR, LC" COM "rright (rs2) <= rleft (rs1) \n", }, 
-
-{	LE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SZERO, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	ble x0, AL, LC" COM "0 <= rleft (rs2)\n", }, 
-	
-{	LT, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP,
-	"	blt AR, AL, LC" COM "rright (rs1) < rleft (rs2) \n", }, 
-	
-{	LT, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SZERO, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	blt x0, AL, LC" COM "0 < rleft (rs2)\n", }, 
-
-{	GE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bge AR, AL, LC" COM "rright (rs1) >= rleft (rs2)\n", }, 
-
-
-{	GE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SZERO, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bge x0, AL, LC" COM "0 >= rleft (rs2)\n", }, 
-
-
-{	GT, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bgt AR, AL, LC" COM "rright (rs1) > rleft (rs2)\n", },
-	
-{	GT, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SZERO, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bgt x0, AL, LC" COM "0 > rleft (rs2)\n", }, 
-	
-{	ULE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bleu AR, AL, LC\n", }, 	
-	
-{	ULT, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bltu AR, AL, LC\n", }, 	
-
-{	UGE, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bgeu AR, AL, LC\n", }, 
-
-{	UGT, 	FORCC|INTEMP, 
-	SAREG, 	TWORD|TPOINT, 
-	SAREG, 	TWORD|TPOINT, 
-	0, 	RNOP, 
-	"	bgtu AR, AL, LC\n", }, 
-
-
-
-{	EQ, 	FORCC|INTEMP, 
-	SBREG, 	TFLOAT, 
-	SBREG, 	TFLOAT, 
+/* floating point comparison, require two instructions */
+{ OPLOG, FORCC, 
+	SBREG, 	TFLOAT|TDOUBLE,
+	SBREG, 	TFLOAT|TDOUBLE,
 	NAREG, 	RNOP, 
-	"	feq.s A1, AR, AL\n" \
-	"	bne x0, A1, LC\n" }, 
-
-{	EQ, 	FORCC|INTEMP, 
-	SBREG, 	TDOUBLE, 
-	SBREG, 	TDOUBLE, 
-	NAREG, 	RNOP, 
-	"	feq.d A1, AR, AL\n" \
-	"	bne x0, A1, LC\n" },
-
-{	NE, 	FORCC|INTEMP, 
-	SBREG, 	TFLOAT, 
-	SBREG, 	TFLOAT, 
-	NAREG, 	RNOP, 
-	"	feq.s A1, AR, AL\n" \
-	"	beq x0, A1, LC\n" }, 
-
-{	NE, 	FORCC|INTEMP, 
-	SBREG, 	TDOUBLE, 
-	SBREG, 	TDOUBLE, 
-	NAREG, 	RNOP, 
-	"	feq.d A1, AR, AL\n"  \
-	"	beq x0, A1, LC\n" },
-
-{	LT, 	FORCC|INTEMP, 
-	SBREG, 	TFLOAT, 
-	SBREG, 	TFLOAT, 
-	NAREG, 	RNOP, 
-	"	flt.s A1, AR, AL\n" \
-	"	bne x0, A1, LC\n" }, 
-
-{	LT, 	FORCC|INTEMP, 
-	SBREG, 	TDOUBLE, 
-	SBREG, 	TDOUBLE, 
-	NAREG, 	RNOP, 
-	"	flt.d A1, AR, AL\n" \
-	"	bne x0, A1, LC\n" },
-	
-{	LE, 	FORCC|INTEMP, 
-	SBREG, 	TFLOAT, 
-	SBREG, 	TFLOAT, 
-	NAREG, 	RNOP, 
-	"	fle.s A1, AR, AL\n" \
-	"	bne x0, A1, LC\n" }, 
-
-{	LE, 	FORCC|INTEMP, 
-	SBREG, 	TDOUBLE, 
-	SBREG, 	TDOUBLE, 
-	NAREG, 	RNOP, 
-	"	fle.d A1, AR, AL\n" \
-	"	bne x0, A1, LC\n" },
-
-/* EQ, NE, LE, LT, GE, GT, ULE, ULT, UGE, UGT */
-
-{	GE, 	FORCC|INTEMP, 
-	SBREG, 	TFLOAT, 
-	SBREG, 	TFLOAT, 
-	NAREG, 	RNOP, 
-	"	flt.s A1, AR, AL\n" \
-	"	beq x0, A1, LC\n" }, 
-
-{	GE, 	FORCC|INTEMP, 
-	SBREG, 	TDOUBLE, 
-	SBREG, 	TDOUBLE, 
-	NAREG, 	RNOP, 
-	"	flt.d A1, AR, AL\n" \
-	"	beq x0, A1, LC\n" },
-
-{	GT, 	FORCC|INTEMP, 
-	SBREG, 	TFLOAT, 
-	SBREG, 	TFLOAT, 
-	NAREG, 	RNOP, 
-	"	fle.s A1, AR, AL\n" \
-	"	beq x0, A1, LC\n" }, 
-
-{	GT, 	FORCC|INTEMP, 
-	SBREG, 	TDOUBLE, 
-	SBREG, 	TDOUBLE, 
-	NAREG, 	RNOP, 
-	"	fle.d A1, AR, AL\n" \
-	"	beq x0, A1, LC\n" },
-
-
-
-{ 	OPLOG,	FOREFF,
-	SAREG,	TWORD,
-	SZERO,	TWORD,
-	 0,      0,
-	"	beq AL, x0, LC" COM "oplog compare zero\n", }, 
-
+	"ZF" }, 
 
 /* who needs OPLOG? */
 {	OPLOG, 	FORCC, 
