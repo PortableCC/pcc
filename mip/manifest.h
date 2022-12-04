@@ -260,7 +260,10 @@ struct interpass {
 struct interpass_prolog {
 	struct interpass ipp_ip;
 	char *ipp_name;		/* Function name */
-	int ipp_vis;		/* Function visibility */
+	int ipp_flags;		/* Function-specific flags */
+#define	ipp_vis		ipp_flags
+#define	IF_VISIBLE	001
+#define	IF_NEEDFP	002
 	TWORD ipp_type;		/* Function type */
 	int ipp_autos;		/* Size on stack needed */
 	int ip_tmpnum;		/* # allocated temp nodes so far */

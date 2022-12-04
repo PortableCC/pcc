@@ -320,6 +320,23 @@ deluseless(NODE *p)
 	return NULL;
 }
 
+/*
+ * Do some checks after optimization is finished.
+ */
+static void
+latechecks(NODE *p, void *arg)
+{
+	int *flags = arg;
+
+	/* Check if frame pointer is needed */
+	if (p->n_op == ASSIGN && p->n_left->n_op == REG &&
+	    regno(p->n_left) == FPREG)
+		*flags |= IF_NEEDFP; /* FP is assigned */
+	if (p->n_op == CALL && p->n_left->n_op == ICON && 
+	    strcmp(p->n_left->n_name, "alloca") == 0)
+		*flags |= IF_NEEDFP; /* alloca may modify FP */
+}
+
 #ifdef PASS2
 
 #define	SKIPWS(p) while (*p == ' ') p++
@@ -504,7 +521,7 @@ mainp2()
 			ip = (void *)ipp;
 			ip->type = IP_PROLOG;
 			sscanf(p, "%d %d %d %d %d %s", &ipp->ipp_type,
-			    &ipp->ipp_vis, &ip->ip_lbl, &ipp->ip_tmpnum,
+			    &ipp->ipp_flags, &ip->ip_lbl, &ipp->ip_tmpnum,
 			    &ipp->ip_lblnum, nam);
 			ipp->ipp_name = xstrdup(nam);
 			ipp->ipp_autos = -1;
@@ -668,6 +685,10 @@ pass2_compile(struct interpass *ip)
 
 	if (xtemps && xdeljumps)
 		deljumps(p2e);
+
+	DLIST_FOREACH(ip, &p2e->ipole, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, latechecks, &p2env.ipp->ipp_flags);
 
 	DLIST_FOREACH(ip, &p2e->ipole, qelem)
 		emit(ip);
