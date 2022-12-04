@@ -50,7 +50,7 @@ prologue(struct interpass_prolog *ipp)
 {
 	int i, j;
 
-	if (ipp->ipp_vis)
+	if (ipp->ipp_flags & IF_VISIBLE)
 		printf("	.globl %s\n", ipp->ipp_name);
 	printf("%s:\n", ipp->ipp_name);
 	addto = p2maxautooff;

@@ -151,7 +151,7 @@ prologue(struct interpass_prolog *ipp)
 			ipp->ipp_ip.type,
 			ipp->ipp_ip.lineno,
 			ipp->ipp_name,
-			ipp->ipp_vis,
+			ipp->ipp_flags,
 			ipp->ipp_type,
 			ipp->ipp_autos,
 			ipp->ip_tmpnum,

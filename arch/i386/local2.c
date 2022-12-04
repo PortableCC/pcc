@@ -102,7 +102,7 @@ prologue(struct interpass_prolog *ipp)
 	ftype = ipp->ipp_type;
 
 #ifdef LANG_F77
-	if (ipp->ipp_vis)
+	if (ipp->ipp_flags & IF_VISIBLE)
 		printf("	.globl %s\n", ipp->ipp_name);
 	printf("	.align 4\n");
 	printf("%s:\n", ipp->ipp_name);

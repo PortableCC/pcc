@@ -56,7 +56,7 @@ prologue(struct interpass_prolog *ipp)
 #endif
     
     printf("	RSEG CODE:CODE:REORDER:NOROOT(0)\n");
-    if (ipp->ipp_vis)	
+    if (ipp->ipp_flags & IF_VISIBLE)	
 	printf("	PUBLIC %s\n", ipp->ipp_name);
     printf("%s:\n", ipp->ipp_name);
     

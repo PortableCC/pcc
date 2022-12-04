@@ -116,7 +116,7 @@ int i, addto = 0;
 			ipp->ipp_ip.type,
 			ipp->ipp_ip.lineno,
 			ipp->ipp_name,
-			ipp->ipp_vis,
+			ipp->ipp_flags & IF_VISIBLE,
 			ipp->ipp_type,
 			ipp->ipp_autos,
 			ipp->ip_tmpnum,

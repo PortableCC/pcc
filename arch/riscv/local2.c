@@ -145,11 +145,11 @@ prologue(struct interpass_prolog *ipp)
 
 #ifdef PCC_DEBUG
 	if (x2debug)
-		printf("prologue: type=%d, lineno=%d, name=%s, vis=%d, ipptype=%d, autos=%d, tmpnum=%d, lblnum=%d\n",
+		printf("prologue: type=%d, lineno=%d, name=%s, flags=%x, ipptype=%d, autos=%d, tmpnum=%d, lblnum=%d\n",
 			ipp->ipp_ip.type,
 			ipp->ipp_ip.lineno,
 			ipp->ipp_name,
-			ipp->ipp_vis,
+			ipp->ipp_flags,
 			ipp->ipp_type,
 			ipp->ipp_autos,
 			ipp->ip_tmpnum,

@@ -138,7 +138,7 @@ prologue(struct interpass_prolog *ipp)
 		needframe = 1;
 
 #ifdef LANG_F77
-	if (ipp->ipp_vis)
+	if (ipp->ipp_flags & IF_VISIBLE)
 		printf("	.globl %s\n", ipp->ipp_name);
 	printf("	.align 16\n");
 	printf("%s:\n", ipp->ipp_name);

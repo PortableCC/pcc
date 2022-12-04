@@ -48,7 +48,7 @@ prologue(struct interpass_prolog *ipp)
 {
 
 #ifdef os_none
-	if (ipp->ipp_vis)
+	if (ipp->ipp_flags & IF_VISIBLE)
 		printf("	.ENT %s\n", ipp->ipp_name);
 	printf("	.ZREL\n");
 	printf("%s:	.%s\n", ipp->ipp_name, ipp->ipp_name);
@@ -59,7 +59,7 @@ prologue(struct interpass_prolog *ipp)
 	printf("	jsr @prolog\n");	/* jump to prolog */
 #else
 	printf("#BEGFTN\n");
-	if (ipp->ipp_vis)
+	if (ipp->ipp_flags & IF_VISIBLE)
 		printf("	.globl %s\n", ipp->ipp_name);
 	printf("%s:\n", ipp->ipp_name);
 	printf("	sta 3,@spref\n");	/* put ret pc on stack */
