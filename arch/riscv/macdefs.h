@@ -102,6 +102,7 @@ typedef long long OFFSZ;
 #define AUTOINIT	0	/* # bits below fp where automatics start */
 #define BACKAUTO 		/* stack grows negatively for automatics */
 #define BACKTEMP 		/* stack grows negatively for temporaries */
+#define	REGARGS		8	/* # of args in argument regs */
 
 #undef	FIELDOPS		/* no bit-field instructions */
 #define	TARGET_ENDIAN TARGET_LE	/* little-endian only */
@@ -411,6 +412,7 @@ extern int msettings;
 #define	RVISE()		(msettings & RV_E)
 
 #define	XLEN	(RVIS64() ? 64 : 32)
+#define	XLENx2	(2*XLEN)
 #define	XLENTYP	szlong
 
 int szlong, szpoint, allong, alpoint;

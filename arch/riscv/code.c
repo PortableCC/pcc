@@ -325,9 +325,6 @@ param_struct(struct symtab *sym, int *argofsp)
 void
 bfcode(struct symtab **sp, int cnt)
 {
-#ifdef USE_GOTNR
-	extern int gotnr;
-#endif
 
 	struct symtab *sp2;
 	union arglist *usym;
@@ -340,38 +337,29 @@ bfcode(struct symtab **sp, int cnt)
 	 * Detect if this function has ellipses and save those
 	 * argument registers onto stack.
 	 */
-	
-	usym = cftnsp->sdf->dfun;
-	for (; usym->type != TELLIPSIS; usym++) {
-		t = usym->type;
-		if (t == TNULL)
-			break;
-		if (ISSOU(BTYPE(t)))
-			usym++;
-		for (i = 0; t > BTMASK; t = DECREF(t)) 
-			if (ISARY(t) || ISFTN(t))
-				i++;
-		if (i)
-			usym++;
+	if (cftnsp->sdf && cftnsp->sdf->dfun) {
+		usym = cftnsp->sdf->dfun;
+		for (; usym->type != TELLIPSIS; usym++) {
+			t = usym->type;
+			if (t == TNULL)
+				break;
+			if (ISSOU(BTYPE(t)))
+				usym++;
+			for (i = 0; t > BTMASK; t = DECREF(t)) 
+				if (ISARY(t) || ISFTN(t))
+					i++;
+			if (i)
+				usym++;
+		}
+		if (usym->type == TELLIPSIS)
+			saveallargs = 1;
 	}
-	if (usym->type == TELLIPSIS)
-				saveallargs = 1;
 	
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
 		param_retstruct();
 		++argofs;
 	}
 
-#ifdef USE_GOTNR
-	if (kflag) {
-		/* put GOT register into temporary */
-		q = block(REG, NIL, NIL, INT, 0, 0);
-		regno(q) = GOTREG;
-		p = tempnode(0, INT, 0, 0);
-		gotnr = regno(p);
-		ecomp(buildtree(ASSIGN, p, q));
-	}
-#endif
 	/* recalculate the arg offset and create TEMP moves */
 	for (i = 0; i < cnt; i++) {
 
@@ -384,7 +372,7 @@ bfcode(struct symtab **sp, int cnt)
 			break;
 
 		if (argofs >= NARGREGS) {
-				//cerror("too many arguments, do something intelligent");
+			//cerror("too many arguments, do something intelligent");
 				putintemp(sp[i]);
 		} else if (stype == STRTY || stype == UNIONTY) {
 				param_struct(sp[i], &argofs);
