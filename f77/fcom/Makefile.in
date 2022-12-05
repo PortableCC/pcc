@@ -10,7 +10,7 @@ CC = @CC@
 CC_FOR_BUILD = @CC_FOR_BUILD@
 CFLAGS = @CFLAGS@ @ADD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@ @ADD_CPPFLAGS@ -DFCOM -DLANG_F77 \
-	-Dos_$(TARGOS) -Dmach_$(TARGMACH) \
+	-Dos_$(TARGOS) -Dmach_$(TARGMACH) -I$(top_srcdir)/common \
 	-I$(srcdir) -I$(builddir) -I$(top_builddir) \
 	-I$(MIPDIR) -I$(MDIR) -I$(top_srcdir)/os/$(TARGOS)
 LIBS = @LIBS@
@@ -34,6 +34,7 @@ INSTALL_DATA = @INSTALL_DATA@
 
 MDIR=$(top_srcdir)/arch/$(TARGMACH)
 MIPDIR=$(top_srcdir)/mip
+COMDIR=$(top_srcdir)/common
 
 DEST=@BINPREFIX@fcom$(EXEEXT)
 MKEXT=mkext$(EXEEXT)
@@ -91,8 +92,8 @@ $(OBJS): $(HDRS) external.c gram.c
 common.o: $(MIPDIR)/common.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(MIPDIR)/common.c
 
-compat.o: $(MIPDIR)/compat.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(MIPDIR)/compat.c
+compat.o: $(COMDIR)/compat.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(COMDIR)/compat.c
 
 data.o: $(srcdir)/data.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(srcdir)/data.c
