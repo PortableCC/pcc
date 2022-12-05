@@ -304,7 +304,7 @@ warner(int type, ...)
 {
 	va_list ap;
 	char *t;
-#ifndef PASS2
+#if !defined(PASS2) && !defined(LANG_F77)
 	extern int issyshdr;
 
 	if (issyshdr && type == Wtruncate)
