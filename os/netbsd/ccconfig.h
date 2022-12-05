@@ -36,6 +36,10 @@
 
 #ifdef LANG_F77
 #define F77LIBLIST { "-L/usr/local/lib", "-lF77", "-lI77", "-lm", "-lc", NULL };
+#define	STARTFILES { "/usr/lib/crt0.o", NULL }
+#define	ENDFILES   { NULL }
+#define DYNLINKER  { "/usr/libexec/ld.elf_so", NULL }
+#define CRT0FILE   "/usr/lib/crt0.o"
 #endif
 
 #define	DYNLINKLIB	"/usr/libexec/ld.elf_so"
