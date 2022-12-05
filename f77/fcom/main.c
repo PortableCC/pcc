@@ -44,8 +44,8 @@ void mkdope(void);
 int ndebug;
 int b2debug, c2debug, e2debug, f2debug, g2debug, o2debug;
 int r2debug, s2debug, t2debug, u2debug, x2debug;
-int kflag;
-int xdeljumps, xtemps, xssa, xdce;
+int kflag, wdebug;
+int xdeljumps, xtemps, xssa, xdce, xscp;
 
 int mflag, tflag;
 

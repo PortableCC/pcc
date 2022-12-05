@@ -95,8 +95,7 @@ void
 puthead(char *s)
 {
 	struct interpass_prolog *ipp = ckalloc(sizeof(struct interpass_prolog));
-	int olbl, lbl1, lbl2;
-	unsigned int i;
+	int olbl, lbl1;
 
 	if (s == NULL)
 		return;
@@ -105,10 +104,7 @@ puthead(char *s)
 	inproc = s;
 	olbl = lastlabno;
 	lbl1 = newlabel();
-	lbl2 = newlabel();
 
-	for (i = 0; i < NIPPREGS; i++)
-		ipp->ipp_regs[i] = 0;	/* no regs used yet */
 	ipp->ipp_autos = 0;		/* no autos used yet */
 	ipp->ipp_name = copys(s);		/* function name */
 	ipp->ipp_type = INT;		/* type not known yet? */
@@ -136,12 +132,9 @@ void
 putbracket()
 {
 	struct interpass_prolog *ipp = ckalloc(sizeof(struct interpass_prolog));
-	unsigned int i;
 
 	if (inproc == 0)
 		fatal1("puteof outside procedure");
-	for (i = 0; i < NIPPREGS; i++)
-		ipp->ipp_regs[i] = 0;
 	ipp->ipp_autos = autoleng;
 	ipp->ipp_name = copys(inproc);
 	ipp->ipp_type = INT; /* XXX should set the correct type */
@@ -183,7 +176,7 @@ putif(bigptr p, int l)
 	} else {
 		p1 = putex1(p);
 		if (p1->n_op == EQ && p1->n_right->n_op == ICON &&
-		    p1->n_right->n_lval == 0 && logop(p1->n_left->n_op)) {
+		    getlval(p1->n_right) == 0 && logop(p1->n_left->n_op)) {
 			/* created by OPOR */
 			NODE *q = p1->n_left;
 			q->n_op = negrel[q->n_op - EQ];
