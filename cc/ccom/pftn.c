@@ -2622,7 +2622,7 @@ fixtype(NODE *p, int class)
 int
 uclass(int class)
 {
-	if (class == SNULL)
+	if (class == SNULL && !fun_inline)
 		return(EXTERN);
 	else if (class == STATIC)
 		return(USTATIC);
