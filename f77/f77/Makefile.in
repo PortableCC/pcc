@@ -24,24 +24,32 @@ CFLAGS = @CFLAGS@ @ADD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@ @ADD_CPPFLAGS@ -DLANG_F77 \
 	-DLIBEXECDIR=\"$(libexecdir)\" -DINCLUDEDIR=\"$(includedir)\" \
 	-DPCCINCDIR=\"$(PCCINCDIR)/\" -DPCCLIBDIR=\"$(PCCLIBDIR)/\" \
-	-DLIBDIR=\"$(F77LIBDIR)\" -Dmach_$(TARGMACH) -Dos_$(TARGOS) \
+	-Dmach_$(TARGMACH) -Dos_$(TARGOS) \
+	-I$(top_srcdir)/cc/driver -I$(MIPDIR) -I$(COMMONDIR)\
 	-I$(FCOMDIR) -I$(top_builddir) -I$(top_srcdir)/os/$(TARGOS) -I$(MDIR)
 LIBS = @LIBS@
 LDFLAGS = @LDFLAGS@
 INSTALL = @INSTALL@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_DATA = @INSTALL_DATA@
-OBJS=f77.o
+OBJS=f77.o strlist.o xalloc.o
 DEST=@BINPREFIX@f77
 
 MIPDIR=$(top_srcdir)/mip
 MDIR=$(top_srcdir)/arch/$(TARGMACH)
 FCOMDIR=$(top_srcdir)/f77/fcom
+COMMONDIR=$(top_srcdir)/common
 
 all: $(DEST)
 
 $(DEST): $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) -o $@ $(LIBS)
+
+strlist.o: $(top_srcdir)/cc/driver/strlist.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(top_srcdir)/cc/driver/strlist.c
+
+xalloc.o: $(top_srcdir)/cc/driver/xalloc.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(top_srcdir)/cc/driver/xalloc.c
 
 .c.o:
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
