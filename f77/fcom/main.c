@@ -83,7 +83,7 @@ main(int argc, char **argv)
 
 #define DONE(c)	{ retcode = c; goto finis; }
 
-	while ((ch = getopt(argc, argv, "qw:UuOdpC1I:Z:X:")) != -1)
+	while ((ch = getopt(argc, argv, "qw:UuOdpC1I:Z:X:x:")) != -1)
 		switch (ch) {
 		case 'q':
 			quietflag = YES;
@@ -104,12 +104,11 @@ main(int argc, char **argv)
 			undeftype = YES;
 			break;
 
-		case 'O':
-			optimflag = YES;
-#ifdef notyet
-			xdeljumps = 1;
-			xtemps = 1;
-#endif
+		case 'x':
+			if (strcmp(optarg, "deljumps") == 0)
+				xdeljumps = 1;
+			if (strcmp(optarg, "temps") == 0)
+				xtemps = 1;
 			break;
 
 		case 'd':
@@ -239,7 +238,6 @@ main(int argc, char **argv)
 	doext();
 	preven(ALIDOUBLE);
 	prtail();
-	puteof();
 	DONE(0);
 
 

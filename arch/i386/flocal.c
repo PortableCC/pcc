@@ -13,7 +13,7 @@
  * documentation and/or other materials provided with the distribution.
  * All advertising materials mentioning features or use of this software
  * must display the following acknowledgement:
- * 	This product includes software developed or owned by Caldera
+ *	This product includes software developed or owned by Caldera
  *	International, Inc.
  * Neither the name of Caldera International, Inc. nor the names of other
  * contributors may be used to endorse or promote products derived from
@@ -23,7 +23,7 @@
  * INTERNATIONAL, INC. AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED.  IN NO EVENT SHALL CALDERA INTERNATIONAL, INC. BE LIABLE
+ * DISCLAIMED.	IN NO EVENT SHALL CALDERA INTERNATIONAL, INC. BE LIABLE
  * FOR ANY DIRECT, INDIRECT INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -37,12 +37,31 @@
 #include "defines.h"
 #include "defs.h"
 
+/*
+ * put out a character string constant.	 Begin every string on
+ * a long integer boundary, and pad with nulls (by aligning).
+ */
 void
-prchars(int *s)
+putstr(char *s, ftnint n)
 {
-	printf("\t.byte 0%o,0%o\n", s[0], s[1]);
+	int ch;
+
+	printf("\t.align 2\n");
+	printf("\t.ascii \"");
+	while(--n >= 0) {
+		ch = (unsigned)*s++;
+		if (ch < 32 || ch > 126)
+			printf("\\%03o", ch);
+		else
+			printf("%c", ch);
+	}
+	printf("\"\n");
+	printf("\t.align 2\n");
 }
 
+/*
+ * Print out segment. Must correspond with numbers in defs.h.
+ */
 void
 setloc(int l)
 {
@@ -55,8 +74,6 @@ setloc(int l)
 	lastloc = l;
 }
 
-#ifdef FCOM
-
 
 /*
 	PDP11-780/VAX - SPECIFIC PRINTING ROUTINES
@@ -68,6 +85,7 @@ setloc(int l)
 void
 goret(int type)
 {
+	printf("# GORET\n");
 }
 
 /*
@@ -79,6 +97,7 @@ prlabel(int k)
 	printf(LABFMT ":\n", k);
 }
 
+#if 0
 /*
  * Print naming for location.
  * name[0] is location type.
@@ -92,9 +111,10 @@ prnloc(char *name)
 		fatal("unhandled prnloc %c", *name);
 	printf("%s:\n", name+1);
 }
+#endif
 
 /*
- * Print integer constant.
+ * Print integer constant (to either temp file or stdout).
  */
 void
 prconi(FILE *fp, int type, ftnint n)
@@ -103,7 +123,7 @@ prconi(FILE *fp, int type, ftnint n)
 }
 
 /*
- * Print address constant, given as a label number.
+ * Print address constant, given as a label number (to stdout).
  */
 void
 prcona(ftnint a)
@@ -112,7 +132,7 @@ prcona(ftnint a)
 }
 
 /*
- * Print out a floating constant.
+ * Print out a floating constant (to temp file or stdout).
  */
 void
 prconr(FILE *fp, int type, double x)
@@ -123,8 +143,14 @@ prconr(FILE *fp, int type, double x)
 void
 preven(int k)
 {
-	if (k > 1)
-		printf("\t.align\t%d\n", k);
+	static int algsz[] = { 1,2,4,8,16 };
+	int i;
+
+	for (i = 0; i < 5 && algsz[i] != k; i++)
+		;
+	if (algsz[i] != k)
+		err("bad align size %d", k);
+	printf("\t.align\t%d\n", i);
 }
 
 /*
@@ -134,26 +160,25 @@ preven(int k)
 char *
 memname(int stg, int mem)
 {
-#define	MLEN	(XL + 10)
-	char *s = malloc(MLEN);
+	static char s[XL];
 
 	switch(stg) {
 	case STGCOMMON:
 	case STGEXT:
-		snprintf(s, MLEN, "%s", varstr(XL, extsymtab[mem].extname));
+		snprintf(s, XL, "%s", varstr(XL, extsymtab[mem].extname));
 		break;
 
 	case STGBSS:
 	case STGINIT:
-		snprintf(s, MLEN, "v.%d", mem);
+		snprintf(s, XL, "v.%d", mem);
 		break;
 
 	case STGCONST:
-		snprintf(s, MLEN, ".L%d", mem);
+		snprintf(s, XL, ".L%d", mem);
 		break;
 
 	case STGEQUIV:
-		snprintf(s, MLEN, "q.%d", mem);
+		snprintf(s, XL, "q.%d", mem);
 		break;
 
 	default:
@@ -163,40 +188,34 @@ memname(int stg, int mem)
 }
 
 void
-prlocvar(char *s, ftnint len)
+prvar(char *s, ftnint len, int global)
 {
-	printf("\t.lcomm\t%s,%ld\n", s, len);
-}
-
-
-void
-prext(char *name, ftnint leng, int init)
-{
-	if(leng == 0)
-		printf("\t.globl\t%s\n", name);
+	if (len == 0)
+		printf("\t.globl\t%s\n", s);
 	else
-		printf("\t.comm\t%s,%ld\n", name, leng);
+		printf("\t.%scomm\t%s,%ld\n", global ? "" : "l", s, len);
 }
 
 void
 prendproc(void)
 {
+	printf("# END prendproc\n");
 }
 
+/*
+ * Called just before exit.
+ */
 void
 prtail(void)
 {
+	printf("# TAIL prtail\n");
 }
 
 void
 prolog(struct entrypoint *ep, struct bigblock *argvec)
 {
 	/* Ignore for now.  ENTRY is not supported */
-}
-
-void
-prdbginfo(void)
-{
+	printf("# BEGIN %s\n", ep->entryname->extname);
 }
 
 static void
@@ -228,4 +247,3 @@ p2tree(NODE *p)
 {
 	walkf(p, fcheck, 0);
 }
-#endif /* FCOM */

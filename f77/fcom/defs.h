@@ -70,7 +70,6 @@ extern struct labelblock *thislabel;
 extern int mflag, tflag;
 
 extern flag profileflag;
-extern flag optimflag;
 extern flag quietflag;
 extern flag nowarnflag;
 extern flag ftn66flag;
@@ -491,7 +490,7 @@ void entrypt(int, int, ftnint, struct extsym *, chainp);
 void settype(struct bigblock *, int, int), putlabel(int);
 void putbranch(struct bigblock *p), goret(int), putrbrack(int);
 void prolog(struct entrypoint *, struct bigblock *), prendproc(void);
-void prlocvar(char *, ftnint), prext(char *, ftnint, int);
+void prvar(char *, ftnint, int);
 void vardcl(struct bigblock *v), frchain(chainp *p); 
 void frtemp(struct bigblock *p), incomm(struct extsym *, struct bigblock *);
 void setintr(struct bigblock * v), setext(struct bigblock * v);

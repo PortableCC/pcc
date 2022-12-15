@@ -273,27 +273,3 @@ putconst(struct bigblock *p)
 	frexpr(p);
 	return( q );
 }
-
-/*
- * put out a character string constant.  begin every one on
- * a long integer boundary, and pad with nulls
- */
-void
-putstr(char *s, ftnint n)
-{
-	int b[FSZSHORT];
-	int i;
-
-	i = 0;
-	while(--n >= 0) {
-		b[i++] = *s++;
-		if(i == FSZSHORT) {
-			prchars(b);
-			i = 0;
-		}
-	}
-
-	while(i < FSZSHORT)
-		b[i++] = '\0';
-	prchars(b);
-}

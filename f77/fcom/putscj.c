@@ -101,12 +101,12 @@ puthead(char *s)
 		return;
 	if (inproc)
 		fatal1("puthead %s in procedure", s);
-	inproc = s;
+	inproc = strdup(s);
 	olbl = lastlabno;
 	lbl1 = newlabel();
 
 	ipp->ipp_autos = 0;		/* no autos used yet */
-	ipp->ipp_name = copys(s);		/* function name */
+	ipp->ipp_name = inproc;		/* function name */
 	ipp->ipp_type = INT;		/* type not known yet? */
 	ipp->ipp_vis = 1;		/* always visible */
 	ipp->ip_tmpnum = 0; 		/* no temp nodes used in F77 yet */
@@ -131,29 +131,26 @@ puthead(char *s)
 void
 putbracket()
 {
+	static int labs;
 	struct interpass_prolog *ipp = ckalloc(sizeof(struct interpass_prolog));
 
 	if (inproc == 0)
 		fatal1("puteof outside procedure");
 	ipp->ipp_autos = autoleng;
-	ipp->ipp_name = copys(inproc);
+	ipp->ipp_name = inproc;
 	ipp->ipp_type = INT; /* XXX should set the correct type */
 	ipp->ipp_vis = 1;
 	ipp->ip_tmpnum = 0;
 	ipp->ip_lblnum = lastlabno;
+	ipp->ip_labels = &labs;
 	ipp->ipp_ip.ip_lbl = retlabel;
 	ipp->ipp_ip.type = IP_EPILOG;
 	printf("\t.text\n"); /* XXX */
 	pass2_compile((struct interpass *)ipp);
+	free(inproc);
 	inproc = 0;
 }
 
-
-
-void
-putrbrack(int k)
-{
-}
 
 
 void
