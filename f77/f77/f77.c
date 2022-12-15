@@ -1172,6 +1172,7 @@ cksetflags(struct flgcheck *fs, struct strlist *sl, int which)
 }
 
 struct flgcheck fcomflgcheck[] = {
+	{ &vflag, 1, "-v" },
 	{ &Oflag, 1, "-xtemps" },
 	{ &Oflag, 1, "-xdeljumps" },
 	{ &Oflag, 1, "-xinline" },

@@ -32,7 +32,7 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
  * POSSIBILITY OF SUCH DAMAGE.
  */
-char xxxvers[] = "\nFORTRAN 77 PASS 1, VERSION 1.16,  3 NOVEMBER 1978\n";
+char xxxvers[] = "FORTRAN 77 PASS 1, VERSION 1.16,  3 NOVEMBER 1978\n";
 
 #include <unistd.h>
 
@@ -83,7 +83,7 @@ main(int argc, char **argv)
 
 #define DONE(c)	{ retcode = c; goto finis; }
 
-	while ((ch = getopt(argc, argv, "qw:UuOdpC1I:Z:X:x:")) != -1)
+	while ((ch = getopt(argc, argv, "qw:UuOdpC1I:Z:X:x:v")) != -1)
 		switch (ch) {
 		case 'q':
 			quietflag = YES;
@@ -102,6 +102,10 @@ main(int argc, char **argv)
 
 		case 'u':
 			undeftype = YES;
+			break;
+
+		case 'v':
+			printf("%s", xxxvers);
 			break;
 
 		case 'x':
