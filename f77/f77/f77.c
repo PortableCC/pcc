@@ -565,6 +565,7 @@ main(int argc, char *argv[])
 			Oflag = 1;	/* optimize */
 			break;
 
+		case 'V':
 		case 'v':
 			printf("%s\n", VERSSTR);
 			vflag++;
