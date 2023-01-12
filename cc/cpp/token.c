@@ -199,7 +199,6 @@ static int numnl;
 static void
 packbuf(void)
 {
-	static usch pbb[10];
 	register usch *p, *q;
 	register int l;
 	usch *rq, *r;
@@ -211,12 +210,12 @@ packbuf(void)
 
 	q = pbeg + PBMAX;
 	/* if we found potential trigraph */
-	if (pbb[9]) {
-		p = pbb+10;
+	if (ifiles->pbb[9]) {
+		p = ifiles->pbb+10;
 		while ((*--inp = *--p))
 			q--;
 		inp++;
-		pbb[9] = 0;
+		ifiles->pbb[9] = 0;
 	}
 
 	p = inp;
@@ -234,7 +233,7 @@ packbuf(void)
 					goto slow;
 psave:				if (pend-p < 3) {
 					/* Save for future use */
-					q = pbb+10;
+					q = ifiles->pbb+10;
 					while (pend > p)
 						*--q = *--pend;
 					*--q = 0;
@@ -337,7 +336,7 @@ psave2:
 	rq = pend;
 	pend = q;
 	*q = 0;
-	q = pbb+10;
+	q = ifiles->pbb+10;
 	while (rq > p)
 		*--q = *--rq;
 	*--q = 0;
@@ -1053,6 +1052,7 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 #endif
 	ifiles = ic;
 
+	ic->pbb[9] = 0;
 	ic->opend = pend - pbeg;
 	ic->oinp = inp - pbeg;
 	ic->opbeg = pbeg;

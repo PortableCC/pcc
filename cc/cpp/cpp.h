@@ -163,6 +163,7 @@ struct includ {
 	int idx;
 	void *incs;
 	const usch *fn;
+	usch pbb[10];
 #if LIBVMF
 	struct vseg *vseg;
 #endif
