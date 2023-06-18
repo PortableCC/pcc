@@ -675,6 +675,7 @@ clocal(P1ND *p)
 		p = makety(p, o, 0, 0, 0);
 		break;
 
+#if 0
 	case FORCE:
 		/* put return value in return reg */
 		p->n_op = ASSIGN;
@@ -683,6 +684,7 @@ clocal(P1ND *p)
 		p->n_left->n_rval = p->n_left->n_type == BOOL ? 
 		    RETREG(CHAR) : RETREG(p->n_type);
 		break;
+#endif
 
 #ifndef NOBREGS
 	case LS:

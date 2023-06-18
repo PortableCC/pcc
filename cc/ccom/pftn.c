@@ -549,9 +549,12 @@ ftnend(void)
 
 	if (retlab != NOLAB && nerrors == 0) { /* inside a real function */
 		plabel(retlab);
+#ifndef NEWPARAMS
 		if (cftnod)
 			ecomp(buildtree(FORCE, p1tcopy(cftnod), NIL));
+#endif
 		efcode(); /* struct return handled here */
+		fun_leave();
 		c = getexname(cftnsp);
 #ifndef STACK_TYPE
 #define	STACK_TYPE	CHAR
@@ -692,6 +695,7 @@ done:	autooff = AUTOINIT;
 	plabel(prolab); /* after prolog, used in optimization */
 	retlab = getlab();
 	bfcode(argptr, nparams);
+	fun_enter(cftnsp, argptr, nparams);
 	if (fun_inline && (xinline
 #ifdef GCC_COMPAT
  || attr_find(cftnsp->sap, GCC_ATYP_ALW_INL)

@@ -60,22 +60,6 @@ putstr(char *s, ftnint n)
 }
 
 /*
- * Print out segment. Must correspond with numbers in defs.h.
- */
-void
-setloc(int l)
-{
-	static int lastloc = -1;
-	static char *loctbl[] =
-	    { "text", "data", "section .rodata", "section .rodata", "bss" };
-	if (l == lastloc)
-		return;
-	printf("\t.%s\n", loctbl[l]);
-	lastloc = l;
-}
-
-
-/*
 	PDP11-780/VAX - SPECIFIC PRINTING ROUTINES
 */
 
@@ -138,53 +122,6 @@ void
 prconr(FILE *fp, int type, double x)
 {
 	fprintf(fp, "\t%s\t0f%e\n", (type==TYREAL ? ".float" : ".double"), x);
-}
-
-void
-preven(int k)
-{
-	static int algsz[] = { 1,2,4,8,16 };
-	int i;
-
-	for (i = 0; i < 5 && algsz[i] != k; i++)
-		;
-	if (algsz[i] != k)
-		err("bad align size %d", k);
-	printf("\t.align\t%d\n", i);
-}
-
-/*
- * Convert a tag and offset into the symtab table to a string.
- * An external string is never longer than XL bytes.
- */
-char *
-memname(int stg, int mem)
-{
-	static char s[XL];
-
-	switch(stg) {
-	case STGCOMMON:
-	case STGEXT:
-		snprintf(s, XL, "%s", varstr(XL, extsymtab[mem].extname));
-		break;
-
-	case STGBSS:
-	case STGINIT:
-		snprintf(s, XL, "v.%d", mem);
-		break;
-
-	case STGCONST:
-		snprintf(s, XL, ".L%d", mem);
-		break;
-
-	case STGEQUIV:
-		snprintf(s, XL, "q.%d", mem);
-		break;
-
-	default:
-		fatal1("memname: invalid vstg %d", stg);
-	}
-	return(s);
 }
 
 void

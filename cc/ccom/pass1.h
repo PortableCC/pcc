@@ -744,3 +744,65 @@ void dwarf_end(void);
 #define FUNALLO(x)	malloc(x)
 #define FUNFREE(x)	free(x)
 #endif
+
+/*
+ * parameter definition struct, filled in for each parameter.
+ *
+ * Flags field is shared between target and common code. Flags:
+ * AV_REG - param is stored in register reg, reg type in rtp
+ * AV_REG2 - param spans over reg and reg2.
+ * AV_STREG - struct in reg/reg2, reg type in rtp
+ * AV_STK - param on stack, offset from fp in off.
+ *  AV_STK_PUSH - param should be pushed on stack instead of written.
+ *
+ * (typ, df, ap) are the type specification for this parameter.
+ * (off, reg, reg2) are set by the target code for this parameter.
+ */
+struct rdef {
+	int flags;		/* shared between common/target code */
+	int type;		/* set by common code */
+	union dimfun *df;	/* set by common code */
+	struct attr *ap;	/* set by common code */
+	int off, rtp, reg[2];	/* set by target code */
+};
+#define	AV_REG		001
+#define	AV_REG2		002
+#define	AV_STK		004
+#define	AV_STK_PUSH	010
+#define	AV_STREG	020
+
+/*
+ * function call parameter definitions.
+ *
+ * For return values the following flags are important:
+ * RV_STRET - Normal struct return; there is a hidden arg0 that tells
+ *	where to store the return value, off has bits from fp.
+ *  RV_ARG0_REG - The hidden arg0 is in a register instead, number in reg[0].
+ *  RV_RETADDR - The hidden arg address is returned in register reg[1].
+ * RV_STREG - Struct return in regs instead (for small structs).
+ *	Register numbers in reg[0/1].
+ * RV_RETREG - Register where to return result from function, in reg[0/1].
+ * RV_CALLEE - The parameter fillin is intended for the callee, not caller.
+ */
+
+struct callspec {
+	struct rdef rv;	/* return value definitions */
+	int setoff;	/* offset of args callee/caller */
+	int stkadj;	/* size to add to stack after call */
+	int nargs;	/* number of args (size of rdef array) for function */
+	struct rdef av[];
+};
+void mycallspec(struct callspec *);
+
+void fun_enter(struct symtab *sp, struct symtab **spp, int nargs);
+void fun_leave(void);
+//void fun_call();
+void setreg(struct rdef *rd, int reg, int tsz, TWORD typ);
+
+
+#define	RV_STRET	001
+#define	RV_ARG0_REG	002
+#define	RV_RETADDR	004
+#define	RV_STREG	010
+#define	RV_RETREG	020
+#define	RV_CALLEE	040
