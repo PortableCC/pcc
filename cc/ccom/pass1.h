@@ -435,6 +435,9 @@ void blkfree(void);
 char *getexname(struct symtab *sp);
 void putjops(P1ND *p, void *arg);
 int tnodenr(struct symtab *);
+P1ND *mkcmplx(P1ND *p, TWORD dt);
+void cxargfixup(P1ND *arg, TWORD dt, struct attr *ap);
+
 
 void p1walkf(P1ND *, void (*f)(P1ND *, void *), void *);
 void p1fwalk(P1ND *t, void (*f)(P1ND *, int, int *, int *), int down);
