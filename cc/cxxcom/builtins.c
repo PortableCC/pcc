@@ -784,7 +784,7 @@ builtin_check(struct symtab *sp, NODE *a)
  * Put all builtin functions into the global symbol table.
  */
 void
-builtin_init()
+builtin_init(void)
 {
 	const struct bitable *bt;
 	NODE *p = block(TYPE, 0, 0, 0, 0, 0);
