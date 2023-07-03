@@ -1495,7 +1495,7 @@ soft_huge_val(SFP sfp)
 
 	LDBLPTR->make(sfp, SOFT_INFINITE, 0, 0, &a);
 
-#ifdef DEBUGFP
+#if defined(DEBUGFP) && defined(__builtin_huge_vall)
 	if (sfp->debugfp != __builtin_huge_vall())
 		fpwarn("soft_huge_val", sfp->debugfp, __builtin_huge_vall());
 #endif
