@@ -80,26 +80,28 @@
 /*
  * Token used in C lex/yacc communications.
  */
-%token	C_STRING	/* a string constant */
-%token	C_ICON		/* an integer constant */
-%token	C_FCON		/* a floating point constant */
-%token	C_NAME		/* an identifier */
-%token	C_TYPENAME	/* a typedef'd name */
-%token	C_ANDAND	/* && */
-%token	C_OROR		/* || */
-%token	C_GOTO		/* unconditional goto */
-%token	C_RETURN	/* return from function */
-%token	C_TYPE		/* a type */
-%token	C_CLASS		/* a storage class */
-%token	C_ASOP		/* assignment ops */
-%token	C_RELOP		/* <=, <, >=, > */
-%token	C_EQUOP		/* ==, != */
-%token	C_DIVOP		/* /, % */
-%token	C_SHIFTOP	/* <<, >> */
-%token	C_INCOP		/* ++, -- */
-%token	C_UNOP		/* !, ~ */
-%token	C_STROP		/* ., -> */
-%token	C_STRUCT
+%token	<strp>   C_STRING	/* a string constant */
+%token	<li>     C_ICON		/* an integer constant */
+%token	<flt>    C_FCON		/* a floating point constant */
+%token	<strp>   C_NAME		/* an identifier */
+%token	<strp>   C_TYPENAME	/* a typedef'd name */
+%token	<intval> C_ANDAND	/* && */
+%token	<intval> C_OROR		/* || */
+%token	         C_GOTO		/* unconditional goto */
+%token	         C_RETURN	/* return from function */
+%token	<type>   C_TYPE		/* a type */
+%token	<type>   C_CLASS	/* a storage class */
+%token	<intval> C_ASOP		/* assignment ops */
+%token	<intval> C_RELOP	/* <=, <, >=, > */
+%token	<intval> C_EQUOP	/* ==, != */
+%token	<intval> C_DIVOP	/* /, % */
+%token	<intval> C_SHIFTOP	/* <<, >> */
+%token	<intval> C_INCOP	/* ++, -- */
+%token	<intval> C_UNOP		/* !, ~ */
+%token	<intval> C_STROP	/* ., -> */
+%token	<intval> C_STRUCT
+%token	<type>   C_QUALIFIER
+%token	<type>   C_FUNSPEC
 %token	C_IF
 %token	C_ELSE
 %token	C_SWITCH
@@ -113,14 +115,12 @@
 %token	C_SIZEOF
 %token	C_ENUM
 %token	C_ELLIPSIS
-%token	C_QUALIFIER
-%token	C_FUNSPEC
 %token	C_ASM
 %token	NOMATCH
 %token	C_TYPEOF	/* COMPAT_GCC */
 %token	C_ATTRIBUTE	/* COMPAT_GCC */
 %token	PCC_OFFSETOF
-%token	GCC_DESIG
+%token	<strp>   GCC_DESIG
 
 /* C11 keywords */
 %token	C_STATICASSERT
@@ -278,20 +278,10 @@ struct savbc {
 		attribute_list attr_spec_list attr_var /* COMPAT_GCC */
 
 %type <g>	gen_ass_list gen_assoc
-%type <strp>	string C_STRING GCC_DESIG svstr
+%type <strp>	string svstr
 %type <rp>	str_head
 %type <symp>	xnfdeclarator clbrace enum_head
 
-%type <intval>  C_STRUCT C_RELOP C_DIVOP C_SHIFTOP
-		C_ANDAND C_OROR C_STROP C_INCOP C_UNOP C_ASOP C_EQUOP
-
-%type <type>	C_TYPE C_QUALIFIER C_CLASS C_FUNSPEC
-
-%type <li>   C_ICON
-
-%type <flt>	C_FCON 
-
-%type <strp>	C_NAME C_TYPENAME
 %%
 
 ext_def_list:	   ext_def_list external_def
