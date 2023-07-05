@@ -952,7 +952,7 @@ void
 soft_minus(SFP x1, SFP x2, TWORD t)
 {
 	soft_neg(x2);
-	return soft_plus(x1, x2, t);
+	soft_plus(x1, x2, t);
 }
 
 #if defined(mach_i386) || defined(mach_amd64)
