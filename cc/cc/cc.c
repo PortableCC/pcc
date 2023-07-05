@@ -2046,7 +2046,7 @@ setup_as_flags(void)
 }
 
 struct flgcheck ldflgcheck[] = {
-#ifndef MSLINKER
+#if !defined(MSLINKER) && !defined(os_sunos)
 	{ &vflag, 1, "-v" },
 #endif
 #ifdef os_darwin
