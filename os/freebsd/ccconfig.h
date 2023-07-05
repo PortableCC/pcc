@@ -52,8 +52,13 @@
 
 /* FreeBSD do not have any assembler anymore, so use clang for that */
 #if __FreeBSD__ >= 12
+/* Only if the user didn't explictly select an assembler with --with-assembler
+   One can install the binutils package on FreeBSD, then choose to use GNU as.
+*/
+#ifndef ASSEMBLER
 #define PCC_EARLY_AS_ARGS strlist_append(&args, "-xassembler"); strlist_append(&args, "-c");
 #define ASSEMBLER "clang"
+#endif
 #endif
 
 #ifdef LANG_F77
