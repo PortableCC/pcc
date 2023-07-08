@@ -739,6 +739,14 @@ main(int argc, char *argv[])
 				break;
 			}
 #endif
+#if defined(os_sunos)
+			/* Ignore -m64 and -m32 for now.
+			 * TODO set up PCC as a multiarch compiler on Solaris.
+			 */
+			if (match(argp, "-m64") || match(argp, "-m32"))
+				break;
+#endif
+
 			strlist_append(&middle_linker_flags, argp);
 			if (argp[2] == 0) {
 				t = nxtopt(0);

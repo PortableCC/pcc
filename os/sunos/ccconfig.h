@@ -62,8 +62,8 @@
 
 /* TODO: Detect if you're using the Sun assembler instead of the GNU assembler.
    The PCC_EARLY_AS_ARGS below assume the GNU assembler. PCC does generate
-   assembly that the Sun assembler understands, so this assumption is unfounded.
-   We also assume use of the Sun linker.  */
+   assembly that the Sun assembler understands, so this assumption is
+   unfounded.  */
 
 #if defined(mach_i386)
 #define	CPPMDADD { "-D__i386__", "-D__i386", NULL, }
@@ -75,6 +75,13 @@
 #define	CPPMDADD { "-D__amd64__", "-D__amd64", "-D__x86_64__", "-D__x86_64", \
 		   "-D__LP64__", "-D_LP64", NULL, }
 #define PCC_EARLY_AS_ARGS strlist_append(&args, "--64");
+#define PCC_SETUP_LD_ARGS { strlist_append(&early_linker_flags, "-Qy"); \
+	strlist_append(&early_linker_flags, "-Y"); \
+	strlist_append(&early_linker_flags,		\
+	"P,/usr/ccs/lib/amd64:/lib/amd64:/usr/lib/amd64"); }
+#ifndef CROSS_COMPILING
+#define LIBDIR "/usr/lib/amd64"
+#endif
 /* Let's keep it here in case of Polaris. ;) */
 #elif defined(mach_powerpc)
 #define	CPPMDADD { "-D__ppc__", NULL, }
