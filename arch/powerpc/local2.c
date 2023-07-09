@@ -708,12 +708,12 @@ ftou(NODE *p)
 	printf("%s,ha16(", rnames[R31]);
 	printf(LABFMT, lab);
 	if (kflag)
-		printf("-L%s$pb", cftnsp->soname ? cftnsp->soname : exname(cftnsp->sname));
+		printf("-L%s$pb", getexname(cftnsp));
 	printf(")\n");
        	expand(p, 0, "\tlfd A2,lo16(");
 	printf(LABFMT, lab);
 	if (kflag)
-		printf("-L%s$pb", cftnsp->soname ? cftnsp->soname : exname(cftnsp->sname));
+		printf("-L%s$pb", getexname(cftnsp));
 	expand(p, 0, ")(A1)\n");
 
 #endif
@@ -810,12 +810,12 @@ itof(NODE *p)
 	printf("%s,ha16(", rnames[R31]);
 	printf(LABFMT, lab);
 	if (kflag)
-		printf("-L%s$pb", cftnsp->soname ? cftnsp->soname : exname(cftnsp->sname));
+		printf("-L%s$pb", getexname(cftnsp));
 	printf(")\n");
        	expand(p, 0, "\tlfd A2,lo16(");
 	printf(LABFMT, lab);
 	if (kflag)
-		printf("-L%s$pb", cftnsp->soname ? cftnsp->soname : exname(cftnsp->sname));
+		printf("-L%s$pb", getexname(cftnsp));
 	expand(p, 0, ")(A1)\n");
 
 #endif

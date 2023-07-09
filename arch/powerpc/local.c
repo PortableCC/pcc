@@ -122,7 +122,7 @@ picext(NODE *p)
 	NODE *r;
 	char *fname;
 
-	fname = cftnsp->soname ? cftnsp->soname : cftnsp->sname;
+	fname = getexname(p->n_sp);
 
 	if (p->n_sp->sclass == EXTDEF) {
 		snprintf(buf2, 64, "-L%s$pb", fname);
@@ -186,15 +186,14 @@ picstatic(NODE *p)
 	char buf2[64];
 	NODE *r;
 
-	snprintf(buf2, 64, "-L%s$pb",
-	    cftnsp->soname ? cftnsp->soname : cftnsp->sname);
+	snprintf(buf2, 64, "-L%s$pb", getexname(p->n_sp));
 
 	if (p->n_sp->slevel > 0) {
 		char buf1[64];
 		snprintf(buf1, 64, LABFMT, (int)p->n_sp->soffset);
 		sp = picsymtab("", buf1, buf2);
 	} else  {
-		char *name = p->n_sp->soname ? p->n_sp->soname : exname(p->n_sp->sname);
+		char *name = getexname(p->n_sp);
 		sp = picsymtab("", name, buf2);
 	}
 	sp->sclass = STATIC;
@@ -633,12 +632,12 @@ fixnames(NODE *p, void *arg)
 
 #elif defined(MACHOABI)
 
-		if (sp->soname == NULL ||
-		    ((c = strstr(sp->soname, "$non_lazy_ptr")) == NULL &&
-		    (c = strstr(sp->soname, "-L")) == NULL))
+		if ((ap2 = attr_find(sp->sap, ATTR_SONAME)) == NULL ||
+		    ((c = strstr(ap2->sarg(0), "$non_lazy_ptr")) == NULL &&
+		    (c = strstr(ap2->sarg(0), "-L")) == NULL))
 				cerror("fixnames2");
 		if (isu) {
-			addstub(&stublist, sp->soname+1);
+			addstub(&stublist, ap2->sarg(0)+1);
 			memcpy(c, "$stub", sizeof("$stub"));
 		} else 
 			*c = 0;
