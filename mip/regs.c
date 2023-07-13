@@ -1099,7 +1099,7 @@ insnwalk(NODE *p)
 			for (rc = nspecial(q); rc->op; rc++) {
 				if (rc->op != NEVER)
 					continue;
-				AddEdge(r, &ablock[rc->num]);
+				AddEdge(rv, &ablock[rc->num]);
 			}
 		}
 #endif
