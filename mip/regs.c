@@ -1085,8 +1085,25 @@ insnwalk(NODE *p)
 	}
 
 	/* Add edges for the result of this node */
-	if (rv && (q->visit & INREGS || o == TEMP || VALIDREG(p)))	
+	if (rv && (q->visit & INREGS || o == TEMP || VALIDREG(p))) {
 		addalledges(rv);
+#ifdef NEWNEED
+		w = q->needs;
+		while ((w = hasneed(w, cNEVER))) {
+			AddEdge(rv, &ablock[(int)w[1]]);
+			w += 2;
+		}
+#else
+		if (q->needs & NSPECIAL) {
+			struct rspecial *rc;
+			for (rc = nspecial(q); rc->op; rc++) {
+				if (rc->op != NEVER)
+					continue;
+				AddEdge(r, &ablock[rc->num]);
+			}
+		}
+#endif
+	}
 
 	/* special handling of CALL operators */
 	if (callop(o)) {
