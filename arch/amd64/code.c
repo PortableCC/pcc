@@ -235,7 +235,6 @@ efcode(void)
 void
 bfcode(struct symtab **s, int cnt)
 {
-	union arglist *al;
 	struct symtab *sp;
 	NODE *p, *r;
 	TWORD t;
@@ -351,22 +350,10 @@ bfcode(struct symtab **s, int cnt)
 	}
 
 	/* Check if there are varargs */
-	if (cftnsp->sdf == NULL || cftnsp->sdf->dfun == NULL)
+	if (cftnsp->sdf == NULL || cftnsp->sdf->dlst == 0)
 		return; /* no prototype */
-	al = cftnsp->sdf->dfun;
-
-	for (; al->type != TELLIPSIS; al++) {
-		t = al->type;
-		if (t == TNULL)
-			return;
-		if (ISSOU(BTYPE(t)))
-			al++;
-		for (i = 0; t > BTMASK; t = DECREF(t))
-			if (ISARY(t) || ISFTN(t))
-				i++;
-		if (i)
-			al++;
-	}
+	if (pr_hasell(cftnsp->sdf->dlst) == 0)
+		return; /* no ... */
 
 	/* fix stack offset */
 	SETOFF(autooff, ALMAX);
@@ -1212,22 +1199,11 @@ funcode(NODE *p)
 	while (argsort(p->n_right))
 		;
 	/* Check if there are varargs */
-	if (nsse || l->n_df == NULL || l->n_df->dfun == NULL) {
+	if (nsse || l->n_df == NULL || l->n_df->dlst == 0) {
 		; /* Need RAX */
 	} else {
-		union arglist *al = l->n_df->dfun;
-
-		for (; al->type != TELLIPSIS; al++) {
-			if ((t = al->type) == TNULL)
-				return p; /* No need */
-			if (ISSOU(BTYPE(t)))
-				al++;
-			for (i = 0; t > BTMASK; t = DECREF(t))
-				if (ISARY(t) || ISFTN(t))
-					i++;
-			if (i)
-				al++;
-		}
+		if (pr_hasell(l->n_df->dlst) == 0)
+			return p; /* No need */
 	}
 
 	/* Always emit number of SSE regs used */
