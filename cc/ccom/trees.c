@@ -787,9 +787,17 @@ ccast(P1ND *p, TWORD t, TWORD u, union dimfun *df, struct attr *ap)
 	/* let buildtree do typechecking (and casting) */ 
 	q = block(NAME, NULL, NULL, t, df, ap);
 	p = buildtree(ASSIGN, q, p);
-	p1nfree(p->n_left);
-	q = optim(p->n_right);
-	p1nfree(p);
+	if (ISSOU(t)) {
+		p = p1nfree(p);
+		p1nfree(p->n_left);
+		q = p->n_right;
+		p1nfree(p);
+		q = buildtree(UMUL, q, 0);
+	} else {
+		p1nfree(p->n_left);
+		q = optim(p->n_right);
+		p1nfree(p);
+	}
 	return q;
 }
 
@@ -1156,7 +1164,7 @@ chkpun(P1ND *p)
 				if (ISARY(t2))
 					++d2;
 			} else if (ISFTN(t1)) {
-				if (chkftn(d1->dfun, d2->dfun)) {
+				if (pr_ckproto(d1->dlst, d2->dlst, 0)) {
 					werror("illegal function "
 					    "pointer combination");
 					return;

@@ -535,7 +535,7 @@ binhelp(P1ND *a, TWORD rt, char *n)
 		f->n_sp->stype = INCREF(rt)+(FTN-PTR);
 		f->n_sp->sdf = permalloc(sizeof(union dimfun));
 		dimfuncnt++;
-		f->n_sp->sdf->dfun = NULL;
+		f->n_sp->sdf->dlst = 0;
 	}
 	f->n_type = f->n_sp->stype;
 	f = clocal(f);

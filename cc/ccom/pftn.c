@@ -79,7 +79,7 @@
 #define	fwalk p1fwalk
 
 struct symtab *cftnsp;
-int arglistcnt, dimfuncnt;	/* statistics */
+int dimfuncnt;	/* statistics */
 int symtabcnt, suedefcnt;	/* statistics */
 int lcommsz, blkalloccnt;
 int autooff,		/* the next unused automatic offset */
@@ -134,9 +134,6 @@ static void dynalloc(struct symtab *p, int *poff);
 int isdyn(struct symtab *p);
 void inforce(OFFSZ n);
 void vfdalign(int n);
-#ifdef PCC_DEBUG
-static void alprint(union arglist *al, int in);
-#endif
 static void lcommadd(struct symtab *sp);
 extern int fun_inline;
 
@@ -265,10 +262,10 @@ defid2(NODE *q, int class, char *astr)
 			++ddef;
 		} else if (ISFTN(temp)) {
 			/* add a late-defined prototype here */
-			if (!oldstyle && dsym->dfun == NULL)
-				dsym->dfun = ddef->dfun;
-			if (!oldstyle && ddef->dfun != NULL &&
-			    chkftn(dsym->dfun, ddef->dfun))
+			if (!oldstyle && dsym->dlst == 0)
+				dsym->dlst = ddef->dlst;
+			if (!oldstyle && ddef->dlst != 0 &&
+			    pr_ckproto(dsym->dlst, ddef->dlst, intcompare))
 				uerror("declaration doesn't match prototype");
 			dsym++, ddef++;
 		}
@@ -431,7 +428,7 @@ defid2(NODE *q, int class, char *astr)
 	p->sdf = q->n_df;
 	/* Do not save param info for old-style functions */
 	if (ISFTN(type) && oldstyle)
-		p->sdf->dfun = NULL;
+		p->sdf->dlst = 0;
 
 	/* allocate offsets */
 	if (class&FIELD) {
@@ -617,8 +614,6 @@ static struct symtab nulsym = {
 void
 dclargs(void)
 {
-	union dimfun *df;
-	union arglist *al;
 	struct symtab *p; /* XXX gcc */
 	int i;
 
@@ -655,31 +650,9 @@ dclargs(void)
 			stabs_newsym(p);
 #endif
 	}
-	if (oldstyle && (df = cftnsp->sdf) && (al = df->dfun)) {
-		/*
-		 * Check against prototype of oldstyle function.
-		 */
-		union arglist *al2, *alb;
 
-		alb = al2 = FUNALLO(sizeof(union arglist) * nparams * 3 + 1);
-		for (i = 0; i < nparams; i++) {
-			TWORD type = argptr[i]->stype;
-			(al2++)->type = type;
-			if (ISSOU(BTYPE(type)))
-				(al2++)->sap = argptr[i]->sap;
-			while (!ISFTN(type) && !ISARY(type) && type > BTMASK)
-				type = DECREF(type);
-			if (type > BTMASK)
-				(al2++)->df = argptr[i]->sdf;
-		}
-		al2->type = TNULL;
-		intcompare = 1;
-		if (chkftn(al, alb))
-			uerror("function doesn't match prototype");
-		FUNFREE(alb);
-		intcompare = 0;
-
-	}
+	if (oldstyle)
+		pr_oldstyle(argptr, nparams);
 
 	if (oldstyle && nparams) {
 		/* Must recalculate offset for oldstyle args here */
@@ -1898,124 +1871,6 @@ struct tylnk {
 	union dimfun df;
 };
 
-/*
- * Retrieve all CM-separated argument types, sizes and dimensions and
- * put them in an array.
- * XXX - can only check first type level, side effects?
- */
-static union arglist *
-arglist(NODE *n)
-{
-	union arglist *al;
-	NODE *w = n, **ap;
-	int num, cnt, i, j, k;
-	TWORD ty;
-
-#ifdef PCC_DEBUG
-	if (pdebug) {
-		printf("arglist %p\n", n);
-		fwalk(n, eprint, 0);
-	}
-#endif
-	/* First: how much to allocate */
-	for (num = cnt = 0, w = n; w->n_op == CM; w = w->n_left) {
-		cnt++;	/* Number of levels */
-		num++;	/* At least one per step */
-		if (w->n_right->n_op == ELLIPSIS)
-			continue;
-		ty = w->n_right->n_type;
-		if (ty == ENUMTY) {
-			uerror("arg %d enum undeclared", cnt);
-			ty = w->n_right->n_type = INT;
-		}
-		if (BTYPE(ty) == STRTY || BTYPE(ty) == UNIONTY)
-			num++;
-		while (!ISFTN(ty) && !ISARY(ty) && ty > BTMASK)
-			ty = DECREF(ty);
-		if (ty > BTMASK)
-			num++;
-	}
-	cnt++;
-	ty = w->n_type;
-	if (BTYPE(ty) == ENUMTY) {
-		struct attr *app = attr_find(w->n_ap, ATTR_STRUCT);
-		struct symtab *sp;
-
-		if (app == NULL)
-			uerror("arg %d enum undeclared", cnt);
-		sp = app->amlist;
-		if (sp->stype != ENUMTY)
-			MODTYPE(ty, sp->stype);
-		w->n_type = ty;
-	}
-	if (ty == ENUMTY) {
-		uerror("arg %d enum undeclared", cnt);
-		ty = w->n_type = INT;
-	}
-	if (BTYPE(ty) == STRTY || BTYPE(ty) == UNIONTY)
-		num++;
-	while (!ISFTN(ty) && !ISARY(ty) && ty > BTMASK)
-		ty = DECREF(ty);
-	if (ty > BTMASK)
-		num++;
-	num += 2; /* TEND + last arg type */
-
-	/* Second: Create list to work on */
-	ap = FUNALLO(sizeof(NODE *) * cnt);
-	al = permalloc(sizeof(union arglist) * num);
-	arglistcnt += num;
-
-	for (w = n, i = 0; w->n_op == CM; w = w->n_left)
-		ap[i++] = w->n_right;
-	ap[i] = w;
-
-	/* Third: Create actual arg list */
-	for (k = 0, j = i; j >= 0; j--) {
-		if (ap[j]->n_op == ELLIPSIS) {
-			al[k++].type = TELLIPSIS;
-			ap[j]->n_op = ICON; /* for tfree() */
-			continue;
-		}
-		/* Convert arrays to pointers */
-		if (ISARY(ap[j]->n_type)) {
-			ap[j]->n_type += (PTR-ARY);
-			ap[j]->n_df++;
-		}
-		/* Convert (silently) functions to pointers */
-		if (ISFTN(ap[j]->n_type))
-			ap[j]->n_type = INCREF(ap[j]->n_type);
-		ty = ap[j]->n_type;
-#ifdef GCC_COMPAT
-		if (ty == UNIONTY &&
-		    attr_find(ap[j]->n_ap, GCC_ATYP_TRANSP_UNION)){
-			/* transparent unions must have compatible types
-			 * shortcut here: if pointers, set void *, 
-			 * otherwise btype.
-			 */
-			struct symtab *sp = strmemb(ap[j]->n_ap);
-			ty = ISPTR(sp->stype) ? PTR|VOID : sp->stype;
-		}
-#endif
-		al[k++].type = ty;
-		if (BTYPE(ty) == STRTY || BTYPE(ty) == UNIONTY)
-			al[k++].sap = ap[j]->n_ap;
-		while (!ISFTN(ty) && !ISARY(ty) && ty > BTMASK)
-			ty = DECREF(ty);
-		if (ty > BTMASK)
-			al[k++].df = ap[j]->n_df;
-	}
-	al[k++].type = TNULL;
-	if (k > num)
-		cerror("arglist: k%d > num%d", k, num);
-	tfree(n);
-	FUNFREE(ap);
-#ifdef PCC_DEBUG
-	if (pdebug)
-		alprint(al, 0);
-#endif
-	return al;
-}
-
 static int numdfs;
 
 static void
@@ -2050,11 +1905,12 @@ tyreduce(NODE *p, union dimfun *df)
 	switch (o) {
 	case CALL:
 		t += (FTN-PTR);
-		dim.dfun = arglist(p->n_right);
+		dim.dlst = pr_arglst(p->n_right);
+		p1tfree(p->n_right);
 		break;
 	case UCALL:
 		t += (FTN-PTR);
-		dim.dfun = NULL;
+		dim.dlst = 0;
 		break;
 	case LB:
 		t += (ARY-PTR);
@@ -2139,6 +1995,7 @@ tymerge(NODE *typ, NODE *idp)
 		idp->n_df = memcpy(a, dfs, sizeof(union dimfun) * numdfs);
 	} else
 		idp->n_df = NULL;
+//{int i; for (i = 0; i < numdfs; i++)printf("tym%d: %p\n", i, &idp->n_df[i]); }
 
 	/* now idp is a single node: fix up type */
 	idp->n_type = ctype(idp->n_type);
@@ -2153,83 +2010,11 @@ tymerge(NODE *typ, NODE *idp)
 	return(idp);
 }
 
-static NODE *
-argcast(NODE *p, TWORD t, union dimfun *d, struct attr *ap)
-{
-	NODE *u, *r = p1alloc();
-
-	r->n_op = NAME;
-	r->n_type = t;
-	r->n_qual = 0; /* XXX */
-	r->n_df = d;
-	r->n_ap = ap;
-
-	u = buildtree(CAST, r, p);
-	nfree(u->n_left);
-	r = u->n_right;
-	nfree(u);
-	return r;
-}
-
-#ifdef PCC_DEBUG
-/*
- * Print a prototype.
- */
-static void
-alprint(union arglist *al, int in)
-{
-	TWORD t;
-	int i = 0, j;
-
-	for (; al->type != TNULL; al++) {
-		for (j = in; j > 0; j--)
-			printf("  ");
-		printf("arg %d: ", i++);
-		t = al->type;
-		tprint(t, 0);
-		while (t > BTMASK) {
-			if (ISARY(t)) {
-				al++;
-				printf(" dim %d ", al->df->ddim);
-			} else if (ISFTN(t)) {
-				al++;
-				if (al->df->dfun) {
-					printf("\n");
-					alprint(al->df->dfun, in+1);
-				}
-			}
-			t = DECREF(t);
-		}
-		if (ISSOU(t)) {
-			al++;
-			printf(" (size %d align %d)", (int)tsize(t, 0, al->sap),
-			    (int)talign(t, al->sap));
-		}
-		printf("\n");
-	}
-	if (in == 0)
-		printf("end arglist\n");
-}
-#endif
-
 int
 suemeq(struct attr *s1, struct attr *s2)
 {
 
 	return (strmemb(s1) == strmemb(s2));
-}
-
-/*
- * Sanity-check old-style args.
- */
-static NODE *
-oldarg(NODE *p)
-{
-	if (p->n_op == TYPE)
-		uerror("type is not an argument");
-	if (p->n_type == FLOAT)
-		return cast(p, DOUBLE, p->n_qual);
-	return p;
 }
 
 /*
@@ -2240,14 +2025,11 @@ oldarg(NODE *p)
 NODE *
 doacall(struct symtab *sp, NODE *f, NODE *a)
 {
-	NODE *w, *r;
-	union arglist *al;
+	NODE *w;
 	struct ap {
 		struct ap *next;
 		NODE *node;
-	} *at, *apole = NULL, *apary = NULL;
-	int i, argidx/* , hasarray = 0*/;
-	TWORD type, arrt;
+	} *apary = NULL;
 
 #ifdef PCC_DEBUG
 	if (ddebug) {
@@ -2280,310 +2062,14 @@ doacall(struct symtab *sp, NODE *f, NODE *a)
 			uerror("enum %s not declared", sq->sname);
 	}
 
-	/*
-	 * Do some basic checks.
-	 */
-	if (f->n_df == NULL || (al = f->n_df[0].dfun) == NULL) {
-		/*
-		 * Handle non-prototype declarations.
-		 */
-		if (f->n_op == NAME && f->n_sp != NULL) {
-			if (strncmp(f->n_sp->sname, "__builtin", 9) != 0 &&
-			    (f->n_sp->sflags & SINSYS) == 0)
-				warner(Wmissing_prototypes, f->n_sp->sname);
-		} else
-			warner(Wmissing_prototypes, "<pointer>");
-
-		/* floats must be cast to double */
-		if (a == NULL)
-			goto build;
-		if (a->n_op != CM) {
-			a = oldarg(a);
-		} else {
-			for (w = a; w->n_left->n_op == CM; w = w->n_left)
-				w->n_right = oldarg(w->n_right);
-			w->n_left = oldarg(w->n_left);
-			w->n_right = oldarg(w->n_right);
-		}
-		goto build;
-	}
-	if (al->type == VOID) {
-		if (a != NULL)
-			uerror("function takes no arguments");
-		goto build; /* void function */
-	} else {
-		if (a == NULL) {
-			uerror("function needs arguments");
-			goto build;
-		}
-	}
-#ifdef PCC_DEBUG
-	if (pdebug) {
-		printf("arglist for %s\n",
-		    f->n_sp != NULL ? f->n_sp->sname : "function pointer");
-		alprint(al, 0);
-	}
-#endif
-
-	/*
-	 * Create a list of pointers to the nodes given as arg.
-	 */
-	for (w = a, i = 1; w->n_op == CM; w = w->n_left)
-		i++;
-	apary = FUNALLO(sizeof(struct ap) * i);
-
-	for (w = a, i = 0; w->n_op == CM; w = w->n_left) {
-		at = &apary[i++];
-		at->node = w->n_right;
-		at->next = apole;
-		apole = at;
-	}
-	at = &apary[i];
-	at->node = w;
-	at->next = apole;
-	apole = at;
-
-	/*
-	 * Do the typechecking by walking up the list.
-	 */
-	argidx = 1;
-	while (al->type != TNULL) {
-		if (al->type == TELLIPSIS) {
-			/* convert the rest of float to double */
-			for (; apole; apole = apole->next) {
-				if (apole->node->n_type != FLOAT)
-					continue;
-				MKTY(apole->node, DOUBLE, 0, 0);
-			}
-			goto build;
-		}
-		if (apole == NULL) {
-			uerror("too few arguments to function");
-			goto build;
-		}
-/* al = prototyp, apole = argument till ftn */
-/* type = argumentets typ, arrt = prototypens typ */
-		type = apole->node->n_type;
-		arrt = al->type;
-#if 0
-		if ((hasarray = ISARY(arrt)))
-			arrt += (PTR-ARY);
-#endif
-		/* Taking addresses of arrays are meaningless in expressions */
-		/* but people tend to do that and also use in prototypes */
-		/* this is mostly a problem with typedefs */
-		if (ISARY(type)) {
-			if (ISPTR(arrt) && ISARY(DECREF(arrt)))
-				type = INCREF(type);
-			else
-				type += (PTR-ARY);
-		} else if (ISPTR(type) && !ISARY(DECREF(type)) &&
-		    ISPTR(arrt) && ISARY(DECREF(arrt))) {
-			type += (ARY-PTR);
-			type = INCREF(type);
-		}
-
-		/* Check structs */
-		if (type <= BTMASK && arrt <= BTMASK) {
-#ifndef NO_COMPLEX
-			if ((type != arrt) && (ANYCX(apole->node) ||
-			    (arrt == STRTY &&
-			    attr_find(al[1].sap, ATTR_COMPLEX)))) {
-				cxargfixup(apole->node, arrt, al[1].sap);
-			} else
-#endif
-			if (type != arrt) {
-				if (ISSOU(BTYPE(type)) || ISSOU(BTYPE(arrt))) {
-incomp:					uerror("incompatible types for arg %d",
-					    argidx);
-				} else {
-					MKTY(apole->node, arrt, 0, 0)
-				}
-#ifndef NO_COMPLEX
-			} else if (type == STRTY &&
-			    attr_find(apole->node->n_ap, ATTR_COMPLEX) &&
-			    attr_find(al[1].sap, ATTR_COMPLEX)) {
-				/* Both are complex */
-				if (strmemb(apole->node->n_ap)->stype !=
-				    strmemb(al[1].sap)->stype) {
-					/* must convert to correct type */
-					w = p1alloc();
-					*w = *apole->node;
-					w = mkcmplx(w,
-					    strmemb(al[1].sap)->stype);
-					*apole->node = *w;
-					nfree(w);
-				}
-				goto out;
-#endif
-			} else if (ISSOU(BTYPE(type))) {
-				if (!suemeq(apole->node->n_ap, al[1].sap))
-					goto incomp;
-			}
-			goto out;
-		}
-
-		/* XXX should (recusively) check return type and arg list of
-		   func ptr arg XXX */
-		if (ISFTN(DECREF(arrt)) && ISFTN(type))
-			type = INCREF(type);
-
-		/* Hereafter its only pointers (or arrays) left */
-		/* Check for struct/union intermixing with other types */
-		if (((type <= BTMASK) && ISSOU(BTYPE(type))) ||
-		    ((arrt <= BTMASK) && ISSOU(BTYPE(arrt))))
-			goto incomp;
-
-		/* Check for struct/union compatibility */
-		if (type == arrt) {
-			if (ISSOU(BTYPE(type))) {
-				if (suemeq(apole->node->n_ap, al[1].sap))
-					goto out;
-			} else
-				goto out;
-		}
-		if (BTYPE(arrt) == VOID && type > BTMASK)
-			goto skip; /* void *f = some pointer */
-		if (arrt > BTMASK && BTYPE(type) == VOID)
-			goto skip; /* some *f = void pointer */
-		if (apole->node->n_op == ICON && glval(apole->node) == 0)
-			goto skip; /* Anything assigned a zero */
-
-		if ((type & ~BTMASK) == (arrt & ~BTMASK)) {
-			/* do not complain for pointers with signedness */
-			if ((DEUNSIGN(BTYPE(type)) == DEUNSIGN(BTYPE(arrt))) &&
-			    (BTYPE(type) != BTYPE(arrt))) {
-				warner(Wpointer_sign);
-				goto skip;
-			}
-		}
-
-		werror("implicit conversion of argument %d due to prototype",
-		    argidx);
-
-skip:		if (ISSOU(BTYPE(arrt))) {
-			MKTY(apole->node, arrt, 0, al[1].sap)
-		} else {
-			MKTY(apole->node, arrt, 0, 0)
-		}
-
-out:		al++;
-		if (ISSOU(BTYPE(arrt)))
-			al++;
-#if 0
-		while (arrt > BTMASK && !ISFTN(arrt))
-			arrt = DECREF(arrt);
-		if (ISFTN(arrt) || hasarray)
-			al++;
-#else
-		while (arrt > BTMASK) {
-			if (ISARY(arrt) || ISFTN(arrt)) {
-				al++;
-				break;
-			}
-			arrt = DECREF(arrt);
-		}
-#endif
-		apole = apole->next;
-		argidx++;
-	}
-	if (apole != NULL)
-		uerror("too many arguments to function");
+	/* Do prototype checking for function call */
+	pr_callchk(sp, f, a);
 
 build:	if (apary)
 		FUNFREE(apary);
 	if (sp != NULL && (sp->sflags & SINLINE) && (w = inlinetree(sp, f, a)))
 		return w;
 	return buildtree(a == NIL ? UCALL : CALL, f, a);
-}
-
-static int
-chk2(TWORD type, union dimfun *dsym, union dimfun *ddef)
-{
-	while (type > BTMASK) {
-		switch (type & TMASK) {
-		case ARY:
-			/* may be declared without dimension */
-			if (dsym->ddim == NOOFFSET)
-				dsym->ddim = ddef->ddim;
-			if (dsym->ddim < 0 && ddef->ddim < 0)
-				; /* dynamic arrays as arguments */
-			else if (ddef->ddim > 0 && dsym->ddim != ddef->ddim)
-				return 1;
-			dsym++, ddef++;
-			break;
-		case FTN:
-			/* old-style function headers with function pointers
-			 * will most likely not have a prototype.
-			 * This is not considered an error.  */
-			if (ddef->dfun == NULL) {
-#ifdef notyet
-				werror("declaration not a prototype");
-#endif
-			} else if (chkftn(dsym->dfun, ddef->dfun))
-				return 1;
-			dsym++, ddef++;
-			break;
-		}
-		type = DECREF(type);
-	}
-	return 0;
-}
-
-/*
- * Compare two function argument lists to see if they match.
- */
-int
-chkftn(union arglist *usym, union arglist *udef)
-{
-	TWORD t2;
-	int ty, tyn;
-
-	if (usym == NULL)
-		return 0;
-	if (cftnsp != NULL && udef == NULL && usym->type == VOID)
-		return 0; /* foo() { function with foo(void); prototype */
-	if (udef == NULL && usym->type != TNULL)
-		return 1;
-	while (usym->type != TNULL) {
-		if (usym->type == udef->type)
-			goto done;
-		/*
-		 * If an old-style declaration, then all types smaller than
-		 * int are given as int parameters.
-		 */
-		if (intcompare) {
-			ty = BTYPE(usym->type);
-			tyn = BTYPE(udef->type);
-			if (ty == tyn || ty != INT)
-				return 1;
-			if (tyn == CHAR || tyn == UCHAR ||
-			    tyn == SHORT || tyn == USHORT)
-				goto done;
-			return 1;
-		} else
-			return 1;
-
-done:		ty = BTYPE(usym->type);
-		t2 = usym->type;
-		if (ISSOU(ty)) {
-			usym++, udef++;
-			if (suemeq(usym->sap, udef->sap) == 0)
-				return 1;
-		}
-
-		while (!ISFTN(t2) && !ISARY(t2) && t2 > BTMASK)
-			t2 = DECREF(t2);
-		if (t2 > BTMASK) {
-			usym++, udef++;
-			if (chk2(t2, usym->df, udef->df))
-				return 1;
-		}
-		usym++, udef++;
-	}
-	if (usym->type != udef->type)
-		return 1;
-	return 0;
 }
 
 void

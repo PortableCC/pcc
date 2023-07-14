@@ -624,9 +624,7 @@ inlinetree(struct symtab *sp, P1ND *f, P1ND *ap)
 void
 inline_args(struct symtab **sp, int nargs)
 {
-	union arglist *al;
 	struct istat *cf;
-	TWORD t;
 	int i;
 
 	SDEBUG(("inline_args\n"));
@@ -637,19 +635,10 @@ inline_args(struct symtab **sp, int nargs)
 	 * - function args are volatile, checked if no temp node is asg'd.
 	 */
 	/* XXX - this is ugly, invent something better */
-	if (cf->sp->sdf->dfun == NULL)
-		return; /* no prototype */
-	for (al = cf->sp->sdf->dfun; al->type != TNULL; al++) {
-		t = al->type;
-		if (t == TELLIPSIS)
-			return; /* cannot inline */
-		if (ISSOU(BTYPE(t)))
-			al++;
-		for (; t > BTMASK; t = DECREF(t))
-			if (ISARY(t) || ISFTN(t))
-				al++;
-	}
-
+	if (cf->sp->sdf->dlst == 0)
+		return; /* no prototype, won't inline */
+	if (pr_hasell(cf->sp->sdf->dlst))
+		return; /* cannot inline */
 	if (nargs) {
 		for (i = 0; i < nargs; i++)
 			if ((sp[i]->sflags & STNODE) == 0)

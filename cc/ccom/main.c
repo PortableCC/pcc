@@ -417,7 +417,7 @@ prtstats(void)
 	fprintf(stderr, "Inline control block size:	%d B\n",
 	    inlstatcnt * istatsz);
 	fprintf(stderr, "Argument list size:		%d B\n",
-	    arglistcnt * (int)sizeof(union arglist));
+	    arglistcnt/sizeof(int));
 	fprintf(stderr, "Dimension/function size:	%d B\n",
 	    dimfuncnt * (int)sizeof(union dimfun));
 	fprintf(stderr, "Permanent symtab size:		%d B\n",
@@ -432,7 +432,7 @@ prtstats(void)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Not accounted for:		%d B\n",
 	    (int)permallocsize-(nametabs * treestrsz)-namestrlen-strstrlen-
-	    (arglistcnt * (int)sizeof(union arglist))-(strtabs * treestrsz)-
+	    (strtabs * treestrsz)-
 	    (dimfuncnt * (int)sizeof(union dimfun))-(inlstatcnt * istatsz)-
 	    (symtabcnt * (int)sizeof(struct symtab))-(symtreecnt * treestrsz)-
 	    lcommsz-blkalloccnt-newattrsz-nodesszcnt);

@@ -125,17 +125,9 @@ struct gcc_attr_pack;
  */
 union dimfun {
 	int	ddim;		/* Dimension of an array */
-	union arglist *dfun;	/* Prototype index */
+	int	dlst;		/* arglist index */
 };
 
-/*
- * Argument list member info when storing prototypes.
- */
-union arglist {
-	TWORD type;
-	union dimfun *df;
-	struct attr *sap;
-};
 #define TNULL		INCREF(FARG) /* pointer to FARG -- impossible type */
 #define TELLIPSIS 	INCREF(INCREF(FARG))
 
@@ -332,7 +324,6 @@ struct symtab *hide(struct symtab *);
 void soumemb(P1ND *, char *, int);
 int talign(unsigned int, struct attr *);
 void bfcode(struct symtab **, int);
-int chkftn(union arglist *, union arglist *);
 void branch(int);
 void cbranch(P1ND *, P1ND *);
 void extdec(struct symtab *);
@@ -437,7 +428,11 @@ void putjops(P1ND *p, void *arg);
 int tnodenr(struct symtab *);
 P1ND *mkcmplx(P1ND *p, TWORD dt);
 void cxargfixup(P1ND *arg, TWORD dt, struct attr *ap);
-
+int pr_arglst(P1ND *n);
+int pr_ckproto(int usym, int udef, int old);
+void pr_callchk(struct symtab *sp, P1ND *f, P1ND *a);
+void pr_oldstyle(struct symtab **as, int nparams);
+int pr_hasell(int);
 
 void p1walkf(P1ND *, void (*f)(P1ND *, void *), void *);
 void p1fwalk(P1ND *t, void (*f)(P1ND *, int, int *, int *), int down);

@@ -74,7 +74,7 @@ complinit(void)
 		defid2(p, EXTERN, 0);
 		cxmul[i]->sdf = permalloc(sizeof(union dimfun));
 		dimfuncnt++;
-		cxmul[i]->sdf->dfun = NULL;
+		cxmul[i]->sdf->dlst = 0;
 		cxndiv[i] = addname(cxndiv[i]);
 		p->n_sp = cxdiv[i] = lookup(cxndiv[i], 0);
 		p->n_type = FTN|STRTY;
@@ -83,7 +83,7 @@ complinit(void)
 		defid2(p, EXTERN, 0);
 		cxdiv[i]->sdf = permalloc(sizeof(union dimfun));
 		dimfuncnt++;
-		cxdiv[i]->sdf->dfun = NULL;
+		cxdiv[i]->sdf->dlst = 0;
 	}
 	p1nfree(p);
 	ddebug = d_debug;
