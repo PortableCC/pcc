@@ -358,7 +358,6 @@ param_float(struct symtab *sym, int *regp, int dotemps)
 void
 bfcode(struct symtab **sp, int cnt)
 {
-	union arglist *usym;
 	int lastreg = A0 + nargregs - 1;
 	int saveallargs = 0;
 	int i, reg;
@@ -367,14 +366,8 @@ bfcode(struct symtab **sp, int cnt)
 	 * Detect if this function has ellipses and save all
 	 * argument register onto stack.
 	 */
-	usym = cftnsp->sdf->dfun;
-	while (usym && usym->type != TNULL) {
-		if (usym->type == TELLIPSIS) {
-			saveallargs = 1;
-			break;
-		}
-		++usym;
-	}
+	if (cftnsp->sdf->dlst)
+		saveallargs = pr_hasell(cftnsp->sdf->dlst);
 
 	reg = A0;
 
