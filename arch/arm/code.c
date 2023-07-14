@@ -327,7 +327,6 @@ param_struct(struct symtab *sym, int *argofsp)
 void
 bfcode(struct symtab **sp, int cnt)
 {
-	union arglist *usym;
 	int saveallargs = 0;
 	int i, argofs = 0;
 
@@ -335,14 +334,8 @@ bfcode(struct symtab **sp, int cnt)
 	 * Detect if this function has ellipses and save all
 	 * argument registers onto stack.
 	 */
-	usym = cftnsp->sdf->dfun;
-	while (usym && usym->type != TNULL) {
-		if (usym->type == TELLIPSIS) {
-			saveallargs = 1;
-			break;
-		}
-		++usym;
-	}
+	if (cftnsp->sdf->dlst)
+		saveallargs = pr_hasell(cftnsp->sdf->dlst);
 
 	/* if returning a structure, move the hidden argument into a TEMP */
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
