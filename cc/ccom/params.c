@@ -250,6 +250,7 @@ pr_rptr(void)
 
 	w = w2 = pr_rd();
 	if (sizeof(uintptr_t) > sizeof(int)) {
+		w &= 0xffffffffL;
 		w2 = pr_rd() << 16;
 		w2 = (w2 << 16) | w;
 	}
@@ -371,14 +372,14 @@ pr_arglst(P1ND *n)
 
 	rv = arglistcnt;
 	if (pdebug)
-		printf("arglst: pos %d\n", arglistcnt/sizeof(int));
+		printf("arglst: pos %d\n", arglistcnt/(int)sizeof(int));
 	pr_seek(arglistcnt);
 	p1listf(n, argeval);
 	pr_wr(TNULL);
 	arglistcnt = ftell(pr_file);
 	if (pdebug)
 		printf("arglst: pos %d totsz %d\n",
-		    arglistcnt/sizeof(int), (arglistcnt-rv)/sizeof(int));
+		    arglistcnt/(int)sizeof(int), (arglistcnt-rv)/(int)sizeof(int));
 	if (pdebug > 1)
 		pr_alprnt(rv, 0);
 
@@ -436,7 +437,7 @@ pr_ckproto(int usym, int udef, int old)
 
 	if (pdebug)
 		printf("pr_ckproto: usym %d udef %d old %d\n",
-		    usym/sizeof(int), udef/sizeof(int), old);
+		    usym/(int)sizeof(int), udef/(int)sizeof(int), old);
 
 	if (usym == 0)
 		return 0; /* no prototype */
