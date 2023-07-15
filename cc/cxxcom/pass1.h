@@ -130,6 +130,8 @@ union dimfun {
 	int	ddim;		/* Dimension of an array */
 	union arglist *dfun;	/* Prototype index */
 };
+#define	dlst dfun	/* XXX workaround for ccom changes */
+int pr_hasell(union arglist *df);
 
 /*
  * Argument list member info when storing prototypes.

@@ -3323,3 +3323,23 @@ cxret(NODE *p, NODE *q)
 	return p;
 }
 #endif
+
+int
+pr_hasell(union arglist *al)
+{
+	int i, t;
+
+	for (; al->type != TELLIPSIS; al++) {
+		t = al->type;
+		if (t == TNULL)
+			return 0;
+		if (ISSOU(BTYPE(t)))
+			al++;
+		for (i = 0; t > BTMASK; t = DECREF(t))
+			if (ISARY(t) || ISFTN(t))
+				i++;
+		if (i)
+			al++;
+	}
+	return 1;
+}
