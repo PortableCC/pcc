@@ -229,6 +229,7 @@ pr_rd(void)
 	int w;
 
 	w = getw(pr_file);
+if (pdebug > 2) printf("pr_rd: %#x\n", w);
 	if (ferror(pr_file) || feof(pr_file))
 		pr_err("pr_rd");
 	return w;
@@ -342,16 +343,18 @@ argeval(P1ND *p)
 int
 pr_hasell(int dsym)
 {
-	int t;
+	int i, t;
 
+if (pdebug) printf("pr_hasell: dsym %d\n", dsym);
 	SEEKRD(dsym, t);
 	while (t != TNULL) {
 		if (t == TELLIPSIS)
 			return 1;
 		if (ISSOU(BTYPE(t)))
 			(void)pr_rptr();
-		if (ISFTN(t) || ISARY(t))
-			(void)pr_rptr();
+		for (i = 0; t > BTMASK; t = DECREF(t))
+			if (ISFTN(t) || ISARY(t))
+				(void)pr_rptr();
 		t = pr_rd();
 	}
 	return 0;
