@@ -77,6 +77,13 @@
 #define	ccopy p1tcopy
 #define	flist p1flist
 #define	fwalk p1fwalk
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
+
 
 struct symtab *cftnsp;
 int dimfuncnt;	/* statistics */
@@ -608,7 +615,7 @@ ftnend(void)
 }
 
 static struct symtab nulsym = {
-	NULL, 0, 0, 0, 0, "null", INT, 0, NULL, NULL
+	NULL, 0, 0, 0, 0, "null", { INT, 0, NULL, NULL },
 };
 
 void

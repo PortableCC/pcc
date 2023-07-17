@@ -110,26 +110,62 @@ extern	char *scnames(int);
 
 struct rstack;
 struct symtab;
-union arglist;
 #ifdef GCC_COMPAT
 struct gcc_attr_pack;
 #endif
 
 /*
- * Dimension/prototype information.
+ * Type descriptions in pass1 consists of four different parts;
+ *	- The type word (used in pass2 as well).
+ *	- The qual word, (const/vol/...) pass1 only.
+ *	- The dimension/function pointer
+ *	- The size/struct description table pointer.
+ *
+ * The dimfun pointer points into an array of "union dimfun", which is the 
+ * same size as the number of ARY/FTN in the type word.  See below.
+ *
+ * The size/struct description member is only used if needed, unless it is
+ * a struct/union when it always is avaliable.  It has three initial 
+ * elements, thereafter followed by parameters that are allocated if needed.
+ *
+ * Note that some type/variable attributes may be stored in this struct.
+ */
+
+/* size/struct description */
+struct ssdesc {
+	struct symtab *sp;	/* Pointer to linked list of members */
+	int sz;			/* Size of this type */
+	short al;		/* alignment of this type */
+	short nelem;		/* # extra element allocated */
+	int val[];
+};
+
+
+/*
+ * Dimension information.
  * 	ddim > 0 holds the dimension of an array.
  *	ddim < 0 is a dynamic array and refers to a tempnode.
  *	...unless:
  *		ddim == NOOFFSET, an array without dimenston, "[]"
  *		ddim == -1, dynamic array while building before defid.
+ *
+ * Prototypes are kept at an index given in dlst.
  */
 union dimfun {
 	int	ddim;		/* Dimension of an array */
-	int	dlst;		/* arglist index */
+	int	dlst;		/* prototype index */
 };
 
 #define TNULL		INCREF(FARG) /* pointer to FARG -- impossible type */
 #define TELLIPSIS 	INCREF(INCREF(FARG))
+
+/* the type description itself */
+struct tdef {
+	TWORD type;
+	TWORD qual;
+	union dimfun *df;
+	struct ssdesc *ss;
+};
 
 /*
  * Symbol table definition.
@@ -141,13 +177,18 @@ struct	symtab {
 	char	slevel;		/* scope level */
 	short	sflags;		/* flags, see below */
 	char	*sname;		/* Symbol name */
-	TWORD	stype;		/* type word */
-	TWORD	squal;		/* qualifier word */
-	union	dimfun *sdf;	/* ptr to the dimension/prototype array */
+	struct	tdef td;
+
 	struct	attr *sap;	/* the base type attribute list */
 };
 
 #define	ISSOU(ty)   ((ty) == STRTY || (ty) == UNIONTY)
+
+/* compat */
+#define stype td.type
+#define squal td.qual
+#define sdf td.df    
+
 
 /*
  * External definitions
@@ -228,12 +269,10 @@ struct flt;
 
 typedef struct p1node {
 	int	n_op;
-	TWORD	n_type;
-	TWORD	n_qual;
 	union {
-		char *	_name;
-		union	dimfun *_df;
-	} n_5;
+		struct	tdef n_td;
+		struct { int pad[3]; char *_name; } n_5;
+	};
 	struct attr *n_ap;
 	union {
 		struct {
@@ -255,7 +294,9 @@ typedef struct p1node {
 #define slval(p,v)	((p)->n_f.n_u.n_l._val = (v))
 #define	n_ccon		n_f._ccon
 #define	n_scon		n_f._scon
-
+#define	ptype		n_td.type
+#define	pqual		n_td.qual
+#define	pdf		n_td.df
 
 /*	mark an offset which is undefined */
 
@@ -287,10 +328,12 @@ extern	P1ND
 	*optim(P1ND *),
 	*clocal(P1ND *),
 	*tempnode(int, TWORD, union dimfun *, struct attr *),
+//	*tempnode(int, struct tdef *),
 	*eve(P1ND *),
 	*doacall(struct symtab *, P1ND *, P1ND *);
 P1ND	*intprom(P1ND *);
 OFFSZ	tsize(TWORD, union dimfun *, struct attr *),
+	tsize2(struct tdef *),
 	psize(P1ND *);
 P1ND *	typenode(P1ND *new);
 void	spalloc(P1ND *, P1ND *, OFFSZ);
@@ -323,6 +366,7 @@ void symclear(int);
 struct symtab *hide(struct symtab *);
 void soumemb(P1ND *, char *, int);
 int talign(unsigned int, struct attr *);
+int talign2(struct tdef *);
 void bfcode(struct symtab **, int);
 void branch(int);
 void cbranch(P1ND *, P1ND *);
@@ -406,6 +450,7 @@ void ftnend(void);
 void dclargs(void);
 int suemeq(struct attr *s1, struct attr *s2);
 struct symtab *strmemb(struct attr *ap);
+struct symtab *strmemb2(struct tdef *);
 int yylex(void);
 void yyerror(char *);
 int pragmas_gcc(char *t);
@@ -433,6 +478,8 @@ int pr_ckproto(int usym, int udef, int old);
 void pr_callchk(struct symtab *sp, P1ND *f, P1ND *a);
 void pr_oldstyle(struct symtab **as, int nparams);
 int pr_hasell(int);
+struct tdef *intdef(struct tdef *, TWORD);
+struct tdef *intdefq(TWORD);
 
 void p1walkf(P1ND *, void (*f)(P1ND *, void *), void *);
 void p1fwalk(P1ND *t, void (*f)(P1ND *, int, int *, int *), int down);
@@ -717,7 +764,7 @@ void dwarf_end(void);
 #define	ISFTY(x)	((x) >= FLOAT && (x) <= LDOUBLE)
 #define	ISCTY(x)	((x) >= FCOMPLEX && (x) <= LCOMPLEX)
 #define	ISITY(x)	((x) >= FIMAG && (x) <= LIMAG)
-#define ANYCX(p) (p->n_type == STRTY && attr_find(p->n_ap, ATTR_COMPLEX))
+#define ANYCX(p) (p->ptype == STRTY && attr_find(p->n_ap, ATTR_COMPLEX))
 
 #define coptype(o)	(cdope(o)&TYFLG)
 #define clogop(o)	(cdope(o)&LOGFLG)

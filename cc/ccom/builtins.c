@@ -27,6 +27,10 @@
 # include "pass1.h"
 
 #define	ccopy p1tcopy
+#undef n_type
+#define	n_type ptype
+#undef n_df
+#define n_df pdf
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))

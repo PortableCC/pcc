@@ -33,6 +33,12 @@
 
 #define	NODE P1ND
 #define	fwalk p1fwalk
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 
 /*
  * These definitions are used in the patricia tree that stores
@@ -183,7 +189,7 @@ int numsyms[NSTYPES];
  * Returns a struct symtab.
  */
 struct symtab *
-lookup(char *key, int stype)
+lookup(char *key, int sstype)
 {
 	struct symtab *sym;
 	struct tree *w, *new, *last;
@@ -191,7 +197,7 @@ lookup(char *key, int stype)
 	int type, uselvl;
 	intptr_t ix, match, code = (intptr_t)key;
 
-	type = stype & SMASK;
+	type = sstype & SMASK;
 	uselvl = (blevel > 0 && type != SSTRING);
 
 	/*
@@ -205,17 +211,17 @@ lookup(char *key, int stype)
 
 	switch (numsyms[type]) {
 	case 0:
-		if (stype & SNOCREAT)
+		if (sstype & SNOCREAT)
 			return NULL;
 		if (uselvl) {
 			if (type == SNORMAL)
-				stype |= SBLK;
-			sym = getsymtab(key, stype);
+				sstype |= SBLK;
+			sym = getsymtab(key, sstype);
 			sym->snext = tmpsyms[type];
 			tmpsyms[type] = sym;
 			return sym;
 		}
-		sympole[type] = (struct tree *)getsymtab(key, stype);
+		sympole[type] = (struct tree *)getsymtab(key, sstype);
 		numsyms[type]++;
 		return (struct symtab *)sympole[type];
 
@@ -243,7 +249,7 @@ lookup(char *key, int stype)
 	ix = code ^ match;
 	if (ix == 0)
 		return sym;
-	else if (stype & SNOCREAT)
+	else if (sstype & SNOCREAT)
 		return NULL;
 
 #ifdef PCC_DEBUG
@@ -256,7 +262,7 @@ lookup(char *key, int stype)
 	 * Insert into the linked list, if feasible.
 	 */
 	if (uselvl) {
-		sym = getsymtab(key, stype|STEMP);
+		sym = getsymtab(key, sstype|STEMP);
 		sym->snext = tmpsyms[type];
 		tmpsyms[type] = sym;
 		return sym;
@@ -268,8 +274,8 @@ lookup(char *key, int stype)
 	 * This could be optimized by adding a remove routine, but it
 	 * may be more trouble than it is worth.
 	 */
-	if (stype == (STEMP|SNORMAL))
-		stype = SNORMAL;
+	if (sstype == (STEMP|SNORMAL))
+		sstype = SNORMAL;
 
 	for (cix = 0; (ix & 1) == 0; ix >>= 1, cix++)
 		;
@@ -277,7 +283,7 @@ lookup(char *key, int stype)
 	new = (symtreecnt++, permalloc(sizeof(struct tree)));
 	bit = (int)(code >> cix) & 1;
 	new->bitno = cix | (bit ? RIGHT_IS_LEAF : LEFT_IS_LEAF);
-	new->lr[bit] = (struct tree *)getsymtab(key, stype);
+	new->lr[bit] = (struct tree *)getsymtab(key, sstype);
 	if (numsyms[type]++ == 1) {
 		new->lr[!bit] = sympole[type];
 		new->bitno |= (bit ? LEFT_IS_LEAF : RIGHT_IS_LEAF);

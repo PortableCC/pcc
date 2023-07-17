@@ -36,6 +36,14 @@
 
 #include "pass1.h"
 
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
+
+
 #ifdef STABS
 
 #include <sys/types.h>
@@ -82,7 +90,7 @@ static char *curfun;
 static int stablbl = 10;
 extern int inftn;
 
-void ptype(char *name, int num, int inhnum, long long min, long long max);
+void sptype(char *name, int num, int inhnum, long long min, long long max);
 struct stabtype *addtype(TWORD, union dimfun *, struct attr *);
 struct stabtype *findtype(TWORD t, union dimfun *df, struct attr *sue);
 void printtype(struct symtab *s, char *str, int len);
@@ -103,24 +111,24 @@ stabs_init(void)
 
 #define	ADDTYPE(y) addtype(y, NULL, 0)
 
-	ptype("int", ADDTYPE(INT)->num, INTNUM, MIN_INT, MAX_INT);
+	sptype("int", ADDTYPE(INT)->num, INTNUM, MIN_INT, MAX_INT);
 
 	st = ADDTYPE(CHAR);
-	ptype("char", st->num, st->num, 0, MAX_CHAR);
-	ptype("short", ADDTYPE(SHORT)->num, INTNUM, MIN_SHORT, MAX_SHORT);
-	ptype("long", ADDTYPE(LONG)->num, INTNUM, MIN_LONG, MAX_LONG);
-	ptype("long long", ADDTYPE(LONGLONG)->num, INTNUM,
+	sptype("char", st->num, st->num, 0, MAX_CHAR);
+	sptype("short", ADDTYPE(SHORT)->num, INTNUM, MIN_SHORT, MAX_SHORT);
+	sptype("long", ADDTYPE(LONG)->num, INTNUM, MIN_LONG, MAX_LONG);
+	sptype("long long", ADDTYPE(LONGLONG)->num, INTNUM,
 	     MIN_LONGLONG, MAX_LONGLONG);
-	ptype("unsigned char", ADDTYPE(UCHAR)->num, INTNUM, 0, MAX_UCHAR);
-	ptype("unsigned short", ADDTYPE(USHORT)->num, INTNUM, 0, MAX_USHORT);
-	ptype("unsigned int", ADDTYPE(UNSIGNED)->num, INTNUM, 0, MAX_UNSIGNED);
-	ptype("unsigned long", ADDTYPE(ULONG)->num, INTNUM, 0, MAX_ULONG);
-	ptype("unsigned long long", ADDTYPE(ULONGLONG)->num, INTNUM,
+	sptype("unsigned char", ADDTYPE(UCHAR)->num, INTNUM, 0, MAX_UCHAR);
+	sptype("unsigned short", ADDTYPE(USHORT)->num, INTNUM, 0, MAX_USHORT);
+	sptype("unsigned int", ADDTYPE(UNSIGNED)->num, INTNUM, 0, MAX_UNSIGNED);
+	sptype("unsigned long", ADDTYPE(ULONG)->num, INTNUM, 0, MAX_ULONG);
+	sptype("unsigned long long", ADDTYPE(ULONGLONG)->num, INTNUM,
 	    0, MAX_ULONGLONG);
 
-	ptype("float", ADDTYPE(FLOAT)->num, INTNUM, 4, 0);
-	ptype("double", ADDTYPE(DOUBLE)->num, INTNUM, 8, 0);
-	ptype("long double", ADDTYPE(LDOUBLE)->num, INTNUM, 12, 0);
+	sptype("float", ADDTYPE(FLOAT)->num, INTNUM, 4, 0);
+	sptype("double", ADDTYPE(DOUBLE)->num, INTNUM, 8, 0);
+	sptype("long double", ADDTYPE(LDOUBLE)->num, INTNUM, 12, 0);
 	st = ADDTYPE(VOID);
 	cprint(0, "\t.stabs \"void:t%d=r%d\",%d,0,0,0\n",
 	    st->num, st->num, N_LSYM);
@@ -131,7 +139,7 @@ stabs_init(void)
  * Print a type in stabs format
  */
 void
-ptype(char *name, int num, int inhnum, long long min, long long max)
+sptype(char *name, int num, int inhnum, long long min, long long max)
 {
 	cprint(0, "\t.stabs \"%s:t%d=r%d;%lld;%lld;\",%d,0,0,0\n",
 	    name, num, inhnum, min, max, N_LSYM);

@@ -154,6 +154,13 @@
 # include <string.h>
 # include <stdlib.h>
 
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
+
 int fun_inline;	/* Reading an inline function */
 int oldstyle;	/* Current function being defined */
 static struct symtab *xnf;

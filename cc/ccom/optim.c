@@ -38,6 +38,13 @@
 #define	NODE P1ND
 #define	nfree p1nfree
 #define	tfree p1tfree
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
+
 
 # define SWAP(p,q) {sp=p; p=q; q=sp;}
 # define RCON(p) (p->n_right->n_op==ICON)

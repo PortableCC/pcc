@@ -73,6 +73,13 @@
 # include <string.h>
 # include <stdlib.h>
 
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
+
 static void chkpun(P1ND *p);
 static int opact(P1ND *p);
 static int moditype(TWORD);
@@ -2862,6 +2869,9 @@ sptostr(struct symtab *sp)
 	return cp;
 }
 
+#undef n_type
+#undef n_qual
+
 static NODE *
 p2tree(P1ND *p)
 {
@@ -2873,16 +2883,16 @@ p2tree(P1ND *p)
 	myp2tree(p);  /* local action can be taken here */
 
 	/* Fix left imaginary types */
-	if (ISITY(BTYPE(p->n_type)))
-		MODTYPE(p->n_type, p->n_type - (FIMAG-FLOAT));
+	if (ISITY(BTYPE(p->ptype)))
+		MODTYPE(p->ptype, p->ptype - (FIMAG-FLOAT));
 
 	ty = coptype(p->n_op);
 	np = memset(talloc(), 0, sizeof(NODE));
 
 	/* Copy common data */
 	np->n_op = p->n_op;
-	np->n_type = p->n_type;
-	np->n_qual = p->n_qual;
+	np->n_type = p->ptype;
+	np->n_qual = p->pqual;
 	if (ty != BITYPE)
 		np->n_rval = p->n_rval;
 	if (ty == LTYPE) {
@@ -2920,14 +2930,14 @@ p2tree(P1ND *p)
 		ap = attr_new(ATTR_P2STRUCT, 2);
 		np->n_ap = attr_add(np->n_ap, ap);
 		/* STASG used for stack array init */
-		if (p->n_op == STASG && ISARY(p->n_type)) {
-			int size1 = (int)tsize(p->n_type, p->n_left->n_df,
+		if (p->n_op == STASG && ISARY(p->ptype)) {
+			int size1 = (int)tsize(p->ptype, p->n_left->n_df,
 			    p->n_left->n_ap)/SZCHAR;
-			ap->iarg(0) = (int)tsize(p->n_type, p->n_right->n_df,
+			ap->iarg(0) = (int)tsize(p->ptype, p->n_right->n_df,
 			    p->n_right->n_ap)/SZCHAR;
 			if (size1 < ap->iarg(0))
 				ap->iarg(0) = size1;
-			ap->iarg(1) = talign(p->n_type,
+			ap->iarg(1) = talign(p->ptype,
 			    p->n_left->n_ap)/SZCHAR;
 			break;
 		}
@@ -2955,6 +2965,12 @@ p2tree(P1ND *p)
 	return np;
 }
 
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 
 /*
  * Change void data types into char.

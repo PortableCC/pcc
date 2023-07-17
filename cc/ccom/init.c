@@ -69,6 +69,12 @@
 #define	tfree p1tfree
 #define	nfree p1nfree
 #define	fwalk p1fwalk
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 
 /*
  * The following machine-dependent routines may be called during
