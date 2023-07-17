@@ -1433,10 +1433,15 @@ run_linker(void)
 	struct strlist linker_flags;
 	int retval;
 
+#ifdef PCC_EARLY_LD_ARGS
+	PCC_EARLY_LD_ARGS
+#endif
+
 	if (outfile) {
 		strlist_prepend(&early_linker_flags, outfile);
 		strlist_prepend(&early_linker_flags, "-o");
 	}
+
 	strlist_init(&linker_flags);
 	strlist_append_list(&linker_flags, &early_linker_flags);
 	strlist_append_list(&linker_flags, &middle_linker_flags);
