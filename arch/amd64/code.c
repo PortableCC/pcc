@@ -37,6 +37,12 @@
 #define	nfree p1nfree
 #define	ccopy p1tcopy
 #define	tfree p1tfree
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 #endif
 
 static int nsse, ngpr, nrsp, rsaoff;

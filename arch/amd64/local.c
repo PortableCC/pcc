@@ -35,6 +35,12 @@
 #define	nfree p1nfree
 #define	fwalk p1fwalk
 #define	talloc p1alloc
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 #endif
 
 /*	this file contains code which is dependent on the target machine */
