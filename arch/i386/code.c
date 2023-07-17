@@ -35,7 +35,15 @@
 #else
 #define	NODE P1ND
 #define	talloc p1alloc
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 #endif
+
+
 
 /*
  * Print out assembler segment name.

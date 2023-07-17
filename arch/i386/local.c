@@ -35,6 +35,13 @@
 #define	p1nfree nfree
 #define	p1fwalk fwalk
 #define	p1tcopy tcopy
+#else
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
 #endif
 
 /*	this file contains code which is dependent on the target machine */
@@ -1265,6 +1272,8 @@ mangle(P1ND *p)
 	}
 #endif
 }
+
+#undef n_type
 
 void
 pass1_lastchance(struct interpass *ip)
