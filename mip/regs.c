@@ -126,7 +126,8 @@ typedef struct movlink {
 typedef struct regw {
 	DLIST_ENTRY(regw) link;
 	ADJL *r_adjList;	/* linked list of adjacent nodes */
-	int r_class;		/* this nodes class */
+	short r_class;		/* this nodes class */
+	short r_nrw;		/* XXX number of regw */
 	int r_nclass[NUMCLASS+1];	/* count of adjacent classes */
 	struct regw *r_alias;		/* aliased temporary */
 	int r_color;		/* final node color */
@@ -358,6 +359,7 @@ nsucomp(NODE *p)
 	UDEBUG(("node %p numregs %d\n", p, nxreg+1));
 	w = p->n_regw = tmpalloc(sizeof(REGW) * (nxreg+1));
 	memset(w, 0, sizeof(REGW) * (nxreg+1));
+	w->r_nrw = nxreg+1;
 
 	w->r_class = TCLASS(p->n_su);
 	if (w->r_class == 0)
@@ -1084,26 +1086,30 @@ insnwalk(NODE *p)
 		addalledges(&lr[i]);
 	}
 
-	/* Add edges for the result of this node */
-	if (rv && (q->visit & INREGS || o == TEMP || VALIDREG(p))) {
-		addalledges(rv);
+	if (rv) {
+		for (i = 0; i < rv->r_nrw; i++) {
 #ifdef NEWNEED
-		w = q->needs;
-		while ((w = hasneed(w, cNEVER))) {
-			AddEdge(rv, &ablock[(int)w[1]]);
-			w += 2;
-		}
-#else
-		if (q->needs & NSPECIAL) {
-			struct rspecial *rc;
-			for (rc = nspecial(q); rc->op; rc++) {
-				if (rc->op != NEVER)
-					continue;
-				AddEdge(rv, &ablock[rc->num]);
+			w = q->needs;
+			while ((w = hasneed(w, cNEVER))) {
+				AddEdge(&rv[i], &ablock[(int)w[1]]);
+				w += 2;
 			}
-		}
+#else
+			if (q->needs & NSPECIAL) {
+				struct rspecial *rc;
+				for (rc = nspecial(q); rc->op; rc++) {
+					if (rc->op != NEVER)
+						continue;
+					AddEdge(&rv[i], &ablock[rc->num]);
+				}
+			}
 #endif
+		}
 	}
+
+	/* Add edges for the result of this node */
+	if (rv && (q->visit & INREGS || o == TEMP || VALIDREG(p)))
+		addalledges(rv);
 
 	/* special handling of CALL operators */
 	if (callop(o)) {
