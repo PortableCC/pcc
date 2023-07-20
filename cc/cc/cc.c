@@ -2019,15 +2019,6 @@ struct flgcheck asflgcheck[] = {
 #else
 	{ &kflag, 1, "-k" },
 #endif
-#ifdef os_darwin
-	{ &one, 1, "-arch" },
-#if mach_amd64
-	{ &amd64_i386, 1, "i386" },
-	{ &amd64_i386, 0, "x86_64" },
-#else
-	{ &one, 1, "i386" },
-#endif
-#endif
 #ifdef TARGET_ASFLAGS
 	TARGET_ASFLAGS
 #endif
