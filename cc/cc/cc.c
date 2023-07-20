@@ -341,8 +341,8 @@ int	bigendian = 1;
 int	bigendian = 0;
 #endif
 
-#ifdef mach_amd64
-int amd64_i386;
+#ifdef TARGET_GLOBALS
+TARGET_GLOBALS
 #endif
 
 #define	match(a,b)	(strcmp(a,b) == 0)
@@ -703,18 +703,6 @@ main(int argc, char *argv[])
 				strlist_append(&compiler_flags, argp);
 				break;
 			}
-#ifdef mach_amd64
-			if (strncmp(argp, "-mcmodel=", 9) == 0) {
-				strlist_append(&compiler_flags, argp);
-				break;
-			}
-			/* need to call i386 ccom for this */
-			if (strcmp(argp, "-melf_i386") == 0) {
-				pass0 = LIBEXECDIR "/ccom_i386";
-				amd64_i386 = 1;
-				break;
-			}
-#endif
 #if defined(mach_arm) || defined(mach_mips) || defined(mach_mips64)
 			if (match(argp, "-mbig-endian")) {
 				bigendian = 1;
@@ -2002,10 +1990,7 @@ setup_ccom_flags(void)
 	cksetflags(ccomflgcheck, &compiler_flags, 'a');
 }
 
-#if defined(USE_YASM) || defined(os_win32) || defined(os_darwin) || \
-	(defined(os_sunos) && defined(mach_sparc64))
-static int one = 1;
-#endif
+int one = 1;
 
 struct flgcheck asflgcheck[] = {
 #if defined(USE_YASM)
@@ -2042,10 +2027,9 @@ struct flgcheck asflgcheck[] = {
 #else
 	{ &one, 1, "i386" },
 #endif
-#else
-#ifdef mach_amd64
-	{ &amd64_i386, 1, "--32" },
 #endif
+#ifdef TARGET_ASFLAGS
+	TARGET_ASFLAGS
 #endif
 	{ 0 }
 };
