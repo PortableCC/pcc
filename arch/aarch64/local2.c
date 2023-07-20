@@ -202,8 +202,10 @@ eoftn(struct interpass_prolog *ipp)
                 }
 	}
 	printf("\tret\n");
+#ifndef MACHOABI
 	printf("\t.size %s,.-%s\n", exname(ipp->ipp_name),
 	    exname(ipp->ipp_name));
+#endif
 }
 
 

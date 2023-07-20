@@ -53,11 +53,16 @@ setseg(int seg, char *name)
 		case DATA:
 		case LDATA: name = ".data"; break;
 		case UDATA: break;
+#ifdef MACHOABI
+		case RDATA: name = ".const_data"; break;
+		case STRNG: name = ".cstring"; break;
+#else
+		case RDATA: name = ".section .rodata"; break;
+		case STRNG: name = ".section .rodata"; break;
+#endif
 		case PICLDATA: name = ".section .data.rel.local,\"aw\",@progbits";break;
 		case PICDATA: name = ".section .data.rel.rw,\"aw\",@progbits"; break;
 		case PICRDATA: name = ".section .data.rel.ro,\"aw\",@progbits"; break;
-		case STRNG:
-		case RDATA: name = ".section .rodata"; break;
 		case TLSDATA: name = ".section .tdata,\"awT\",@progbits"; break;
 		case TLSUDATA: name = ".section .tbss,\"awT\",@nobits"; break;
 		case CTORS: name = ".section\t.ctors,\"aw\",@progbits"; break;
