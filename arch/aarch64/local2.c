@@ -214,17 +214,17 @@ eoftn(struct interpass_prolog *ipp)
 
 static char *
 ccbranches[] = {
-	"beq",		/* branch if equal */
-	"bne",		/* branch if not-equal */
-	"ble",		/* branch if less-than-or-equal */
-	"blt",		/* branch if less-than */
-	"bge",		/* branch if greater-than-or-equal */
-	"bgt",		/* branch if greater-than */
+	"b.eq",		/* branch if equal */
+	"b.ne",		/* branch if not-equal */
+	"b.le",		/* branch if less-than-or-equal */
+	"b.lt",		/* branch if less-than */
+	"b.ge",		/* branch if greater-than-or-equal */
+	"b.gt",		/* branch if greater-than */
 	/* what should these be ? */
-	"bls",		/* branch if lower-than-or-same */
-	"blo",		/* branch if lower-than */
-	"bhs",		/* branch if higher-than-or-same */
-	"bhi",		/* branch if higher-than */
+	"b.ls",		/* branch if lower-than-or-same */
+	"b.lo",		/* branch if lower-than */
+	"b.hs",		/* branch if higher-than-or-same */
+	"b.hi",		/* branch if higher-than */
 };
 
 /*
