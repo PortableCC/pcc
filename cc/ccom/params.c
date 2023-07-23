@@ -74,12 +74,14 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 	/* prepare return values */
 	cs->rv.type = DECREF(sp->stype); /* remove FTN */
 	cs->rv.df = sp->sdf;
+	cs->rv.ss = sp->sss;
 	cs->rv.ap = sp->sap;
 
 	/* prepare parameter values */
 	for (i = 0; i < nargs; i++) {
 		cs->av[i].type = spp[i]->stype;
 		cs->av[i].df = spp[i]->sdf;
+		cs->av[i].ss = spp[i]->sss;
 		cs->av[i].ap = spp[i]->sap;
 	}
 	cs->nargs = nargs;
@@ -102,7 +104,7 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 	for (i = 0; i < cs->nargs; i++) {
 		rp = &cs->av[i];
 		sp = spp[i];
-		//sz = (int)tsize(rp->type, rp->df, rp->ap);
+		//sz = (int)tsize(rp->type, rp->df, rp->ss);
 		if (rp->flags & AV_STREG) {
 			// st = (int)tsize(off, 0, 0);
 			cerror("AV_STREG");
@@ -110,9 +112,9 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 			cerror("AV_REG2");
 		} else if (rp->flags & AV_REG) {
 			/* arg in reg, always save in temp */
-			p = block(REG, 0, 0, sp->stype, sp->sdf, sp->sap);
+			p = block(REG, 0, 0, sp->stype, sp->sdf, sp->sss);
 			regno(p) = rp->reg[0];
-			q = tempnode(0, sp->stype, sp->sdf, sp->sap);
+			q = tempnode(0, sp->stype, sp->sdf, sp->sss);
 			sp->soffset = regno(q);
 			sp->sflags |= STNODE;
 			ecomp(buildtree(ASSIGN, q, p));
@@ -122,7 +124,7 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 			if (xtemps && !ISSOU(sp->stype) && cisreg(sp->stype) &&
 			    ((cqual(sp->stype, sp->squal) & VOL) == 0)) {
 				p = nametree(sp);
-				q = tempnode(0, p->n_type, p->n_df, p->n_ap);
+				q = tempnode(0, p->n_type, p->n_df, p->pss);
 				sp->soffset = regno(q);
 				sp->sflags |= STNODE;
 				ecomp(buildtree(ASSIGN, q, p));
@@ -152,12 +154,12 @@ fun_leave(void)
 
 	if (cs->rv.flags & RV_RETREG) {
 		/* scalar/float return in registers */
-		p = block(REG, 0, 0, cn->n_type, cn->n_df, cn->n_ap);
+		p = block(REG, 0, 0, cn->n_type, cn->n_df, cn->pss);
 		regno(p) = cs->rv.reg[0];
 		ecomp(buildtree(ASSIGN, p, p1tcopy(cn)));
 	} else if (cs->rv.flags & RV_STREG) {
 		/* struct return in regs,  struct ptr in cn */
-		sz = (int)tsize(cs->rv.type, cs->rv.df, cs->rv.ap);
+		sz = (int)tsize(cs->rv.type, cs->rv.df, cs->rv.ss);
 		cn->n_type = cs->rv.rtp+PTR;
 		if (sz > (int)tsize(cs->rv.rtp, 0, 0)) {
 			/* must move second word */
@@ -174,7 +176,7 @@ fun_leave(void)
 		ecomp(buildtree(ASSIGN, p, q));
 	} else if (cs->rv.flags & RV_STRET) {
 		/* Create struct assignment */
-		q = tempnode(cs->rv.off, PTR+cs->rv.type, cs->rv.df, cs->rv.ap);
+		q = tempnode(cs->rv.off, PTR+cs->rv.type, cs->rv.df, cs->rv.ss);
 		q = buildtree(UMUL, q, NULL);
 		p = buildtree(UMUL, p1tcopy(cn), NULL);
 		p = buildtree(ASSIGN, q, p);
@@ -292,7 +294,7 @@ pr_tell(void)
 }
 
 /*
- * Write (or compare) prototype info for one parameter.
+ * Write prototype info for one parameter.
  */
 static void
 argeval(P1ND *p)
@@ -321,12 +323,12 @@ argeval(P1ND *p)
 		/* transparent unions must have compatible types
 		 * shortcut here: if pointers, set void *,
 		 * otherwise btype  */
-		struct symtab *sp = strmemb(p->n_ap);
+		struct symtab *sp = strmemb(p->n_td->ss);
 		type = ISPTR(sp->stype) ? PTR|VOID : sp->stype;
 	}
 #endif
 	if (ISSOU(BTYPE(type)))
-		ptr1 = (uintptr_t)p->n_ap;
+		ptr1 = (uintptr_t)p->n_td->ss;
 	for (tw = type; ISPTR(tw); tw = DECREF(tw))
 		;
 	if (tw > BTMASK)
@@ -484,8 +486,12 @@ done:		ty = BTYPE(t1);
 		if (ISSOU(ty)) {
 			SEEKRDP(usym, u1);
 			SEEKRDP(udef, u2);
+//printf("ckproto: usym %d u1 %p\n", usym, u1);
+//printf("ckproto: udef %d u2 %p\n", udef, u2);
 			usym += sizeof(intptr_t), udef += sizeof(intptr_t);
-			if (suemeq((struct attr *)u1, (struct attr *)u2) == 0)
+			if (suemeq((struct ssdesc *)u1,
+			    (struct ssdesc *)u2) == 0)
+//			if (suemeq((struct tdef *)u1, (struct tdef *)u2) == 0)
 				return 1;
 		}
 
@@ -525,7 +531,7 @@ pr_oldstyle(struct symtab **as, int nparams)
 		int t = as[i]->stype;
 		pr_wr(t);
 		if (ISSOU(BTYPE(t)))
-			pr_wptr((uintptr_t)as[i]->sap);
+			pr_wptr((uintptr_t)&as[i]->td);
 		while (!ISFTN(t) && !ISARY(t) && t > BTMASK)
 			t = DECREF(t);
 		if (t > BTMASK)
@@ -558,7 +564,7 @@ static int isell;
 static void
 protoarg(P1ND *p)
 {
-	struct attr *ap;
+	struct ssdesc *ss;
 	union dimfun *dp;
 	P1ND *q;
 	int tp, t;
@@ -598,14 +604,14 @@ protoarg(P1ND *p)
 	/* Check structs (tn=type, tp=arrt) */
 	an = p->n_ap;
 #endif
-	ap = ISSOU(BTYPE(tp)) ? (void *)pr_rptr() : NULL;
+	ss = ISSOU(BTYPE(tp)) ? (void *)pr_rptr() : NULL;
 	for (t = tp; ISPTR(t); t = DECREF(t))
 		;
 	dp = t > BTMASK ? (void *)pr_rptr() : NULL;
 
 	q = p1alloc();
 	*q = *p;
-	q = ccast(q, tp, 0, dp, ap);
+	q = ccast(q, tp, 0, dp, ss);
 	*p = *q;
 	p1nfree(q);
 
@@ -670,7 +676,7 @@ pr_callchk(struct symtab *sp, P1ND *f, P1ND *a)
 static void
 pr_alprnt(int off, int in)
 {
-	struct attr *ap;
+	struct ssdesc *ss;
 	union dimfun *df;
 	TWORD t;
 	int i = 0, j;
@@ -698,9 +704,9 @@ pr_alprnt(int off, int in)
 			t = DECREF(t);
 		}
 		if (ISSOU(t)) {
-			ap = (struct attr *)pr_rptr();
-			printf(" (size %d align %d)", (int)tsize(t, 0, ap),
-			    (int)talign(t, ap));
+			ss = (struct ssdesc *)pr_rptr();
+			printf(" (size %d align %d)", (int)tsize(t, 0, ss),
+			    (int)talign(t, ss));
 		}
 		printf("\n");
 	}

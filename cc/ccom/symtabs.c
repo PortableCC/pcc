@@ -425,7 +425,7 @@ locctr(int seg, struct symtab *sp)
 		if (ISFTN(sp->stype)) {
 			al = ALFTN;
 		} else
-			al = talign(sp->stype, sp->sap);
+			al = talign(sp->stype, sp->sss);
 		defalign(al);
 		symdirec(sp);
 	}
@@ -643,7 +643,7 @@ strend(char *s, TWORD t)
 #ifdef NO_STRING_SAVE
 	instring(sp);
 #endif
-	p = block(NAME, NIL, NIL, sp->stype, sp->sdf, sp->sap);
+	p = block(NAME, NIL, NIL, sp->stype, sp->sdf, sp->sss);
 	p->n_sp = sp;
 	return(clocal(p));
 }

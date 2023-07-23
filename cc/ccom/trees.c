@@ -90,7 +90,7 @@ static P1ND *rewincop(P1ND *p1, P1ND *p2, int op);
 static int has_se(P1ND *p);
 static struct symtab *findmember(struct symtab *, char *);
 int inftn; /* currently between epilog/prolog */
-P1ND *cstknode(TWORD t, union dimfun *df, struct attr *ap);
+P1ND *cstknode(TWORD t, union dimfun *df, struct ssdesc *ap);
 
 static char *tnames[] = {
 	"undef",
@@ -361,7 +361,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 		if (has_se(l)) {
 			ll = l->n_left;
 
-			q = cstknode(ll->n_type, ll->n_df, ll->n_ap);
+			q = cstknode(ll->n_type, ll->n_df, ll->pss);
 			l->n_left = p1tcopy(q);
 			q = buildtree(ASSIGN, q, ll);
 		} else 
@@ -373,7 +373,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 		/* avoid casting of LHS */
 		if ((cdope(o) & SIMPFLG) && ISINTEGER(l->n_type) && 
 		    l->n_type != BOOL) 
-			r = ccast(r, l->n_type, l->n_qual, l->n_df, l->n_ap);
+			r = ccast(r, l->n_type, l->n_qual, l->n_df, l->pss);
 
 		r = buildtree(UNASG o, p1tcopy(l), r);
 		r = buildtree(ASSIGN, l, r);
@@ -388,7 +388,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 		if (has_se(l)) {
 			ll = l->n_left;
 
-			q = cstknode(ll->n_type, ll->n_df, ll->n_ap);
+			q = cstknode(ll->n_type, ll->n_df, ll->pss);
 			l->n_left = p1tcopy(q);
 			q = buildtree(ASSIGN, q, ll);
 		} else 
@@ -458,7 +458,8 @@ runtime:
 		p->n_type = q->n_type;
 		p->n_qual = q->n_qual;
 		p->n_df = q->n_df;
-		p->n_ap = q->n_ap;
+		p->pss = q->pss;
+//		p->n_ap = q->n_ap;
 		}
 
 	if( actions & CVTL ) p = convert( p, CVTL );
@@ -487,7 +488,7 @@ runtime:
 				break;
 			}
 
-			if ((sp1 = strmemb(l->n_ap)) == NULL) {
+			if ((sp1 = strmemb(l->n_td->ss)) == NULL) {
 				uerror("undefined struct or union");
 				break;
 			}
@@ -510,7 +511,8 @@ runtime:
 			p->n_type = DECREF(l->n_type);
 			p->n_qual = DECREF(l->n_qual);
 			p->n_df = l->n_df;
-			p->n_ap = l->n_ap;
+			p->pss = l->pss;
+	//		p->n_ap = l->n_ap;
 			break;
 
 		case ADDROF:
@@ -525,7 +527,8 @@ runtime:
 				p->n_type = INCREF(l->n_type);
 				p->n_qual = INCQAL(l->n_qual);
 				p->n_df = l->n_df;
-				p->n_ap = l->n_ap;
+				p->pss = l->pss;
+	//			p->n_ap = l->n_ap;
 				break;
 
 			case COMOP:
@@ -560,8 +563,9 @@ runtime:
 			p->n_type = l->n_type;
 			p->n_qual = l->n_qual;
 			p->n_df = l->n_df;
-			p->n_ap = l->n_ap;
-			if(tsize(r->n_type, r->n_df, r->n_ap) > SZINT)
+			p->pss = l->pss;
+		//	p->n_ap = l->n_ap;
+			if(tsize(r->n_type, r->n_df, r->pss) > SZINT)
 				p->n_right = makety(r, INT, 0, 0, 0);
 			break;
 
@@ -573,12 +577,12 @@ runtime:
 			 * operator using STASG and
 			 * the addresses of left and right */
 
-			if (strmemb(l->n_ap) != strmemb(r->n_ap))
+			if (suemeq(l->n_td->ss, r->n_td->ss) == 0)
 				uerror("assignment of different structures");
 
 			r = buildtree(ADDROF, r, NULL);
 
-			l = block(STASG, l, r, r->n_type, r->n_df, r->n_ap);
+			l = block(STASG, l, r, r->n_type, r->n_df, r->pss);
 			l = clocal(l);
 
 			if( o == RETURN ){
@@ -595,16 +599,15 @@ runtime:
 		case QUEST: /* fixup types of : */
 			if (r->n_left->n_type != p->n_type)
 				r->n_left = makety(r->n_left, p->n_type,
-				    p->n_qual, p->n_df, p->n_ap);
+				    p->n_qual, p->n_df, p->pss);
 			if (r->n_right->n_type != p->n_type)
 				r->n_right = makety(r->n_right, p->n_type,
-				    p->n_qual, p->n_df, p->n_ap);
+				    p->n_qual, p->n_df, p->pss);
 			break;
 
 		case COLON:
 			/* structure colon */
-
-			if (strmemb(l->n_ap) != strmemb(r->n_ap))
+			if (suemeq(l->n_td->ss, r->n_td->ss) == 0)
 				uerror( "type clash in conditional" );
 			break;
 
@@ -620,7 +623,8 @@ runtime:
 				uerror("illegal function");
 			p->n_type = DECREF(p->n_type);
 			p->n_df = l->n_df+1; /* add one for prototypes */
-			p->n_ap = l->n_ap;
+			p->pss = l->pss;
+		//	p->n_ap = l->n_ap;
 			if (p->n_type == STRTY || p->n_type == UNIONTY) {
 				/* function returning structure */
 				/*  make function really return ptr to str., with * */
@@ -674,7 +678,7 @@ rewincop(P1ND *p1, P1ND *p2, int op)
 {
 	P1ND *t, *r;
 		
-	t = cstknode(p1->n_type, p1->n_df, p1->n_ap);
+	t = cstknode(p1->n_type, p1->n_df, p1->pss);
 	r = buildtree(ASSIGN, p1tcopy(t), p1tcopy(p1));
 	r = buildtree(COMOP, r, buildtree(op, p1, eve(p2)));
 	return buildtree(COMOP, r, t);
@@ -690,7 +694,7 @@ findmember(struct symtab *sp, char *s)
 	for (; sp != NULL; sp = sp->snext) {
 		if (sp->sname[0] == '*') {
 			/* unnamed member, recurse down */
-			if ((sp2 = findmember(strmemb(sp->sap), s))) {
+			if ((sp2 = findmember(strmemb(sp->td->ss), s))) {
 				sp3 = tmpalloc(sizeof (struct symtab));
 				*sp3 = *sp2;
 				sp3->soffset += sp->soffset;
@@ -723,7 +727,7 @@ nametree(struct symtab *sp)
 {
 	P1ND *p;
 
-	p = block(NAME, NULL, NULL, sp->stype, sp->sdf, sp->sap);
+	p = block(NAME, NULL, NULL, sp->stype, sp->sdf, sp->sss);
 	p->n_qual = sp->squal;
 	p->n_sp = sp;
 
@@ -787,12 +791,12 @@ cast(P1ND *p, TWORD t, TWORD u)
  * Cast and complain if necessary by not inserining a cast.
  */
 P1ND *
-ccast(P1ND *p, TWORD t, TWORD u, union dimfun *df, struct attr *ap)
+ccast(P1ND *p, TWORD t, TWORD u, union dimfun *df, struct ssdesc *ss)
 {
 	P1ND *q;
 
 	/* let buildtree do typechecking (and casting) */ 
-	q = block(NAME, NULL, NULL, t, df, ap);
+	q = block(NAME, NULL, NULL, t, df, ss);
 	p = buildtree(ASSIGN, q, p);
 	if (ISSOU(t)) {
 		p = p1nfree(p);
@@ -900,7 +904,7 @@ strargs(register P1ND *p)
 		}
 
 	if( p->n_type == STRTY || p->n_type == UNIONTY ){
-		p = block(STARG, p, NULL, p->n_type, p->n_df, p->n_ap);
+		p = block(STARG, p, NULL, p->n_type, p->n_df, p->pss);
 		p->n_left = buildtree( ADDROF, p->n_left, NULL );
 		p = clocal(p);
 		}
@@ -1152,7 +1156,7 @@ chkpun(P1ND *p)
 	} else {
 		if (t1 == t2) {
 			if (ISSOU(BTYPE(t1)) &&
-			    !suemeq(p->n_left->n_ap, p->n_right->n_ap))
+			    !suemeq(p->n_left->n_td->ss, p->n_right->n_td->ss))
 				werror("illegal structure pointer combination");
 			return;
 		}
@@ -1191,9 +1195,10 @@ chkpun(P1ND *p)
 }
 
 static P1ND *
-offplus(P1ND *p, int off, TWORD t, TWORD q, union dimfun *d, struct attr *ap) {
+offplus(P1ND *p, int off, TWORD t, TWORD q, union dimfun *d, struct ssdesc *ss)
+{
 	if (off != 0) {
-		p = block(PLUS, p, offcon(off, t, d, ap), t, d, ap);
+		p = block(PLUS, p, offcon(off, t, d, ss), t, d, ss);
 		p->n_qual = q;
 		p = optim(p);
 	}
@@ -1205,6 +1210,7 @@ P1ND *
 stref(P1ND *p)
 {
 	P1ND *r;
+	struct ssdesc *ss;
 	struct attr *ap, *xap, *yap;
 	union dimfun *d;
 	TWORD t, q;
@@ -1235,6 +1241,7 @@ stref(P1ND *p)
 	q = INCQAL(s->squal);
 	d = s->sdf;
 	ap = s->sap;
+	ss = s->sss;
 #ifdef GCC_COMPAT
 	if ((yap = attr_find(ap, GCC_ATYP_PACKED)) != NULL)
 		xap = yap;
@@ -1245,7 +1252,7 @@ stref(P1ND *p)
 	yap = NULL;
 #endif
 
-	p = makety(p, t, q, d, ap);
+	p = makety(p, t, q, d, ss);
 
 	/* compute the offset to be added */
 
@@ -1254,11 +1261,11 @@ stref(P1ND *p)
 
 	if (dsc & FIELD) {
 		TWORD ftyp = s->stype;
-		int fal = talign(ftyp, ap);
+		int fal = talign(ftyp, ss);
 		fsz = dsc&FLDSIZ;
 		off = (off/fal)*fal;
-		p = offplus(p, off, t, q, d, ap);
-		p = block(FLD, p, NULL, ftyp, 0, ap);
+		p = offplus(p, off, t, q, d, ss);
+		p = block(FLD, p, NULL, ftyp, 0, ss);
 		p->n_qual = q;
 		p->n_rval = PKFIELD(fsz, s->soffset%fal);
 		/* make type int or some other signed type */
@@ -1271,7 +1278,7 @@ stref(P1ND *p)
 		if (ftyp != p->n_type)
 			p = makety(p, ftyp, 0, 0, 0);
 	} else {
-		p = offplus(p, off, t, q, d, ap);
+		p = offplus(p, off, t, q, d, ss);
 #ifndef CAN_UNALIGN
 		/* if target cannot handle unaligned addresses, fix here */
 #endif
@@ -1351,7 +1358,7 @@ bpsize(P1ND *p)
 				s.sdf++;
 			}
 		}
-		sz = (int)tsize(t, s.sdf, p->n_ap);
+		sz = (int)tsize(t, s.sdf, p->pss);
 		p = buildtree(MUL, q, bcon(sz/SZCHAR));
 	} else
 		p = (offcon(psize(p), p->n_type, p->n_df, p->n_ap));
@@ -1371,7 +1378,7 @@ psize(P1ND *p)
 		return(SZINT);
 	}
 	/* note: no pointers to fields */
-	return(tsize(DECREF(p->n_type), p->n_df, p->n_ap));
+	return(tsize(DECREF(p->n_type), p->n_df, p->pss));
 }
 
 /*
@@ -1399,7 +1406,7 @@ convert(P1ND *p, int f)
 	while (ISARY(ty))
 		ty = DECREF(ty);
 
-	r = offcon(tsize(ty, s->n_df, s->n_ap), s->n_type, s->n_df, s->n_ap);
+	r = offcon(tsize(ty, s->n_df, s->pss), s->n_type, s->n_df, s->n_ap);
 	ty = ty2;
 	rv = bcon(1);
 	df = s->n_df;
@@ -1467,7 +1474,7 @@ oconvert(register P1ND *p)
 
 	case MINUS:
 		p->n_type = INTPTR;
-		p->n_ap = NULL;
+	//	p->n_ap = NULL;
 		p = (clocal(VBLOCK(p, bpsize(p->n_left), INT, 0, 0)));
 		return( p );
 		}
@@ -1486,7 +1493,7 @@ oconvert(register P1ND *p)
 P1ND *
 ptmatch(P1ND *p)
 {
-	struct attr *ap, *ap2;
+	struct ssdesc *ss, *ss2;
 	union dimfun *d, *d2;
 	TWORD t1, t2, t, q1, q2, q;
 	int o;
@@ -1498,8 +1505,8 @@ ptmatch(P1ND *p)
 	q2 = p->n_right->n_qual;
 	d = p->n_left->n_df;
 	d2 = p->n_right->n_df;
-	ap = p->n_left->n_ap;
-	ap2 = p->n_right->n_ap;
+	ss = p->n_left->pss;
+	ss2 = p->n_right->pss;
 
 	switch( o ){
 
@@ -1541,7 +1548,7 @@ ptmatch(P1ND *p)
 				if (BTYPE(t1) == VOID) {
 					t = t2;
 					d = d2;
-					ap = ap2;
+					ss = ss2;
 					break;
 				}
 				if (BTYPE(t2) == VOID)
@@ -1557,7 +1564,7 @@ ptmatch(P1ND *p)
 			t = t2;
 			q = q2;
 			d = d2;
-			ap = ap2;
+			ss = ss2;
 			break;
 			}
 		if( !ISPTR(t2) ){
@@ -1565,22 +1572,22 @@ ptmatch(P1ND *p)
 			}
 
 		/* both are pointers */
-		if( talign(t2,ap2) < talign(t,ap) ){
+		if( talign(t2,ss2) < talign(t,ss) ){
 			t = t2;
 			q = q2;
-			ap = ap2;
+			ss = ss2;
 			}
 		break;
 		}
 
-	p->n_left = makety( p->n_left, t, q, d, ap );
-	p->n_right = makety( p->n_right, t, q, d, ap );
+	p->n_left = makety( p->n_left, t, q, d, ss );
+	p->n_right = makety( p->n_right, t, q, d, ss );
 	if( o!=MINUS && !clogop(o) ){
 
 		p->n_type = t;
 		p->n_qual = q;
 		p->n_df = d;
-		p->n_ap = ap;
+		p->pss = ss;
 		}
 
 	return(clocal(p));
@@ -1662,12 +1669,12 @@ tymatch(P1ND *p)
  * make p into type t by inserting a conversion
  */
 P1ND *
-makety(P1ND *p, TWORD t, TWORD q, union dimfun *d, struct attr *ap)
+makety(P1ND *p, TWORD t, TWORD q, union dimfun *d, struct ssdesc *ss)
 {
 
 	if (t == p->n_type && t != FLOAT && t != DOUBLE) {
 		p->n_df = d;
-		p->n_ap = ap;
+		p->pss = ss;
 		p->n_qual = q;
 		return(p);
 	}
@@ -1678,13 +1685,35 @@ makety(P1ND *p, TWORD t, TWORD q, union dimfun *d, struct attr *ap)
 	if (concast(p, t))
 		return clocal(p);
 
-	p = block(t & TMASK ? PCONV : SCONV, p, NULL, t, d, ap);
+	p = block(t & TMASK ? PCONV : SCONV, p, NULL, t, d, ss);
 	p->n_qual = q;
 	return clocal(p);
 }
 
 P1ND *
-block(int o, P1ND *l, P1ND *r, TWORD t, union dimfun *d, struct attr *ap)
+blck(int o, P1ND *l, P1ND *r, struct tdef *td)
+{
+	register P1ND *p;
+
+	p = p1alloc();
+	p->n_rval = 0;
+	p->n_op = o;
+	slval(p, 0);
+	p->n_left = l;
+	p->n_right = r;
+
+	p->n_td[0] = *td;
+//	p->n_type = t;
+//	p->n_qual = 0;
+//	p->n_df = d;
+//	p->pss = ss;
+
+	p->n_ap = NULL;
+	return(p);
+}
+
+P1ND *
+block(int o, P1ND *l, P1ND *r, TWORD t, union dimfun *d, struct ssdesc *ss)
 {
 	register P1ND *p;
 
@@ -1697,7 +1726,8 @@ block(int o, P1ND *l, P1ND *r, TWORD t, union dimfun *d, struct attr *ap)
 	p->n_type = t;
 	p->n_qual = 0;
 	p->n_df = d;
-	p->n_ap = ap;
+	p->pss = ss;
+	p->n_ap = NULL;
 	return(p);
 }
 
@@ -1923,7 +1953,7 @@ getn(TWORD t)
 	if (tvaloff == -NOOFFSET)
 		tvaloff++; /* Skip this for array indexing */
 	n = tvaloff;
-	tvaloff += szty(t);
+	tvaloff += szty(t); /* XXX pass2 thingie */
 	return n;
 }
 
@@ -1932,11 +1962,25 @@ getn(TWORD t)
  * If nr == 0, return a node with a new number.
  */
 P1ND *
-tempnode(int nr, TWORD type, union dimfun *df, struct attr *ap)
+tmpnod(int nr, struct tdef *td)
 {
 	P1ND *r;
 
-	r = block(TEMP, NULL, NULL, type, df, ap);
+	r = blck(TEMP, NULL, NULL, td);
+	regno(r) = nr ? nr : getn(td->type);
+	return r;
+}
+
+/*
+ * Returns a TEMP node with temp number nr.
+ * If nr == 0, return a node with a new number.
+ */
+P1ND *
+tempnode(int nr, TWORD type, union dimfun *df, struct ssdesc *ss)
+{
+	P1ND *r;
+
+	r = block(TEMP, NULL, NULL, type, df, ss);
 	regno(r) = nr ? nr : getn(type);
 	return r;
 }
@@ -1986,7 +2030,7 @@ doszof(P1ND *p)
 		ty = DECREF(ty);
 	}
 	rv = buildtree(MUL, rv, 
-	    xbcon(tsize(ty, p->n_df, p->n_ap)/SZCHAR, NULL, INTPTR));
+	    xbcon(tsize(ty, p->n_df, p->pss)/SZCHAR, NULL, INTPTR));
 	p1tfree(p);
 	return rv;
 }
@@ -2022,6 +2066,9 @@ eprint(P1ND *p, int down, int *a, int *b)
 	}
 	tprint(p->n_type, p->n_qual);
 	printf( ", %p, ", p->n_df);
+	if (p->pss)
+		printf("al %d sz %d lnk %p ",
+		    p->pss->al, p->pss->sz, p->pss->sp);
 #ifdef GCC_COMPAT
 	dump_attr(p->n_ap);
 #endif
@@ -2257,7 +2304,7 @@ calc:		if (true < 0) {
  * Create a node for either TEMP or on-stack storage.
  */
 P1ND *
-cstknode(TWORD t, union dimfun *df, struct attr *ap)
+cstknode(TWORD t, union dimfun *df, struct ssdesc *ss)
 {
 	struct symtab *sp;
 	int i;
@@ -2267,7 +2314,7 @@ cstknode(TWORD t, union dimfun *df, struct attr *ap)
 	sp->stype = t;
 	sp->squal = 0;
 	sp->sdf = df;
-	sp->sap = ap;
+	sp->sss = ss;
 	sp->sclass = AUTO;
 	sp->soffset = NOOFFSET;
 	if ((i = tnodenr(sp)) != 0) {
@@ -2297,7 +2344,7 @@ rmcops(P1ND *p)
 	o = p->n_op;
 	ty = coptype(o);
 	if (BTYPE(p->n_type) == ENUMTY) { /* fixup enum */
-		struct symtab *sp = strmemb(p->n_ap);
+		struct symtab *sp = strmemb(p->n_td->ss);
 		MODTYPE(p->n_type, sp->stype);
 		/*
 		 * XXX may fail if these are true:
@@ -2322,7 +2369,7 @@ rmcops(P1ND *p)
 		q = p->n_right->n_left;
 		comops(q);
 		if (type != VOID) {
-			tval = cstknode(q->n_type, q->n_df, q->n_ap);
+			tval = cstknode(q->n_type, q->n_df, q->pss);
 			q = buildtree(ASSIGN, p1tcopy(tval), q);
 		}
 		rmcops(q);
@@ -2371,7 +2418,7 @@ rmcops(P1ND *p)
 		*r = *p;
 		andorbr(r, -1, lbl = getlab());
 
-		tval = cstknode(p->n_type, p->n_df, p->n_ap);
+		tval = cstknode(p->n_type, p->n_df, p->pss);
 
 		ecode(buildtree(ASSIGN, p1tcopy(tval), bcon(1)));
 		branch(lbl2 = getlab());
@@ -2932,19 +2979,21 @@ p2tree(P1ND *p)
 		/* STASG used for stack array init */
 		if (p->n_op == STASG && ISARY(p->ptype)) {
 			int size1 = (int)tsize(p->ptype, p->n_left->n_df,
-			    p->n_left->n_ap)/SZCHAR;
+			    p->n_left->pss)/SZCHAR;
 			ap->iarg(0) = (int)tsize(p->ptype, p->n_right->n_df,
-			    p->n_right->n_ap)/SZCHAR;
+			    p->n_right->pss)/SZCHAR;
 			if (size1 < ap->iarg(0))
 				ap->iarg(0) = size1;
-			ap->iarg(1) = talign(p->ptype,
-			    p->n_left->n_ap)/SZCHAR;
+			ap->iarg(1) = talign(p->ptype, p->n_left->pss)/SZCHAR;
 			break;
 		}
 		/* set up size parameters */
-		ap->iarg(0) = (int)((tsize(STRTY, p->n_left->n_df,
-		    p->n_left->n_ap)+SZCHAR-1)/SZCHAR);
-		ap->iarg(1) = talign(STRTY,p->n_left->n_ap)/SZCHAR;
+//		ap->iarg(0) = (int)((tsize(STRTY, p->n_left->n_df,
+//		    p->n_left->pss)+SZCHAR-1)/SZCHAR);
+//		ap->iarg(1) = talign(STRTY,p->n_left->pss)/SZCHAR;
+		ap->iarg(0) = (int)((tsize(STRTY, p->n_df,
+		    p->pss)+SZCHAR-1)/SZCHAR);
+		ap->iarg(1) = talign(STRTY,p->pss)/SZCHAR;
 		if (ap->iarg(1) == 0)
 			ap->iarg(1) = 1; /* At least char for packed structs */
 		break;
@@ -3013,9 +3062,9 @@ deldcall(P1ND *p, int split)
 
 	if (cdope(o) & CALLFLG) {
 		if (split) {
-			q = cstknode(p->n_type, p->n_df, p->n_ap);
+			q = cstknode(p->n_type, p->n_df, p->pss);
 			r = p1tcopy(q);
-			q = block(ASSIGN, q, p, p->n_type, p->n_df, p->n_ap);
+			q = block(ASSIGN, q, p, p->n_type, p->n_df, p->pss);
 			ecode(q);
 			return r;
 		}
@@ -3031,7 +3080,7 @@ deldcall(P1ND *p, int split)
 #ifndef WORD_ADDRESSED
 
 static P1ND *
-pprop(P1ND *p, TWORD t, struct attr *ap)
+pprop(P1ND *p, TWORD t, struct ssdesc *ss)
 {
 	int o = p->n_op;
 	TWORD t2;
@@ -3044,7 +3093,8 @@ pprop(P1ND *p, TWORD t, struct attr *ap)
 #endif
 
 	p->n_type = t;
-	p->n_ap = ap;
+	if (p->n_op != STCALL && p->n_op != USTCALL)
+		p->pss = ss; /* XXX may break type propagation otherwise */
 	switch (o) {
 	case UMUL:
 		t = INCREF(t);
@@ -3076,18 +3126,18 @@ pprop(P1ND *p, TWORD t, struct attr *ap)
 		if (!ISPTR(p->n_left->n_type)) {
 			if (!ISPTR(p->n_right->n_type))
 				cerror("%p: no * in PLUS", p);
-			p->n_right = pprop(p->n_right, t, ap);
+			p->n_right = pprop(p->n_right, t, ss);
 		} else
-			p->n_left = pprop(p->n_left, t, ap);
+			p->n_left = pprop(p->n_left, t, ss);
 		return p;
 
 	case MINUS:
 		if (ISPTR(p->n_left->n_type)) {
 			if (ISPTR(p->n_right->n_type))
 				break; /* change both */
-			p->n_left = pprop(p->n_left, t, ap);
+			p->n_left = pprop(p->n_left, t, ss);
 		} else 
-			p->n_right = pprop(p->n_right, t, ap);
+			p->n_right = pprop(p->n_right, t, ss);
 		return p;
 
 	case CALL:
@@ -3103,7 +3153,7 @@ pprop(P1ND *p, TWORD t, struct attr *ap)
 		break;
 
 	case COMOP:
-		p->n_right = pprop(p->n_right, t, ap);
+		p->n_right = pprop(p->n_right, t, ss);
 		return p;
 
 	default:
@@ -3116,9 +3166,9 @@ pprop(P1ND *p, TWORD t, struct attr *ap)
 		cerror("pprop op error %d\n", o);
 	}
 	if (coptype(o) == BITYPE)
-		p->n_right = pprop(p->n_right, t, ap);
+		p->n_right = pprop(p->n_right, t, ss);
 	if (coptype(o) != LTYPE)
-		p->n_left = pprop(p->n_left, t, ap);
+		p->n_left = pprop(p->n_left, t, ss);
 	return p;
 }
 
@@ -3152,7 +3202,7 @@ rmpconv(P1ND *p)
 		l->n_sp = sp;
 	} else if (!ISPTR(l->n_type))
 		return p;
-	q = pprop(p->n_left, p->n_type, p->n_ap);
+	q = pprop(p->n_left, p->n_type, p->pss);
 	p1nfree(p);
 	return q;
 }

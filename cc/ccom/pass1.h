@@ -177,7 +177,7 @@ struct	symtab {
 	char	slevel;		/* scope level */
 	short	sflags;		/* flags, see below */
 	char	*sname;		/* Symbol name */
-	struct	tdef td;
+	struct	tdef td[1];
 
 	struct	attr *sap;	/* the base type attribute list */
 };
@@ -185,10 +185,10 @@ struct	symtab {
 #define	ISSOU(ty)   ((ty) == STRTY || (ty) == UNIONTY)
 
 /* compat */
-#define stype td.type
-#define squal td.qual
-#define sdf td.df    
-
+#define stype td->type
+#define squal td->qual
+#define sdf td->df    
+#define sss td->ss    
 
 /*
  * External definitions
@@ -270,7 +270,7 @@ struct flt;
 typedef struct p1node {
 	int	n_op;
 	union {
-		struct	tdef n_td;
+		struct	tdef n_td[1];
 		struct { int pad[3]; char *_name; } n_5;
 	};
 	struct attr *n_ap;
@@ -294,9 +294,10 @@ typedef struct p1node {
 #define slval(p,v)	((p)->n_f.n_u.n_l._val = (v))
 #define	n_ccon		n_f._ccon
 #define	n_scon		n_f._scon
-#define	ptype		n_td.type
-#define	pqual		n_td.qual
-#define	pdf		n_td.df
+#define	ptype		n_td->type
+#define	pqual		n_td->qual
+#define	pdf		n_td->df
+#define	pss		n_td->ss
 
 /*	mark an offset which is undefined */
 
@@ -305,7 +306,7 @@ typedef struct p1node {
 /* declarations of various functions */
 extern	P1ND
 	*buildtree(int, P1ND *, P1ND *r),
-	*mkty(unsigned, union dimfun *, struct attr *),
+	*mkty(unsigned, union dimfun *, struct ssdesc *),
 	*rstruct(char *, int),
 	*dclstruct(struct rstack *),
 	*strend(char *, TWORD),
@@ -321,19 +322,19 @@ extern	P1ND
 	*pconvert(P1ND *),
 	*oconvert(P1ND *),
 	*ptmatch(P1ND *),
-	*makety(P1ND *, TWORD, TWORD, union dimfun *, struct attr *),
-	*block(int, P1ND *, P1ND *, TWORD, union dimfun *, struct attr *),
+	*makety(P1ND *, TWORD, TWORD, union dimfun *, struct ssdesc *),
+	*block(int, P1ND *, P1ND *, TWORD, union dimfun *, struct ssdesc *),
+	*blck(int, P1ND *, P1ND *, struct tdef *),
 	*doszof(P1ND *),
 	*p1alloc(void),
 	*optim(P1ND *),
 	*clocal(P1ND *),
-	*tempnode(int, TWORD, union dimfun *, struct attr *),
-//	*tempnode(int, struct tdef *),
+	*tempnode(int, TWORD, union dimfun *, struct ssdesc *),
+	*tmpnod(int, struct tdef *),
 	*eve(P1ND *),
 	*doacall(struct symtab *, P1ND *, P1ND *);
 P1ND	*intprom(P1ND *);
-OFFSZ	tsize(TWORD, union dimfun *, struct attr *),
-	tsize2(struct tdef *),
+OFFSZ	tsize(TWORD, union dimfun *, struct ssdesc *),
 	psize(P1ND *);
 P1ND *	typenode(P1ND *new);
 void	spalloc(P1ND *, P1ND *, OFFSZ);
@@ -365,8 +366,7 @@ char *addname(char *);
 void symclear(int);
 struct symtab *hide(struct symtab *);
 void soumemb(P1ND *, char *, int);
-int talign(unsigned int, struct attr *);
-int talign2(struct tdef *);
+int talign(unsigned int, struct ssdesc *);
 void bfcode(struct symtab **, int);
 void branch(int);
 void cbranch(P1ND *, P1ND *);
@@ -431,7 +431,7 @@ P1ND *cxcast(P1ND *p1, P1ND *p2);
 P1ND *cxret(P1ND *p, P1ND *q);
 P1ND *imret(P1ND *p, P1ND *q);
 P1ND *cast(P1ND *p, TWORD t, TWORD q);
-P1ND *ccast(P1ND *p, TWORD t, TWORD u, union dimfun *df, struct attr *sue);
+P1ND *ccast(P1ND *p, TWORD t, TWORD u, union dimfun *df, struct ssdesc *);
 int andable(P1ND *);
 int conval(P1ND *, int, P1ND *);
 int ispow2(CONSZ);
@@ -448,9 +448,8 @@ int notlval(P1ND *);
 void ecode(P1ND *p);
 void ftnend(void);
 void dclargs(void);
-int suemeq(struct attr *s1, struct attr *s2);
-struct symtab *strmemb(struct attr *ap);
-struct symtab *strmemb2(struct tdef *);
+int suemeq(struct ssdesc *s1, struct ssdesc *s2);
+struct symtab *strmemb(struct ssdesc *);
 int yylex(void);
 void yyerror(char *);
 int pragmas_gcc(char *t);
@@ -472,7 +471,7 @@ char *getexname(struct symtab *sp);
 void putjops(P1ND *p, void *arg);
 int tnodenr(struct symtab *);
 P1ND *mkcmplx(P1ND *p, TWORD dt);
-void cxargfixup(P1ND *arg, TWORD dt, struct attr *ap);
+void cxargfixup(P1ND *arg, struct tdef *td);
 int pr_arglst(P1ND *n);
 int pr_ckproto(int usym, int udef, int old);
 void pr_callchk(struct symtab *sp, P1ND *f, P1ND *a);
@@ -532,10 +531,10 @@ enum {	ATTR_FIRST = ATTR_MI_MAX + 1,
 	ATTR_COMPLEX,	/* Internal definition of complex */
 	xxxATTR_BASETYP,	/* Internal; see below */
 	ATTR_QUALTYP,	/* Internal; const/volatile, see below */
-	ATTR_ALIGNED,	/* Internal; also used as gcc type attribute */
+	xxxATTR_ALIGNED,	/* Internal; also used as gcc type attribute */
 	ATTR_NORETURN,	/* Function does not return */
-	ATTR_STRUCT,	/* Internal; element list */
-#define ATTR_MAX ATTR_STRUCT
+	xxxATTR_STRUCT,	/* Internal; element list */
+#define ATTR_MAX xxxATTR_STRUCT
 
 	ATTR_P1LABELS,	/* used to store stuff while parsing */
 	ATTR_SONAME,	/* output name of symbol */
@@ -618,7 +617,8 @@ enum {	ATTR_FIRST = ATTR_MI_MAX + 1,
  */
 #define amlist  aa[0].varg
 #define amsize  aa[1].iarg
-#define	strattr(x)	(attr_find(x, ATTR_STRUCT))
+// #define	strattr(x)	(attr_find(x, ATTR_STRUCT))
+#define	strattr(x)	((x)->ss)
 
 void gcc_init(void);
 int gcc_keyword(char *);
@@ -666,7 +666,7 @@ void stabs_lbrac(int);
 void stabs_func(struct symtab *);
 void stabs_newsym(struct symtab *);
 void stabs_chgsym(struct symtab *);
-void stabs_struct(struct symtab *, struct attr *);
+void stabs_struct(struct symtab *);
 #endif
 #ifdef DWARF
 void dwarf_init(char *);
@@ -807,6 +807,7 @@ struct rdef {
 	int flags;		/* shared between common/target code */
 	int type;		/* set by common code */
 	union dimfun *df;	/* set by common code */
+	struct ssdesc *ss;	/* set by common code */
 	struct attr *ap;	/* set by common code */
 	int off, rtp, reg[2];	/* set by target code */
 };

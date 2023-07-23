@@ -374,8 +374,8 @@ struct atax {
 	CS(ATTR_COMPLEX)	{ 0, NULL },
 	CS(xxxATTR_BASETYP)	{ 0, NULL },
 	CS(ATTR_QUALTYP)	{ 0, NULL },
-	CS(ATTR_STRUCT)		{ 0, NULL },
-	CS(ATTR_ALIGNED)	{ A_0ARG|A_1ARG, "aligned" },
+	CS(xxxATTR_STRUCT)		{ 0, NULL },
+	CS(xxxATTR_ALIGNED)	{ A_0ARG|A_1ARG, "aligned" },
 	CS(ATTR_NORETURN)	{ A_0ARG, "noreturn" },
 	CS(ATTR_P1LABELS)	{ A_0ARG, "p1labels" },
 	CS(ATTR_SONAME)		{ A_1ARG|A1_STR, "soname" },
@@ -562,7 +562,7 @@ gcc_attribs(NODE *p)
 
 	/* some attributes must be massaged special */
 	switch (attr) {
-	case ATTR_ALIGNED:
+	case xxxATTR_ALIGNED:
 		if (narg == 0)
 			ap->aa[0].iarg = ALMAX;
 		else
@@ -626,6 +626,7 @@ gcc_attr_parse(NODE *p)
 void
 gcc_tcattrfix(NODE *p)
 {
+	struct ssdesc *ss;
 	struct symtab *sp;
 	struct attr *ap;
 	int sz, coff, csz, al, oal, mxal;
@@ -640,8 +641,8 @@ gcc_tcattrfix(NODE *p)
 
 	/* Must repack struct */
 	coff = csz = 0;
-	for (sp = strmemb(ap); sp; sp = sp->snext) {
-		oal = talign(sp->stype, sp->sap);
+	for (sp = strmemb(p->n_td->ss); sp; sp = sp->snext) {
+		oal = talign(sp->stype, sp->sss);
 		if (oal > al)
 			oal = al;
 		if (mxal < oal)
@@ -649,7 +650,7 @@ gcc_tcattrfix(NODE *p)
 		if (sp->sclass & FIELD)
 			sz = sp->sclass&FLDSIZ;
 		else
-			sz = (int)tsize(sp->stype, sp->sdf, sp->sap);
+			sz = (int)tsize(sp->stype, sp->sdf, sp->sss);
 		sp->soffset = upoff(sz, oal, &coff);
 		if (coff > csz)
 			csz = coff;
@@ -660,11 +661,9 @@ gcc_tcattrfix(NODE *p)
 		mxal = ALCHAR; /* for bitfields */
 	SETOFF(csz, mxal); /* Roundup to whatever */
 
-	ap = attr_find(p->n_ap, ATTR_STRUCT);
-	ap->amsize = csz;
-	ap = attr_find(p->n_ap, ATTR_ALIGNED);
-	ap->iarg(0) = mxal;
-
+	ss = p->n_td->ss;
+	ss->sz = csz;
+	ss->al = mxal;
 }
 
 /*
@@ -715,6 +714,7 @@ pragmas_gcc(char *t)
 void
 gcc_modefix(NODE *p)
 {
+	struct ssdesc *ss;
 	struct attr *ap;
 #ifdef TARGET_TIMODE
 	struct attr *a2;
@@ -762,8 +762,8 @@ gcc_modefix(NODE *p)
 		if (BTYPE(p->n_type) != STRTY)
 			uerror("gcc_modefix: complex not STRTY");
 		i -= (FCOMPLEX-FLOAT);
-		ap = strattr(p->n_ap);
-		sp = ap->amlist;
+		ss = strattr(p->n_td);
+		sp = ss->sp;
 		if (sp->stype == (unsigned)i)
 			return; /* Already correct type */
 		/* we must change to another struct */
@@ -813,7 +813,7 @@ tistack(void)
 	n = addname(buf);
 	sp = lookup(n, 0);
 	sp2 = tisp;
-	q = block(TYPE, NIL, NIL, sp2->stype, sp2->sdf, sp2->sap);
+	q = block(TYPE, NIL, NIL, sp2->stype, sp2->sdf, sp2->sss);
 	q->n_sp = sp;
 	nidcl2(q, AUTO, 0);
 	nfree(q);
@@ -958,8 +958,8 @@ gcc_andorer(int op, NODE *p1, NODE *p2)
 	char *n = tistack();
 	NODE *p, *t1, *t2, *p3;
 
-	t1 = tempnode(0, p1->n_type, p1->n_df, p1->n_ap);
-	t2 = tempnode(0, p2->n_type, p2->n_df, p2->n_ap);
+	t1 = tempnode(0, p1->n_type, p1->n_df, p1->pss);
+	t2 = tempnode(0, p2->n_type, p2->n_df, p2->pss);
 
 	p1 = buildtree(ASSIGN, p1tcopy(t1), p1);
 	p2 = buildtree(ASSIGN, p1tcopy(t2), p2);
@@ -1126,7 +1126,7 @@ dump_attr(struct attr *ap)
 			printf("bad type %d, ", ap->atype);
 		} else if (atax[ap->atype].name == 0) {
 			char *c = ap->atype == ATTR_COMPLEX ? "complex" :
-			    ap->atype == ATTR_STRUCT ? "struct" : "badtype";
+			    "badtype";
 			printf("%s, ", c);
 		} else {
 			printf("%s: ", atax[ap->atype].name);

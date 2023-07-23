@@ -110,10 +110,13 @@ struct params;
 struct rstack {
 	struct	rstack *rnext;
 	int	rsou;
-	int	rstr;
+	int	curpos;	/* position in struct */
+	int	maxsz;	/* total size of struct */
 	struct	symtab *rsym;
 	struct	symtab *rb;
+	struct	ssdesc *ss;
 	struct	attr *ap;
+	int	pack;
 	int	flags;
 #define	LASTELM	1
 } *rpole;
@@ -195,6 +198,9 @@ defid2(NODE *q, int class, char *astr)
 		tprint(q->n_type, q->n_qual);
 		printf(", %s, (%p)), level %d\n\t", scnames(class),
 		    q->n_df, blevel);
+		if (p->sss)
+			printf("link %p size %d align %d\n",
+			    p->sss->sp, p->sss->sz, p->sss->al);
 #ifdef GCC_COMPAT
 		dump_attr(q->n_ap);
 #endif
@@ -284,7 +290,8 @@ defid2(NODE *q, int class, char *astr)
 
 	/* check that redeclarations are to the same structure */
 	if (temp == STRTY || temp == UNIONTY) {
-		if (strmemb(p->sap) != strmemb(q->n_ap))
+		if (suemeq(p->td->ss, q->n_td->ss) == 0)
+//		if (strmemb(p->sap) != strmemb(q->n_ap))
 			goto mismatch;
 	}
 
@@ -428,6 +435,7 @@ defid2(NODE *q, int class, char *astr)
 	p->sclass = (char)class;
 	p->slevel = (char)blevel;
 	p->soffset = NOOFFSET;
+	p->sss = q->pss;
 	if (q->n_ap)
 		p->sap = attr_add(q->n_ap, p->sap);
 
@@ -615,7 +623,7 @@ ftnend(void)
 }
 
 static struct symtab nulsym = {
-	NULL, 0, 0, 0, 0, "null", { INT, 0, NULL, NULL },
+	NULL, 0, 0, 0, 0, "null", {{ INT, 0, NULL, NULL }},
 };
 
 void
@@ -692,6 +700,7 @@ done:	autooff = AUTOINIT;
 	symclear(1);	/* In case of function pointer args */
 }
 
+#if 0
 /*
  * basic attributes for structs and enums
  */
@@ -700,6 +709,9 @@ seattr(void)
 {
 	return attr_add(attr_new(ATTR_ALIGNED, 4), attr_new(ATTR_STRUCT, 2));
 }
+#endif
+#define	SEDESC()	memset(permalloc(sizeof(struct ssdesc)), \
+	0, sizeof(struct ssdesc));
 
 /*
  * Struct/union/enum symtab construction.
@@ -742,9 +754,9 @@ rstruct(char *tag, int soru)
 	struct symtab *sp;
 
 	sp = deftag(tag, soru);
-	if (sp->sap == NULL)
-		sp->sap = seattr();
-	return mkty(sp->stype, 0, sp->sap);
+	if (sp->sss == NULL)
+		sp->sss = SEDESC();
+	return mkty(sp->stype, 0, sp->sss);
 }
 
 static int enumlow, enumhigh;
@@ -780,7 +792,6 @@ moedef(char *name)
 struct symtab *
 enumhd(char *name)
 {
-	struct attr *ap;
 	struct symtab *sp;
 
 	enummer = enumlow = enumhigh = 0;
@@ -794,11 +805,16 @@ enumhd(char *name)
 		sp = hide(sp);
 		defstr(sp, ENAME);
 	}
+	if (sp->sss == NULL)
+		sp->sss = SEDESC();
+	sp->sss->sp = sp;
+#if 0
 	if (sp->sap == NULL)
 		ap = sp->sap = attr_new(ATTR_STRUCT, 4);
 	else
 		ap = attr_find(sp->sap, ATTR_STRUCT);
 	ap->amlist = sp;
+#endif
 	return sp;
 }
 
@@ -859,7 +875,7 @@ enumref(char *name)
 		sp->stype = ENUMTY;
 	}
 
-	p = mkty(sp->stype, 0, sp->sap);
+	p = mkty(sp->stype, 0, sp->sss);
 	p->n_sp = sp;
 	return p;
 }
@@ -871,40 +887,47 @@ enumref(char *name)
 struct rstack *
 bstruct(char *name, int soru, NODE *gp)
 {
+	struct ssdesc *ss;
 	struct rstack *r;
 	struct symtab *sp;
-	struct attr *ap, *gap;
+	struct attr *gap = NULL;
+	int pack = 0;
 
 #ifdef GCC_COMPAT
-	gap = gp ? gcc_attr_parse(gp) : NULL;
-#else
-	gap = NULL;
+	if (gp) {
+		struct attr *ap;
+		gap = gcc_attr_parse(gp);
+		if ((ap = attr_find(gap, GCC_ATYP_PACKED)))
+			pack = ap->iarg(0);
+	}
 #endif
 
 	if (name != NULL) {
 		sp = deftag(name, soru);
-		if (sp->sap == NULL)
-			sp->sap = seattr();
-		ap = attr_find(sp->sap, ATTR_ALIGNED);
-		if (ap->iarg(0) != 0) {
+		if (sp->sss == NULL)
+			sp->sss = SEDESC();
+		if (sp->sss->al != 0) {
 			if (sp->slevel < blevel) {
 				sp = hide(sp);
 				defstr(sp, soru);
-				sp->sap = seattr();
+				sp->sss = SEDESC();
 			} else
 				uerror("%s redeclared", name);
 		}
-		gap = sp->sap = attr_add(sp->sap, gap);
+		ss = sp->sss;
 	} else {
-		gap = attr_add(seattr(), gap);
+		ss = SEDESC();
 		sp = NULL;
 	}
+	ss->al = ALCHAR;
 
 	r = tmpcalloc(sizeof(struct rstack));
 	r->rsou = soru;
 	r->rsym = sp;
 	r->rb = NULL;
+	r->ss = ss;
 	r->ap = gap;
+	r->pack = pack;
 	r->rnext = rpole;
 	rpole = r;
 
@@ -921,53 +944,23 @@ NODE *
 dclstruct(struct rstack *r)
 {
 	NODE *n;
-	struct attr *aps, *apb;
+	struct ssdesc *ss;
 	struct symtab *sp;
-	int al, sa, sz;
 
-	apb = attr_find(r->ap, ATTR_ALIGNED);
-	aps = attr_find(r->ap, ATTR_STRUCT);
-	aps->amlist = r->rb;
+	ss = r->ss;
+	ss->sp = r->rb;
+	ss->sz = r->maxsz;
 
-#ifdef ALSTRUCT
-	al = ALSTRUCT;
-#else
-	al = ALCHAR;
-#endif
-
-	/*
-	 * extract size and alignment, calculate offsets
-	 */
-	for (sp = r->rb; sp; sp = sp->snext) {
-		sa = talign(sp->stype, sp->sap);
-		if (sp->sclass & FIELD)
-			sz = sp->sclass&FLDSIZ;
-		else
-			sz = (int)tsize(sp->stype, sp->sdf, sp->sap);
-		if (sz > rpole->rstr)
-			rpole->rstr = sz;  /* for use with unions */
-		/*
-		 * set al, the alignment, to the lcm of the alignments
-		 * of the members.
-		 */
-		SETOFF(al, sa);
-	}
-
-	SETOFF(rpole->rstr, al);
-
-	aps->amsize = rpole->rstr;
-	apb->iarg(0) = al;
+	SETOFF(ss->sz, ss->al);
 
 #ifdef PCC_DEBUG
 	if (ddebug) {
 		printf("dclstruct(%s): size=%d, align=%d\n",
-		    r->rsym ? r->rsym->sname : "??",
-		    aps->amsize, apb->iarg(0));
+		    r->rsym ? r->rsym->sname : "??", ss->sz, ss->al);
 	}
 	if (ddebug>1) {
-		printf("\tsize %d align %d link %p\n",
-		    aps->amsize, apb->iarg(0), aps->amlist);
-		for (sp = aps->amlist; sp != NULL; sp = sp->snext) {
+		printf("\tsize %d align %d link %p\n", ss->sz, ss->al, ss->sp);
+		for (sp = ss->sp; sp != NULL; sp = sp->snext) {
 			printf("\tmember %s(%p)\n", sp->sname, sp);
 		}
 	}
@@ -975,11 +968,11 @@ dclstruct(struct rstack *r)
 
 #ifdef STABS
 	if (gflag)
-		stabs_struct(r->rsym, r->ap);
+		stabs_struct(r->rsym);
 #endif
 
 	rpole = r->rnext;
-	n = mkty(r->rsou == STNAME ? STRTY : UNIONTY, 0, r->ap);
+	n = mkty(r->rsou == STNAME ? STRTY : UNIONTY, 0, r->ss);
 	n->n_sp = r->rsym;
 
 	n->n_qual |= 1; /* definition place XXX used by attributes */
@@ -1014,23 +1007,43 @@ soumemb(NODE *n, char *name, int class)
 	n->n_sp = sp;
 	sp->stype = n->n_type;
 	sp->squal = n->n_qual;
+	sp->sdf = n->n_df;
+	sp->sss = n->pss;
+
 	sp->slevel = blevel;
 	sp->sap = n->n_ap;
-	sp->sdf = n->n_df;
 
+	if (rpole->rsou == UNAME)
+		rpole->curpos = 0;
 	if (class & FIELD) {
 		sp->sclass = (char)class;
-		if (rpole->rsou == UNAME)
-			rpole->rstr = 0;
 		falloc(sp, class&FLDSIZ, NIL);
+		al = talign(sp->stype, sp->sss);
 	} else if (rpole->rsou == STNAME || rpole->rsou == UNAME) {
 		sp->sclass = rpole->rsou == STNAME ? MOS : MOU;
-		if (sp->sclass == MOU)
-			rpole->rstr = 0;
-		al = talign(sp->stype, sp->sap);
-		tsz = (int)tsize(sp->stype, sp->sdf, sp->sap);
-		sp->soffset = upoff(tsz, al, &rpole->rstr);
+
+		al = talign(sp->stype, sp->sss);
+		tsz = (int)tsize(sp->stype, sp->sdf, sp->sss);
+
+		if (rpole->pack && al > rpole->pack)
+			al = rpole->pack;
+		if (al < SZCHAR)
+			al = SZCHAR;
+
+		SETOFF(rpole->curpos, al);
+		sp->soffset = rpole->curpos;
+		rpole->curpos += tsz;
+
 	}
+	if (rpole->rsou == UNAME) {
+		if (tsz > rpole->maxsz)
+			rpole->maxsz = tsz;
+	} else {
+		rpole->maxsz = rpole->curpos;
+	}
+if (ddebug)printf("soumemb: name %s tsz %d al %d sympos %d curpos %d totsz %d\n", name, tsz, al, sp->soffset, rpole->curpos, rpole->maxsz);
+	if (al > rpole->ss->al)
+		rpole->ss->al = al;
 
 	/*
 	 * 6.7.2.1 clause 16:
@@ -1059,7 +1072,7 @@ soumemb(NODE *n, char *name, int class)
 	if (ISPTR(t))
 		return;
 
-	if ((lsp = strmemb(sp->sap)) != NULL) {
+	if ((lsp = strmemb(sp->td->ss)) != NULL) {
 		for (; lsp->snext; lsp = lsp->snext)
 			;
 		if (ISARY(lsp->stype) && lsp->snext &&
@@ -1105,9 +1118,8 @@ argsave(P1ND *p)
  * compute the alignment of an object with type ty, sizeoff index s
  */
 int
-talign(unsigned int ty, struct attr *apl)
+talign(unsigned int ty, struct ssdesc *ss)
 {
-	struct attr *al;
 	int a;
 
 	for (; ty > BTMASK; ty = DECREF(ty)) {
@@ -1121,14 +1133,8 @@ talign(unsigned int ty, struct attr *apl)
 		}
 	}
 
-	/* check for alignment attribute */
-	if ((al = attr_find(apl, ATTR_ALIGNED))) {
-		if ((a = al->iarg(0)) == 0) {
-			uerror("no alignment");
-			a = ALINT;
-		} 
-		return a;
-	}
+	if (ss && ss->al)
+		return ss->al;
 
 #ifndef NO_COMPLEX
 	if (ISITY(ty))
@@ -1165,9 +1171,9 @@ short sztable[] = { 0, SZBOOL, SZCHAR, SZCHAR, SZSHORT, SZSHORT, SZINT, SZINT,
  *  dimoff d, and sizoff s */
 /* BETTER NOT BE CALLED WHEN t, d, and s REFER TO A BIT FIELD... */
 OFFSZ
-tsize(TWORD ty, union dimfun *d, struct attr *apl)
+//tsize(TWORD ty, union dimfun *d, struct attr *apl)
+tsize(TWORD ty, union dimfun *d, struct ssdesc *ss)
 {
-	struct attr *ap, *ap2;
 	OFFSZ mult, sz;
 
 	mult = 1;
@@ -1203,13 +1209,13 @@ tsize(TWORD ty, union dimfun *d, struct attr *apl)
 	if (ty <= LDOUBLE)
 		sz = sztable[ty];
 	else if (ISSOU(ty)) {
-		if ((ap = strattr(apl)) == NULL ||
-		    (ap2 = attr_find(apl, ATTR_ALIGNED)) == NULL ||
-		    (ap2->iarg(0) == 0)) {
+		if (ss == NULL || (sz = ss->sz) == 0) {
+//		if ((ap = strattr(apl)) == NULL ||
+//		    (ap2 = attr_find(apl, ATTR_ALIGNED)) == NULL ||
+//		    (ap2->iarg(0) == 0)) {
 			uerror("unknown structure/union/enum");
 			sz = SZINT;
-		} else
-			sz = ap->amsize;
+		}
 	} else {
 		uerror("unknown type");
 		sz = SZINT;
@@ -1314,10 +1320,10 @@ oalloc(struct symtab *p, int *poff )
 	int al, off, tsz;
 	int noff;
 
-	al = talign(p->stype, p->sap);
+	al = talign(p->stype, p->sss);
 	noff = *poff;
 	off = 0;
-	tsz = (int)tsize(p->stype, p->sdf, p->sap);
+	tsz = (int)tsize(p->stype, p->sdf, p->sss);
 
 #ifdef STACK_DOWN
 	if (p->sclass == AUTO) {
@@ -1414,7 +1420,7 @@ dynalloc(struct symtab *p, int *poff)
 	t = p->stype;
 	p->sflags |= STNODE;
 	p->stype = INCREF(p->stype); /* Make this an indirect pointer */
-	tn = tempnode(0, p->stype, p->sdf, p->sap);
+	tn = tempnode(0, p->stype, p->sdf, p->sss);
 	p->soffset = regno(tn);
 
 	df = p->sdf;
@@ -1432,7 +1438,7 @@ dynalloc(struct symtab *p, int *poff)
 		df++;
 	}
 	/* Create stack gap */
-	spalloc(tn, pol, tsize(t, 0, p->sap));
+	spalloc(tn, pol, tsize(t, 0, p->sss));
 }
 
 /*
@@ -1463,23 +1469,23 @@ falloc(struct symtab *p, int w, NODE *pty)
 	}
 
 	if (w == 0) { /* align only */
-		SETOFF(rpole->rstr, al);
+		SETOFF(rpole->curpos, al);
 		if (p != NULL)
 			uerror("zero size field");
 		return(0);
 	}
 
-	if (rpole->rstr%al + w > sz)
-		SETOFF(rpole->rstr, al);
+	if (rpole->curpos%al + w > sz)
+		SETOFF(rpole->curpos, al);
 	if (p == NULL) {
-		rpole->rstr += w;  /* we know it will fit */
+		rpole->curpos += w;  /* we know it will fit */
 		return(0);
 	}
 
 	/* establish the field */
 
-	p->soffset = rpole->rstr;
-	rpole->rstr += w;
+	p->soffset = rpole->curpos;
+	rpole->curpos += w;
 	p->stype = otype;
 	fldty(p);
 	return(0);
@@ -1776,7 +1782,6 @@ typwalk(NODE *p, void *arg)
 NODE *
 typenode(NODE *p)
 {
-	struct attr *ap;
 	struct symtab *sp;
 	struct typctx tc;
 	NODE *q;
@@ -1801,7 +1806,7 @@ typenode(NODE *p)
 			    tc.type == FLOAT ? "0f" : "0l";
 			sp = lookup(addname(c), 0);
 			tc.type = STRTY;
-			tc.saved = mkty(tc.type, sp->sdf, sp->sap);
+			tc.saved = mkty(tc.type, sp->sdf, sp->sss);
 			tc.saved->n_sp = sp;
 			tc.type = 0;
 		} else
@@ -1861,10 +1866,11 @@ typenode(NODE *p)
 	gcc_tcattrfix(q);
 #endif
 
-	if (tc.align && (ap = attr_find(q->n_ap, ATTR_ALIGNED)) &&
-	    ap->iarg(0) && tc.align > talign(q->n_type, q->n_ap)/SZCHAR) {
-		q->n_ap = attr_add(q->n_ap, attr_new(ATTR_ALIGNED, 1));
-		q->n_ap->aa[0].iarg = SZCHAR * tc.align;
+	if (tc.align) {
+		if (q->pss == NULL) 
+			q->pss = SEDESC();
+		if (tc.align > talign(q->n_type, q->pss)/SZCHAR)
+			q->pss->al = tc.align * tc.align;
 	}
 
 	return q;
@@ -2013,12 +2019,13 @@ tymerge(NODE *typ, NODE *idp)
 
 	/* carefully not destroy any type attributes */
 	idp->n_ap = attr_add(typ->n_ap, idp->n_ap);
+	idp->pss = typ->pss;
 
 	return(idp);
 }
 
 int
-suemeq(struct attr *s1, struct attr *s2)
+suemeq(struct ssdesc *s1, struct ssdesc *s2)
 {
 
 	return (strmemb(s1) == strmemb(s2));
@@ -2062,7 +2069,7 @@ doacall(struct symtab *sp, NODE *f, NODE *a)
 	/* Check for undefined or late defined enums */
 	if (BTYPE(f->n_type) == ENUMTY) {
 		/* not-yet check if declared enum */
-		struct symtab *sq = strmemb(f->n_ap);
+		struct symtab *sq = strmemb(f->n_td->ss);
 		if (sq->stype != ENUMTY)
 			MODTYPE(f->n_type, sq->stype);
 		if (BTYPE(f->n_type) == ENUMTY)
@@ -2088,7 +2095,7 @@ fixtype(NODE *p, int class)
 
 	/* forward declared enums */
 	if (BTYPE(p->n_sp->stype) == ENUMTY) {
-		MODTYPE(p->n_sp->stype, strmemb(p->n_sp->sap)->stype);
+		MODTYPE(p->n_sp->stype, strmemb(p->n_sp->td->ss)->stype);
 	}
 
 	if( (type = p->n_type) == UNDEF ) return;
@@ -2257,11 +2264,12 @@ getsymtab(char *name, int flags)
 	s->snext = NULL;
 	s->stype = UNDEF;
 	s->squal = 0;
+	s->sdf = NULL;
+	s->sss = NULL;
 	s->sclass = SNULL;
 	s->sflags = (short)(flags & SMASK);
 	s->soffset = 0;
 	s->slevel = (char)blevel;
-	s->sdf = NULL;
 	s->sap = NULL;
 	return s;
 }
@@ -2410,12 +2418,12 @@ sspend(void)
  * Fetch pointer to first member in a struct list.
  */
 struct symtab *
-strmemb(struct attr *ap)
+strmemb(struct ssdesc *ss)
 {
 
-	if ((ap = attr_find(ap, ATTR_STRUCT)) == NULL)
+	if (ss == NULL)
 		cerror("strmemb");
-	return ap->amlist;
+	return ss->sp;
 }
 
 /*

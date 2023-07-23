@@ -172,7 +172,7 @@ again:	o = p->n_op;
 		if (LCON(p) && RCON(p) && conval(p->n_left, o, p->n_right))
 			goto zapright;
 
-		sz = tsize(p->n_type, p->n_df, p->n_ap);
+		sz = tsize(p->n_type, p->n_df, p->pss);
 
 		if (LO(p) == RS && RCON(p->n_left) && RCON(p) &&
 		    (RV(p) + RV(p->n_left)) < sz) {
@@ -215,7 +215,7 @@ again:	o = p->n_op;
 		if (LCON(p) && RCON(p) && conval(p->n_left, o, p->n_right))
 			goto zapright;
 
-		sz = tsize(p->n_type, p->n_df, p->n_ap);
+		sz = tsize(p->n_type, p->n_df, p->pss);
 
 		if (LO(p) == LS && RCON(p->n_left) && RCON(p)) {
 			/* two left-shift  by constants */
@@ -291,8 +291,7 @@ again:	o = p->n_op;
 			q = p->n_left->n_left;
 			if (q->n_left->n_type == PTR+STRTY &&
 			    q->n_right->n_type == PTR+STRTY &&
-			    strmemb(q->n_left->n_ap) ==
-			    strmemb(q->n_right->n_ap)) {
+			    suemeq(q->n_left->n_td->ss, q->n_right->n_td->ss)) {
 				p = zapleft(p);
 				p = zapleft(p);
 				break;
@@ -344,7 +343,7 @@ again:	o = p->n_op;
 			zapright:
 			nfree(p->n_right);
 			q = makety(p->n_left, p->n_type, p->n_qual,
-			    p->n_df, p->n_ap);
+			    p->n_df, p->pss);
 			nfree(p);
 			p = clocal(q);
 			break;
@@ -384,7 +383,7 @@ again:	o = p->n_op;
 			p->n_op = RS;
 			RV(p) = i;
 			q = p->n_right;
-			if(tsize(q->n_type, q->n_df, q->n_ap) > SZINT)
+			if(tsize(q->n_type, q->n_df, q->pss) > SZINT)
 				p->n_right = makety(q, INT, 0, 0, 0);
 
 			break;

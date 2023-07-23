@@ -347,7 +347,7 @@ stabs_newsym(struct symtab *s)
 		return; /* XXX - fix structs */
 
 	sname = getexname(s);
-	sz = tsize(s->stype, s->sdf, s->sap);
+	sz = tsize(s->stype, s->sdf, s->sss);
 	suesize = BIT2BYTE(sz);
 	if (suesize > 32767)
 		suesize = 32767;
@@ -404,7 +404,7 @@ stabs_chgsym(struct symtab *s)
  * define a struct.
  */
 void
-stabs_struct(struct symtab *p, struct attr *ap)
+stabs_struct(struct symtab *p)
 {
 }
 

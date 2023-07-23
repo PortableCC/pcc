@@ -332,9 +332,9 @@ type_sq:	   C_TYPE { $$ = mkty($1, 0, 0); }
 		|  C_TYPENAME { 
 			struct symtab *sp = lookup($1, 0);
 			if (sp->stype == ENUMTY) {
-				sp->stype = strmemb(sp->sap)->stype;
+				sp->stype = strmemb(sp->td->ss)->stype;
 			}
-			$$ = mkty(sp->stype, sp->sdf, sp->sap);
+			$$ = mkty(sp->stype, sp->sdf, sp->sss);
 			$$->n_sp = sp;
 		}
 		|  struct_dcl { $$ = $1; }
@@ -348,7 +348,7 @@ type_sq:	   C_TYPE { $$ = mkty($1, 0, 0); }
 		|  C_ALIGNAS '(' cast_type ')' {
 			TYMFIX($3);
 			$$ = biop(ALIGN, NULL, NULL);
-			slval($$, talign($3->n_type, $3->n_ap)/SZCHAR);
+			slval($$, talign($3->n_type, $3->pss)/SZCHAR);
 			p1tfree($3);
 		}
 		|  C_ATOMIC { uerror("_Atomic not supported"); $$ = bcon(0); }
@@ -438,7 +438,8 @@ type_qualifier_list:
 			$$->n_qual |= $2;
 		}
 		|  attribute_specifier {
-			$$ = block(UMUL, NULL, NULL, 0, 0, gcc_attr_wrapper($1));
+			$$ = block(UMUL, NULL, NULL, 0, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($1);
 		}
 		|  type_qualifier_list attribute_specifier {
 			$1->n_ap = attr_add($1->n_ap, gcc_attr_wrapper($2));
@@ -480,8 +481,8 @@ parameter_declaration:
 		   declaration_specifiers declarator attr_var {
 			if (glval($1) != SNULL && glval($1) != REGISTER)
 				uerror("illegal parameter class");
-			$$ = block(TYMERGE, $1, $2, INT, 0,
-			    gcc_attr_wrapper($3));
+			$$ = block(TYMERGE, $1, $2, INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($3);
 		}
 		|  declaration_specifiers abstract_declarator { 
 			$1->n_ap = attr_add($1->n_ap, $2->n_ap);
@@ -505,29 +506,32 @@ abstract_declarator:
 		}
 		|  '(' abstract_declarator ')' { $$ = $2; }
 		|  '[' ecq ']' attr_var {
-			$$ = block(LB, bdty(NAME, NULL), $2,
-			    INT, 0, gcc_attr_wrapper($4));
+			$$ = block(LB, bdty(NAME, NULL), $2, INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($4);
 		}
 		|  abstract_declarator '[' maybe_r ']' attr_var {
-			$$ = block(LB, $1, bcon(NOOFFSET),
-			    INT, 0, gcc_attr_wrapper($5));
+			$$ = block(LB, $1, bcon(NOOFFSET), INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($5);
 		}
 		|  abstract_declarator '[' e ']' attr_var {
-			$$ = block(LB, $1, $3, INT, 0, gcc_attr_wrapper($5));
+			$$ = block(LB, $1, $3, INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($5);
 		}
 		|  '(' ')' attr_var {
 			$$ = bdty(UCALL, bdty(NAME, NULL));
 			$$->n_ap = gcc_attr_wrapper($3);
 		}
 		|  '(' ib2 parameter_type_list ')' attr_var {
-			$$ = block(CALL, bdty(NAME, NULL), $3, INT, 0,
-			    gcc_attr_wrapper($5));
+			$$ = block(CALL, bdty(NAME, NULL), $3, INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($5);
 		}
 		|  abstract_declarator '(' ')' attr_var {
-			$$ = block(UCALL, $1, NULL, INT, 0, gcc_attr_wrapper($4));
+			$$ = block(UCALL, $1, NULL, INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($4);
 		}
 		|  abstract_declarator '(' ib2 parameter_type_list ')' attr_var {
-			$$ = block(CALL, $1, $4, INT, 0, gcc_attr_wrapper($6));
+			$$ = block(CALL, $1, $4, INT, 0, 0);
+			$$->n_ap = gcc_attr_wrapper($6);
 		}
 		;
 
@@ -970,7 +974,7 @@ statement:	   e ';' { ecomp(eve($1)); symclear(blevel); }
 			} else {
 				if (cftnod == NULL) {
 					P1ND *r = tempnode(0, p->n_type,
-					    p->n_df, p->n_ap);
+					    p->n_df, p->pss);
 					cftnod = tmpalloc(sizeof(P1ND));
 					*cftnod = *r;
 					p1tfree(r);
@@ -1190,7 +1194,7 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 		|  C_ALIGNOF xa '(' cast_type ')' {
 			int al;
 			TYMFIX($4);
-			al = talign($4->n_type, $4->n_ap);
+			al = talign($4->n_type, $4->pss);
 			$$ = bcon(al/SZCHAR);
 			inattr = $<intval>2;
 			p1tfree($4);
@@ -1282,9 +1286,9 @@ cast_type:	   specifier_qualifier_list {
 %%
 
 P1ND *
-mkty(TWORD t, union dimfun *d, struct attr *sue)
+mkty(TWORD t, union dimfun *d, struct ssdesc *ss)
 {
-	return block(TYPE, NULL, NULL, t, d, sue);
+	return block(TYPE, NULL, NULL, t, d, ss);
 }
 
 P1ND *
@@ -1439,7 +1443,7 @@ gccexpr(int bn, P1ND *q)
 	q = r->n_right;
 	/* XXX end hack */
 	if (!(q->n_op == ICON && q->n_type == STRTY) && (r->n_type != VOID)) {
-		p = tempnode(0, q->n_type, q->n_df, q->n_ap);
+		p = tempnode(0, q->n_type, q->n_df, q->pss);
 		r = buildtree(ASSIGN, p1tcopy(p), r);
 		r = buildtree(COMOP, r, p);
 	}
@@ -1967,6 +1971,7 @@ clbrace(P1ND *p)
 	sp->stype = p->n_type;
 	sp->squal = p->n_qual;
 	sp->sdf = p->n_df;
+	sp->sss = p->pss;
 	sp->sap = p->n_ap;
 	p1tfree(p);
 	if (blevel == 0 && xnf != NULL) {
@@ -2104,7 +2109,7 @@ static P1ND *
 tyof(P1ND *p)
 {
 	static struct symtab spp;
-	P1ND *q = block(TYPE, NULL, NULL, p->n_type, p->n_df, p->n_ap);
+	P1ND *q = block(TYPE, NULL, NULL, p->n_type, p->n_df, p->pss);
 	q->n_qual = p->n_qual;
 	q->n_sp = &spp; /* for typenode */
 	p1walkf(p, putjops, 0);
@@ -2342,7 +2347,7 @@ eve(P1ND *p)
 
 	case BIQUEST: /* gcc e ?: e op */
 		p1 = eve(p1);
-		r = tempnode(0, p1->n_type, p1->n_df, p1->n_ap);
+		r = tempnode(0, p1->n_type, p1->n_df, p1->pss);
 		p2 = eve(biop(COLON, p1tcopy(r), p2));
 		r = buildtree(QUEST, buildtree(ASSIGN, r, p1), p2);
 		break;

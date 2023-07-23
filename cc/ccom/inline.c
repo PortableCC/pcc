@@ -43,7 +43,8 @@ struct ntds {
 	int temp;
 	TWORD type;
 	union dimfun *df;
-	struct attr *attr;
+	struct ssdesc *ss;
+//	struct attr *attr;
 };
 
 /*
@@ -440,14 +441,14 @@ mnode(struct ntds *nt, P1ND *p)
 
 	if (p->n_op == CM) {
 		q = p->n_right;
-		q = tempnode(num, nt->type, nt->df, nt->attr);
+		q = tempnode(num, nt->type, nt->df, nt->ss);
 		nt--;
 		p->n_right = buildtree(ASSIGN, q, p->n_right);
 		p->n_left = mnode(nt, p->n_left);
 		p->n_op = COMOP;
 	} else {
 		p = pconvert(p);
-		q = tempnode(num, nt->type, nt->df, nt->attr);
+		q = tempnode(num, nt->type, nt->df, nt->ss);
 		p = buildtree(ASSIGN, q, p);
 	}
 	return p;
@@ -607,7 +608,7 @@ inlinetree(struct symtab *sp, P1ND *f, P1ND *ap)
 	rp = block(GOTO, bcon(l1), NULL, INT, 0, 0);
 	if (is->retval)
 		p = tempnode(is->retval + toff, DECREF(sp->stype),
-		    sp->sdf, sp->sap);
+		    sp->sdf, sp->sss);
 	else
 		p = xbcon(0, NULL, DECREF(sp->stype));
 	rp = buildtree(COMOP, rp, p);
@@ -648,7 +649,7 @@ inline_args(struct symtab **sp, int nargs)
 			cf->nt[i].temp = sp[i]->soffset;
 			cf->nt[i].type = sp[i]->stype;
 			cf->nt[i].df = sp[i]->sdf;
-			cf->nt[i].attr = sp[i]->sap;
+			cf->nt[i].ss = sp[i]->sss;
 		}
 	}
 	cf->nargs = nargs;

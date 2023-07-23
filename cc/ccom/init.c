@@ -240,7 +240,7 @@ inval(CONSZ off, int fsz, NODE *p)
 	if (ANYCX(p) && p->n_left->n_right->n_right->n_op == FCON &&
 	    p->n_left->n_left->n_right->n_op == FCON) {
 		NODE *r = p->n_left->n_right->n_right;
-		int sz = (int)tsize(r->n_type, r->n_df, r->n_ap);
+		int sz = (int)tsize(r->n_type, r->n_df, r->pss);
 		ninval(off, sz, p->n_left->n_left->n_right);
 		ninval(off, sz, r);
 		tfree(p);
@@ -435,18 +435,18 @@ beginit(struct symtab *sp)
 
 	numents = 0; /* no entries in array list */
 	if (ISARY(sp->stype)) {
-		basesz = tsize(DECREF(sp->stype), sp->sdf+1, sp->sap);
+		basesz = tsize(DECREF(sp->stype), sp->sdf+1, sp->sss);
 		if (basesz == 0) {
 			uerror("array has incomplete type");
 			basesz = SZINT;
 		}
 	} else
-		basesz = tsize(sp->stype, sp->sdf, sp->sap);
+		basesz = tsize(sp->stype, sp->sdf, sp->sss);
 	SLIST_INIT(&lpole);
 
 	/* first element */
 	if (ISSOU(sp->stype)) {
-		is->in_lnk = strmemb(sp->sap);
+		is->in_lnk = strmemb(sp->td->ss);
 	} else
 		is->in_lnk = NULL;
 	is->in_n = 0;
@@ -500,7 +500,7 @@ stkpush(void)
 	is->in_n = 0;
 	if (pstk == NULL) {
 		/* stack empty */
-		is->in_lnk = ISSOU(sp->stype) ? strmemb(sp->sap) : NULL;
+		is->in_lnk = ISSOU(sp->stype) ? strmemb(sp->td->ss) : NULL;
 		is->in_t = sp->stype;
 		is->in_sym = sp;
 		is->in_df = sp->sdf;
@@ -509,13 +509,13 @@ stkpush(void)
 		if (sq == NULL) {
 			uerror("excess of initializing elements");
 		} else {
-			is->in_lnk = ISSOU(sq->stype) ? strmemb(sq->sap) : NULL;
+			is->in_lnk = ISSOU(sq->stype) ? strmemb(sq->td->ss) : NULL;
 			is->in_t = sq->stype;
 			is->in_sym = sq;
 			is->in_df = sq->sdf;
 		}
 	} else if (ISARY(t)) {
-		is->in_lnk = ISSOU(DECREF(t)) ? strmemb(pstk->in_sym->sap) : 0;
+		is->in_lnk = ISSOU(DECREF(t)) ? strmemb(pstk->in_sym->td->ss) : 0;
 		is->in_t = DECREF(t);
 		is->in_sym = sp;
 		if (pstk->in_df->ddim != NOOFFSET && pstk->in_df->ddim &&
@@ -615,7 +615,7 @@ findoff(void)
 			if (ISPTR(t)) {
 				o = SZPOINT(t); /* XXX use tsize() */
 			} else {
-				o = tsize(t, is->in_sym->sdf, is->in_sym->sap);
+				o = tsize(t, is->in_sym->sdf, is->in_sym->sss);
 			}
 			off += o * acalc(is, 1);
 			while (is->in_prev && ISARY(is->in_prev->in_t)) {
@@ -719,7 +719,7 @@ scalinit(NODE *p)
 		stkpush();
 		/* If we are doing auto struct init */
 		if (ISSOU(pstk->in_t) && ISSOU(p->n_type) &&
-		    suemeq(pstk->in_sym->sap, p->n_ap)) {
+		    suemeq(pstk->in_sym->td->ss, p->n_td->ss)) {
 			pstk->in_lnk = NULL; /* this elem is initialized */
 			break;
 		}
@@ -728,7 +728,7 @@ scalinit(NODE *p)
 	if (ISSOU(pstk->in_t) == 0) {
 		/* let buildtree do typechecking (and casting) */
 		q = block(NAME, NIL,NIL, pstk->in_t, pstk->in_df,
-		    pstk->in_sym->sap);
+		    pstk->in_sym->sss);
 		p = buildtree(ASSIGN, q, p);
 		nfree(p->n_left);
 		q = p->n_right;
@@ -745,7 +745,7 @@ scalinit(NODE *p)
 		fsz = -(pstk->in_sym->sclass & FLDSIZ);
 	else
 		fsz = (int)tsize(pstk->in_t, pstk->in_sym->sdf,
-		    pstk->in_sym->sap);
+		    pstk->in_sym->sss);
 
 	nsetval(woff, fsz, q);
 	if (q->n_op == ICON && q->n_sp &&
@@ -840,7 +840,7 @@ endinit(int seg)
 			oalloc(csym, &autooff);
 		}
 	} else
-		tbit = tsize(csym->stype, csym->sdf, csym->sap);
+		tbit = tsize(csym->stype, csym->sdf, csym->sss);
 
 	/* Setup symbols */
 	if (csym->sclass != AUTO) {
@@ -875,6 +875,7 @@ endinit(int seg)
 				sym.stype = n->n_type;
 				sym.squal = n->n_qual;
 				sym.sdf = n->n_df;
+				sym.sss = n->pss;
 				sym.sap = n->n_ap;
 				sym.soffset = (int)(ll->begsz + il->off);
 				sym.sclass = (char)(fsz < 0 ? FIELD | -fsz : 0);
@@ -999,7 +1000,7 @@ felem(struct symtab *sp, char *n)
 
 	for (; sp; sp = sp->snext) {
 		if (sp->sname[0] == '*') {
-			if ((rs = felem(strattr(sp->sap)->amlist, n)) != NULL)
+			if ((rs = felem(strattr(sp->td)->sp, n)) != NULL)
 				return sp;
 		} else if (sp->sname == n)
 			return sp;
@@ -1067,7 +1068,7 @@ desinit(NODE *p)
 		pstk = pstk->in_prev; /* Empty stack */
 
 	if (ISSOU(pstk->in_t))
-		pstk->in_lnk = strmemb(pstk->in_sym->sap);
+		pstk->in_lnk = strmemb(pstk->in_sym->td->ss);
 
 	mkstack(p);	/* Setup for assignment */
 
@@ -1186,7 +1187,7 @@ prtstk(struct instk *in)
 		printf("ninit=%d ", in->in_n);
 		if (BTYPE(in->in_t) == STRTY || ISARY(in->in_t))
 			printf("stsize=%d ",
-			    (int)tsize(in->in_t, in->in_df, in->in_sym->sap));
+			    (int)tsize(in->in_t, in->in_df, in->in_sym->sss));
 		if (in->in_fl) printf("{ ");
 		printf("soff=%d ", in->in_sym->soffset);
 		if (in->in_t == STRTY) {
@@ -1243,7 +1244,7 @@ simpleinit(struct symtab *sp, NODE *p)
 			r->n_left->n_right->n_left = bcon(0);
 			tfree(r);
 			r = p->n_left->n_right;
-			sz = (int)tsize(r->n_type, r->n_df, r->n_ap);
+			sz = (int)tsize(r->n_type, r->n_df, r->pss);
 			inval(0, sz, r);
 			inval(0, sz, p->n_right->n_right);
 			tfree(p);
@@ -1268,7 +1269,7 @@ simpleinit(struct symtab *sp, NODE *p)
 		    strcmp(ap->aa[0].sarg, "TI") == 0) {
 			if (p->n_op != ICON)
 				uerror("need to handle TImode initializer ");
-			sz = (int)tsize(sp->stype, sp->sdf, sp->sap);
+			sz = (int)tsize(sp->stype, sp->sdf, sp->sss);
 			p->n_type = ctype(LONGLONG);
 			inval(0, sz/2, p);
 			slval(p, 0); /* XXX fix signed types */
@@ -1284,7 +1285,7 @@ simpleinit(struct symtab *sp, NODE *p)
 		p = optloop(buildtree(ASSIGN, nt, p));
 		q = p->n_right;
 		t = q->n_type;
-		sz = (int)tsize(t, q->n_df, q->n_ap);
+		sz = (int)tsize(t, q->n_df, q->pss);
 		inval(0, sz, q);
 		tfree(p);
 		break;
