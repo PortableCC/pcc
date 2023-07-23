@@ -41,6 +41,9 @@
 #define n_qual pqual
 #undef n_df
 #define n_df pdf
+#else
+#define sss sap
+#define pss n_ap
 #endif
 
 /*	this file contains code which is dependent on the target machine */
@@ -138,9 +141,9 @@ picext(NODE *p)
 	sp = picsymtab("", c, "@GOTOFF");
 #endif
 	sp->sap = attr_add(sp->sap, attr_new(ATTR_AMD64_BEENHERE, 1));
-	q = block(NAME, NIL, NIL, INCREF(p->n_type), p->n_df, p->n_ap);
+	q = block(NAME, NIL, NIL, INCREF(p->n_type), p->n_df, p->pss);
 	q->n_sp = sp;
-	q = block(UMUL, q, 0, p->n_type, p->n_df, p->n_ap);
+	q = block(UMUL, q, 0, p->n_type, p->n_df, p->pss);
 	q->n_sp = sp;
 	nfree(p);
 	return q;
@@ -208,7 +211,7 @@ tlspic(NODE *p)
 	q = cmop(q, mkx("%r10", bcon(0)));
 	q = cmop(q, mkx("%r11", bcon(0)));
 
-	s = ccopy(r = tempnode(0, INCREF(p->n_type), p->n_df, p->n_ap));
+	s = ccopy(r = tempnode(0, INCREF(p->n_type), p->n_df, p->pss));
 	r = mkx("=a", r);
 	r = block(XASM, r, q, INT, 0, 0);
 
@@ -223,7 +226,7 @@ tlspic(NODE *p)
 	r->n_name = addstring(mk3str(s1,
 	    attr_find(p->n_sp->sap, ATTR_SONAME)->sarg(0), s2));
 
-	r = block(COMOP, r, s, INCREF(p->n_type), p->n_df, p->n_ap);
+	r = block(COMOP, r, s, INCREF(p->n_type), p->n_df, p->pss);
 	r = buildtree(UMUL, r, NIL);
 	tfree(p);
 	return r;
@@ -247,7 +250,7 @@ tlsinitialexec(NODE *p)
 	q = bcon(0);
 	q->n_type = STRTY;
 
-	s = ccopy(r = tempnode(0, INCREF(p->n_type), p->n_df, p->n_ap));
+	s = ccopy(r = tempnode(0, INCREF(p->n_type), p->n_df, p->pss));
 	r = mkx("=r", r);
 	r = block(XASM, r, q, INT, 0, 0);
 
@@ -260,7 +263,7 @@ tlsinitialexec(NODE *p)
 	r->n_name = mk3str(s1,
 	    attr_find(p->n_sp->sap, ATTR_SONAME)->sarg(0), s2);
 
-	r = block(COMOP, r, s, INCREF(p->n_type), p->n_df, p->n_ap);
+	r = block(COMOP, r, s, INCREF(p->n_type), p->n_df, p->pss);
 	r = buildtree(UMUL, r, NIL);
 	tfree(p);
 	return r;
@@ -394,7 +397,7 @@ clocal(NODE *p)
 			if (l->n_type < INT || l->n_type == BOOL) {
 				p->n_left = block(SCONV, l, NIL,
 				    ISUNSIGNED(l->n_type) ? UNSIGNED : INT,
-				    l->n_df, l->n_ap);
+				    l->n_df, l->pss);
 				break;
 			}
 		}
@@ -405,8 +408,8 @@ clocal(NODE *p)
 		}
 
 		if ((p->n_type & TMASK) == 0 && (l->n_type & TMASK) == 0 &&
-		    tsize(p->n_type, p->n_df, p->n_ap) ==
-		    tsize(l->n_type, l->n_df, l->n_ap)) {
+		    tsize(p->n_type, p->n_df, p->pss) ==
+		    tsize(l->n_type, l->n_df, l->pss)) {
 			if (p->n_type != FLOAT && p->n_type != DOUBLE &&
 			    l->n_type != FLOAT && l->n_type != DOUBLE &&
 			    l->n_type != LDOUBLE && p->n_type != LDOUBLE) {
@@ -436,7 +439,7 @@ clocal(NODE *p)
 			if (!nncon(l) && (l->n_type & TMASK) &&
 			    (m == LONG || m == ULONG)) {
 				l->n_type = m;
-				l->n_ap = 0;
+				l->pss = 0;
 				return nfree(p);
 			}
 
@@ -450,7 +453,7 @@ clocal(NODE *p)
 				break;
 
 			l->n_type = m;
-			l->n_ap = 0;
+			l->pss = 0;
 			nfree(p);
 			return l;
 		} else if (l->n_op == FCON)
@@ -459,7 +462,7 @@ clocal(NODE *p)
 		    p->n_type == SHORT || p->n_type == USHORT) &&
 		    (l->n_type == FLOAT || l->n_type == DOUBLE ||
 		    l->n_type == LDOUBLE)) {
-			p = block(SCONV, p, NIL, p->n_type, p->n_df, p->n_ap);
+			p = block(SCONV, p, NIL, p->n_type, p->n_df, p->pss);
 			p->n_left->n_type = INT;
 			return p;
 		}
@@ -532,6 +535,7 @@ myp2tree(NODE *p)
 			sps.sflags = sps.sclass = 0;
 			sps.sname = "";
 			sps.slevel = 1;
+			sps.sss = NULL;
 			sps.sap = NULL;
 			sps.soffset = dblxor;
 			locctr(DATA, &sps);
@@ -587,6 +591,7 @@ myp2tree(NODE *p)
 	/* XXX should let float constants follow */
 	sp = IALLOC(sizeof(struct symtab));
 	sp->sclass = STATIC;
+	sp->sss = NULL;
 	sp->sap = NULL;
 	sp->slevel = 1; /* fake numeric label */
 	sp->soffset = getlab();
@@ -597,7 +602,7 @@ myp2tree(NODE *p)
 
 	locctr(DATA, sp);
 	defloc(sp);
-	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	inval(0, tsize(sp->stype, sp->sdf, sp->sss), p);
 
 	p->n_op = NAME;
 	slval(p, 0);
@@ -655,7 +660,7 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 	ecomp(buildtree(MINUSEQ, sp, p));
 
 	/* save the address of sp */
-	sp = block(REG, NIL, NIL, PTR+LONG, t->n_df, t->n_ap);
+	sp = block(REG, NIL, NIL, PTR+LONG, t->n_df, t->pss);
 	slval(sp, 0);
 	sp->n_rval = STKREG;
 	t->n_type = sp->n_type;
@@ -738,10 +743,10 @@ defzero(struct symtab *sp)
 	char *name;
 
 	name = getexname(sp);
-	off = tsize(sp->stype, sp->sdf, sp->sap);
+	off = tsize(sp->stype, sp->sdf, sp->sss);
 	SETOFF(off,SZCHAR);
 	off /= SZCHAR;
-	al = talign(sp->stype, sp->sap)/SZCHAR;
+	al = talign(sp->stype, sp->sss)/SZCHAR;
 
 #ifdef MACHOABI
 	if (sp->sclass == STATIC) {
