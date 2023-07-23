@@ -32,6 +32,8 @@
 #ifdef LANG_CXX
 #define	p1listf	listf
 #define	p1tfree tfree
+#define	sss sap
+#define	pss n_ap
 #else
 #define	NODE P1ND
 #define	talloc p1alloc
@@ -119,10 +121,10 @@ defloc(struct symtab *sp)
 	if (!ISFTN(sp->stype)) {
 		if (sp->slevel == 0)
 			printf(PRTPREF "\t.size %s,%d\n", name,
-			    (int)tsize(sp->stype, sp->sdf, sp->sap)/SZCHAR);
+			    (int)tsize(sp->stype, sp->sdf, sp->sss)/SZCHAR);
 		else
 			printf(PRTPREF "\t.size " LABFMT ",%d\n", sp->soffset,
-			    (int)tsize(sp->stype, sp->sdf, sp->sap)/SZCHAR);
+			    (int)tsize(sp->stype, sp->sdf, sp->sss)/SZCHAR);
 	}
 #endif
 	if (sp->slevel == 0)
@@ -172,7 +174,7 @@ mycallspec(struct callspec *cs)
 
 	switch (t) {
 	case STRTY: case UNIONTY: /* struct return */
-		sz = (int)tsize(t, cs->rv.df, cs->rv.ap);
+		sz = (int)tsize(t, cs->rv.df, cs->rv.ss);
 		if (sz == SZLONGLONG && attr_find(cs->rv.ap, ATTR_COMPLEX)) {
 			/* return in eax/edx */
 			cs->rv.flags |= RV_STREG;
@@ -224,7 +226,7 @@ mycallspec(struct callspec *cs)
 	/* arguments */
 	for (i = 0; i < cs->nargs; i++) {
 		struct rdef *rd = &cs->av[i];
-		sz = (int)tsize(rd->type, rd->df, rd->ap);
+		sz = (int)tsize(rd->type, rd->df, rd->ss);
 		SETOFF(sz, SZINT);
 
 		rd->rtp = rd->type;
@@ -393,7 +395,7 @@ addreg(NODE *p)
 	NODE *q;
 	int sz, r;
 
-	sz = (int)tsize(p->n_type, p->n_df, p->n_ap)/SZCHAR;
+	sz = (int)tsize(p->n_type, p->n_df, p->pss)/SZCHAR;
 	sz = (sz + 3) >> 2;	/* sz in regs */
 	if ((regcvt+sz) > rparg) {
 		regcvt = rparg;
@@ -460,7 +462,7 @@ funcode(NODE *p)
 		if (r->n_right->n_op != STARG)
 			r->n_right = block(FUNARG, r->n_right, NIL,
 			    r->n_right->n_type, r->n_right->n_df,
-			    r->n_right->n_ap);
+			    r->n_right->pss);
 	}
 	if (r->n_op != STARG) {
 		l = talloc();
@@ -476,7 +478,11 @@ funcode(NODE *p)
 #else
 	if (stcall &&
 	    (attr_find(p->n_left->n_ap, ATTR_COMPLEX) == 0 ||
+#ifdef LANG_CXX
 	     ((ap = strattr(p->n_left->n_ap)) && ap->amsize > SZLONGLONG)))
+#else
+	    (p->n_left->n_td->ss && p->n_left->n_td->ss->sz > SZLONGLONG)))
+#endif
 #endif
 	{
 		/* Prepend a placeholder for struct address. */
