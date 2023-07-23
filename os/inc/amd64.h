@@ -44,10 +44,10 @@
 		argp = "-m" AMD64_64_EMUL;				\
 		strlist_append(&middle_linker_flags, argp);		\
 		continue;						\
-	} else if (strncmp(argp, "-mcmodel", 9)) {			\
+	} else if (strncmp(argp, "-mcmodel", 9) == 0) {			\
 		strlist_append(&compiler_flags, argp);			\
 		continue;						\
-	} else if (match(argp, "-melf_i386") == 0) {			\
+	} else if (match(argp, "-melf_i386")) {				\
 		pass0 = LIBEXECDIR "/ccom_i386";			\
 		amd64_i386 = 1;						\
 		continue;						\
