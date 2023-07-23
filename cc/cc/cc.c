@@ -1994,6 +1994,7 @@ int one = 1;
 
 struct flgcheck asflgcheck[] = {
 #if defined(USE_YASM)
+	{ &one, 1, "-w" },
 	{ &one, 1, "-p" },
 	{ &one, 1, "gnu" },
 	{ &one, 1, "-f" },
@@ -2002,7 +2003,11 @@ struct flgcheck asflgcheck[] = {
 #elif defined(os_darwin)
 	{ &one, 1, "macho" },
 #else
+#if defined(mach_amd64)
+	{ &one, 1, "elf64" },
+#else
 	{ &one, 1, "elf" },
+#endif
 #endif
 #endif
 #if defined(os_sunos) && defined(mach_sparc64)
@@ -2017,7 +2022,9 @@ struct flgcheck asflgcheck[] = {
 #if defined(os_openbsd) && defined(mach_mips64)
 	{ &kflag, 1, "-KPIC" },
 #else
+#if !defined(USE_YASM)
 	{ &kflag, 1, "-k" },
+#endif
 #endif
 #ifdef TARGET_ASFLAGS
 	TARGET_ASFLAGS
