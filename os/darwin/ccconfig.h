@@ -25,10 +25,6 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define XCODE_PLATFORM		"MacOSX"
-#define XCODE_SELECT_LINK	"/var/db/xcode_select_link/"
-#define XCODE_PLATFORM_SDK	XCODE_SELECT_LINK "Platforms/" XCODE_PLATFORM ".platform/Developer/SDKs/" XCODE_PLATFORM ".sdk"
-
 /*
  * Various settings that controls how the C compiler works.
  */
@@ -46,29 +42,34 @@
 #define CRTI		0
 #define CRTN		0
 
-#if defined(mach_i386) || defined(mach_amd64) || defined(mach_arm64)
-
-#define DEFLIBS         { "-lSystem", "-lpcc", NULL }
-#define DEFPROFLIBS     { "-lSystem_profile", "-lpcc", NULL }
-#define DEFLIBDIRS      { "/usr/lib", NULL }
-#ifndef STDINC
-#define STDINC          "/usr/include"
-#endif
-//#define DEFLIBDIRS      { XCODE_PLATFORM_SDK "/usr/lib", NULL }
-//#define STDINC          XCODE_PLATFORM_SDK "/usr/include"
+#if defined(mach_i386) || defined(mach_amd64) || defined(mach_aarch64)
 
 #if defined(mach_amd64)
 #define AS_ARCH_FLAG		strlist_append(&args, "x86_64");
 #define TARGET_GLOBALS  int amd64_i386;
 #define	TARGET_ASFLAGS	{ &amd64_i386, 1, "i386" }, \
 			{ &amd64_i386, 0, "x86_64" },
+#define XCODE_PLATFORM		
+#define XCODE_SELECT_LINK
+#define XCODE_PLATFORM_SDK	
 #elif defined(mach_aarch64)
 #define AS_ARCH_FLAG		strlist_append(&args, "arm64");
+#define XCODE_PLATFORM		"MacOSX"
+#define XCODE_SELECT_LINK	"/Applications/Xcode.app/Contents/Developer/"
+#define XCODE_PLATFORM_SDK	XCODE_SELECT_LINK "Platforms/" XCODE_PLATFORM ".platform/Developer/SDKs/" XCODE_PLATFORM ".sdk"
 #elif defined(mach_i386)
 #define AS_ARCH_FLAG		strlist_append(&args, "i386");
 #define TARGET_ASFLAGS		{ &one, 1, "i386" },
-#else
-#error missing arch defines
+#define XCODE_PLATFORM		
+#define XCODE_SELECT_LINK
+#define XCODE_PLATFORM_SDK	
+#endif
+
+#define DEFLIBS         { "-lSystem", "-lpcc", NULL }
+#define DEFPROFLIBS     { "-lSystem_profile", "-lpcc", NULL }
+#define DEFLIBDIRS      { XCODE_PLATFORM_SDK "/usr/lib", NULL }
+#ifndef STDINC
+#define STDINC          XCODE_PLATFORM_SDK "/usr/include"
 #endif
 
 #define PCC_EARLY_AS_ARGS 						\
@@ -77,19 +78,19 @@
 				strlist_append(&args, "-arch"); 	\
 				AS_ARCH_FLAG
 
-
 #elif defined(mach_powerpc)
 /*
 ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/usr/lib/gcc/powerpc-apple-darwin8/4.0.1 hello_ppc.o -lgcc -lSystemStubs -lSystem
 */
 
-#ifndef STDINC
-#define STDINC          "/usr/include"
-#endif
 #define DEFLIBS         { "-lcrt1.o", "-lSystem", "-lSystemStubs", "-lgcc", NULL }
 #define DEFPROFLIBS     { "-lcrt1.o", "-lSystem_profile", "-lSystemStubs", "-lgcc", NULL }
 #define DEFLIBDIRS      { "/usr/lib", "/usr/lib/gcc/powerpc-apple-darwin8/4.0.0", NULL }
 #undef PCCLIBDIR
+
+#ifndef STDINC
+#define STDINC        "/usr/include"
+#endif
 
 #else
 #error unknown arch in os/darwin/cconfig.h
@@ -109,8 +110,10 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 #define	CPPMDADD { "-D__i386__", "-D__LITTLE_ENDIAN__", NULL }
 #elif defined(mach_powerpc)
 #define	CPPMDADD { "-D__ppc__", "-D__BIG_ENDIAN__", NULL }
-#elif defined(mach_aarchpc)
-#error add aarch64 CPPMDADD to os/darwin/ccconfig.h
+#elif defined(mach_aarch64)
+#define CPPMDADD { "-D__aarch64__=1","-D__arm64__=1",\
+					"-D__arm64=1", "-D__AARCH64EL__=1",\
+					"-D__LITTLE_ENDIAN__", NULL }
 #elif defined(mach_amd64)
 #define CPPMDADD \
         { "-D__x86_64__", "-D__x86_64", "-D__amd64__", "-D__amd64", \
@@ -173,7 +176,7 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 		strlist_append(&middle_linker_flags, argp);		\
 		strlist_append(&middle_linker_flags, nxtopt(0));	\
 		continue;						\
-	} 								\
+	}								\
 }
 
 /*
