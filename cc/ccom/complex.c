@@ -79,6 +79,7 @@ complinit(void)
 		p->n_type = FTN|STRTY;
 		p->n_ap = cxsp[i]->sap;
 		p->n_df = cxsp[i]->sdf;
+		p->pss = cxsp[i]->sss;
 		defid2(p, EXTERN, 0);
 		cxmul[i]->sdf = permalloc(sizeof(union dimfun));
 		dimfuncnt++;
@@ -88,6 +89,7 @@ complinit(void)
 		p->n_type = FTN|STRTY;
 		p->n_ap = cxsp[i]->sap;
 		p->n_df = cxsp[i]->sdf;
+		p->pss = cxsp[i]->sss;
 		defid2(p, EXTERN, 0);
 		cxdiv[i]->sdf = permalloc(sizeof(union dimfun));
 		dimfuncnt++;
