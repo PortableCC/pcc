@@ -59,17 +59,18 @@
 #define XCODE_PLATFORM_SDK	XCODE_SELECT_LINK "Platforms/" XCODE_PLATFORM ".platform/Developer/SDKs/" XCODE_PLATFORM ".sdk"
 #elif defined(mach_i386)
 #define AS_ARCH_FLAG		strlist_append(&args, "i386");
-#define TARGET_ASFLAGS		{ &one, 1, "i386" },
+#define TARGET_ASFLAGS
 #define XCODE_PLATFORM		
 #define XCODE_SELECT_LINK
 #define XCODE_PLATFORM_SDK	
 #endif
 
-#define DEFLIBS         { "-lSystem", "-lpcc", NULL }
-#define DEFPROFLIBS     { "-lSystem_profile", "-lpcc", NULL }
+#define DEFLIBS         { "-lSystem", NULL } //"-lpcc", 
+#define DEFPROFLIBS     { "-lSystem_profile",  NULL } //"-lpcc",
 #define DEFLIBDIRS      { XCODE_PLATFORM_SDK "/usr/lib", NULL }
 #ifndef STDINC
 #define STDINC          XCODE_PLATFORM_SDK "/usr/include"
+
 #endif
 
 #define PCC_EARLY_AS_ARGS 						\
@@ -102,10 +103,6 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 #define F77LIBLIST { "-L" PCCLIBDIR, "-lF77", "-lI77", "-lm", "-lc", NULL };
 #endif
 
-/*
-ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/usr/lib/gcc/powerpc-apple-darwin8/4.0.1 hello_ppc.o -lgcc -lSystemStubs -lSystem
-*/
-
 #if defined(mach_i386)
 #define	CPPMDADD { "-D__i386__", "-D__LITTLE_ENDIAN__", NULL }
 #elif defined(mach_powerpc)
@@ -130,7 +127,7 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
  */
 #define MACOS_VERSION_MIN \
                 strlist_append(&middle_linker_flags, "-macosx_version_min");    \
-                strlist_append(&middle_linker_flags, "10.9.0");         \
+                strlist_append(&middle_linker_flags, "10.9.0");
 
 #if defined(mach_amd64)
 #define PCC_EARLY_LD_ARGS               \
