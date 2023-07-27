@@ -775,9 +775,7 @@ fixnames(P1ND *p, void *arg)
 
 	struct symtab *sp;
 	struct attr *ap;
-#if defined(ELFABI)
 	struct attr *ap2;
-#endif
 	P1ND *q;
 	char *c;
 	int isu;
@@ -818,15 +816,11 @@ fixnames(P1ND *p, void *arg)
 		if (!ISFTN(sp->stype))
 			return; /* function pointer */
 
-		if (isu) {
-			*c = 0;
-			addstub(&stublist, getexname(sp)+1);
-			memcpy(c, "$stub", sizeof("$stub"));
-		} else 
-			*c = 0;
-
+		if ((ap2 = attr_find(sp->sap, ATTR_SONAME)) == NULL ||
+		    (c = strchr(ap2->sarg(0), '$')) == NULL)
+			cerror("fixnames2: %p %s", ap2, c);
+		*c = 0;
 #endif
-
 		p1nfree(q->n_left);
 		q = q->n_right;
 		if (isu)
@@ -836,9 +830,6 @@ fixnames(P1ND *p, void *arg)
 		q->n_ap = ap;
 	}
 #endif
-//printf("fixnames E\n");
-//p1fwalk(p, eprint, 0);
-	
 }
 
 static void mangle(P1ND *p);
