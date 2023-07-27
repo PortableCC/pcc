@@ -291,7 +291,6 @@ defid2(NODE *q, int class, char *astr)
 	/* check that redeclarations are to the same structure */
 	if (temp == STRTY || temp == UNIONTY) {
 		if (suemeq(p->td->ss, q->n_td->ss) == 0)
-//		if (strmemb(p->sap) != strmemb(q->n_ap))
 			goto mismatch;
 	}
 
@@ -1005,10 +1004,7 @@ soumemb(NODE *n, char *name, int class)
 		lsp->snext = sp;
 
 	n->n_sp = sp;
-	sp->stype = n->n_type;
-	sp->squal = n->n_qual;
-	sp->sdf = n->n_df;
-	sp->sss = n->pss;
+	*sp->td = *n->n_td;
 
 	sp->slevel = blevel;
 	sp->sap = n->n_ap;
@@ -1171,7 +1167,6 @@ short sztable[] = { 0, SZBOOL, SZCHAR, SZCHAR, SZSHORT, SZSHORT, SZINT, SZINT,
  *  dimoff d, and sizoff s */
 /* BETTER NOT BE CALLED WHEN t, d, and s REFER TO A BIT FIELD... */
 OFFSZ
-//tsize(TWORD ty, union dimfun *d, struct attr *apl)
 tsize(TWORD ty, union dimfun *d, struct ssdesc *ss)
 {
 	OFFSZ mult, sz;
@@ -1210,9 +1205,6 @@ tsize(TWORD ty, union dimfun *d, struct ssdesc *ss)
 		sz = sztable[ty];
 	else if (ISSOU(ty)) {
 		if (ss == NULL || (sz = ss->sz) == 0) {
-//		if ((ap = strattr(apl)) == NULL ||
-//		    (ap2 = attr_find(apl, ATTR_ALIGNED)) == NULL ||
-//		    (ap2->iarg(0) == 0)) {
 			uerror("unknown structure/union/enum");
 			sz = SZINT;
 		}

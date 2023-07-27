@@ -451,16 +451,10 @@ runtime:
 	if ((actions&PUN) && (o!=CAST))
 		chkpun(p);
 
-	if( actions & (TYPL|TYPR) ){
-
+	if (actions & (TYPL|TYPR)) {
 		q = (actions&TYPL) ? p->n_left : p->n_right;
-
-		p->n_type = q->n_type;
-		p->n_qual = q->n_qual;
-		p->n_df = q->n_df;
-		p->pss = q->pss;
-//		p->n_ap = q->n_ap;
-		}
+		*p->n_td = *q->n_td;
+	}
 
 	if( actions & CVTL ) p = convert( p, CVTL );
 	if( actions & CVTR ) p = convert( p, CVTR );
@@ -507,12 +501,12 @@ runtime:
 				p1nfree(p);
 				p = p1nfree(l);
 			}
-			if( !ISPTR(l->n_type))uerror("illegal indirection");
+			if (!ISPTR(l->n_type))
+				uerror("illegal indirection");
 			p->n_type = DECREF(l->n_type);
 			p->n_qual = DECREF(l->n_qual);
 			p->n_df = l->n_df;
 			p->pss = l->pss;
-	//		p->n_ap = l->n_ap;
 			break;
 
 		case ADDROF:
@@ -528,7 +522,6 @@ runtime:
 				p->n_qual = INCQAL(l->n_qual);
 				p->n_df = l->n_df;
 				p->pss = l->pss;
-	//			p->n_ap = l->n_ap;
 				break;
 
 			case COMOP:
@@ -560,12 +553,8 @@ runtime:
 				p->n_left = makety(l, UNSIGNED, 0, 0, 0);
 			}
 			l = p->n_left;
-			p->n_type = l->n_type;
-			p->n_qual = l->n_qual;
-			p->n_df = l->n_df;
-			p->pss = l->pss;
-		//	p->n_ap = l->n_ap;
-			if(tsize(r->n_type, r->n_df, r->pss) > SZINT)
+			*p->n_td = *l->n_td;
+			if (tsize(r->n_type, r->n_df, r->pss) > SZINT)
 				p->n_right = makety(r, INT, 0, 0, 0);
 			break;
 
@@ -624,7 +613,6 @@ runtime:
 			p->n_type = DECREF(p->n_type);
 			p->n_df = l->n_df+1; /* add one for prototypes */
 			p->pss = l->pss;
-		//	p->n_ap = l->n_ap;
 			if (p->n_type == STRTY || p->n_type == UNIONTY) {
 				/* function returning structure */
 				/*  make function really return ptr to str., with * */
@@ -1474,7 +1462,6 @@ oconvert(register P1ND *p)
 
 	case MINUS:
 		p->n_type = INTPTR;
-	//	p->n_ap = NULL;
 		p = (clocal(VBLOCK(p, bpsize(p->n_left), INT, 0, 0)));
 		return( p );
 		}
@@ -1702,12 +1689,7 @@ blck(int o, P1ND *l, P1ND *r, struct tdef *td)
 	p->n_left = l;
 	p->n_right = r;
 
-	p->n_td[0] = *td;
-//	p->n_type = t;
-//	p->n_qual = 0;
-//	p->n_df = d;
-//	p->pss = ss;
-
+	*p->n_td = *td;
 	p->n_ap = NULL;
 	return(p);
 }
