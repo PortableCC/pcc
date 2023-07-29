@@ -1275,37 +1275,28 @@ elsestmt(void)
 	chknl(1);
 }
 
+#define	TYP_ELIF	1
+#define	TYP_ELIFDEF	2
+#define	TYP_ELIFNDEF	3
+static void elifcommon(int typ);
+static int chktyp(int typ);
+
 static void
 ifdefstmt(void)
 {
-	register usch *bp;
-	register int ch;
-
-	if (!ISID0(ch = fastspc()))
-		error("bad #ifdef");
-	bp = readid(ch);
-
-	if (lookup(bp, FIND) == NULL)
-		flslvl++;
-	else
+	if (chktyp(TYP_ELIFDEF))
 		trulvl++;
-	chknl(0);
+	else
+		flslvl++;
 }
 
 static void
 ifndefstmt(void)
 {
-	register usch *bp;
-	register int ch;
-
-	if (!ISID0(ch = fastspc()))
-		error("bad #ifndef");
-	bp = readid(ch);
-	if (lookup(bp, FIND) != NULL)
-		flslvl++;
-	else
+	if (chktyp(TYP_ELIFNDEF))
 		trulvl++;
-	chknl(0);
+	else
+		flslvl++;
 }
 
 static void
@@ -1336,6 +1327,45 @@ ifstmt(void)
 static void
 elifstmt(void)
 {
+	return elifcommon(TYP_ELIF);
+}
+
+static void
+elifdefstmt(void)
+{
+	return elifcommon(TYP_ELIFDEF);
+}
+
+static void
+elifndefstmt(void)
+{
+	return elifcommon(TYP_ELIFNDEF);
+}
+
+
+static int
+chktyp(int typ)
+{
+	register usch *bp;
+	register int rv, ch;
+
+	if (typ == TYP_ELIF)
+		return yyparse();
+
+	if (!ISID0(ch = fastspc()))
+		error("bad #elifdef");
+	bp = readid(ch);
+	rv = lookup(bp, FIND) == NULL;
+	if (typ == TYP_ELIFDEF)
+		rv = !rv;
+        chknl(0);
+	return rv;
+}
+
+
+static void
+elifcommon(int typ)
+{
 	register int oCflag = Cflag;
 
 	Cflag = 0;
@@ -1346,7 +1376,7 @@ elifstmt(void)
 			;
 		else if (--flslvl!=0)
 			flslvl++;
-		else if (yyparse())
+		else if (chktyp(typ))
 			trulvl++;
 		else
 			flslvl++;
@@ -1470,6 +1500,8 @@ static struct {
 	{ "line", line, 0 },
 	{ "pragma", pragmastmt, 0 },
 	{ "elif", elifstmt, DIR_FLSLVL },
+	{ "elifdef", elifdefstmt, DIR_FLSLVL },
+	{ "elifndef", elifndefstmt, DIR_FLSLVL },
 	{ "ident", identstmt, 0 },
 #ifdef GCC_COMPAT
 	{ "include_next", include_next, 0 },
