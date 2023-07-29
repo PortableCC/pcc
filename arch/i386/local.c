@@ -164,13 +164,15 @@ static P1ND *
 picext(P1ND *p)
 {
 
+char *name;
+	
+	name = getexname(p->n_sp);
+
 #if defined(ELFABI)
 	P1ND *q, *r;
 	struct symtab *sp;
-	char *name;
 
 	q = tempnode(gotnr, PTR|VOID, 0, 0);
-	name = getexname(p->n_sp);
 
 #ifdef GCC_COMPAT
 	struct attr *ap;
@@ -199,20 +201,27 @@ picext(P1ND *p)
 
 #elif defined(MACHOABI)
 
+#ifndef USE_INDIRECT_ADDRESSING
+	return p;
+#else
+
 	P1ND *q, *r;
 	struct symtab *sp;
-	char buf2[256], *name, *pspn;
+	char buf1[256];
+	char *fname;
 
-	name = getsoname(cftnsp);
-	pspn = getexname(p->n_sp);
+	/* relocatable references are relative to a local address */
+	fname = getsoname(cftnsp);
 
 	if (p->n_sp->sclass == EXTDEF) {
-		snprintf(buf2, 256, "-L%s$pb", name);
-		sp = picsymtab("", pspn, buf2);
+		snprintf(buf1, 256, "-L%s$pb", fname);
+		snprintf(buf1, 256, "", fname);
+		sp = picsymtab("", name, buf1);
 	} else {
-		snprintf(buf2, 256, "$non_lazy_ptr-L%s$pb", name);
-		sp = picsymtab("L", pspn, buf2);
-		addstub(&nlplist, pspn);
+		snprintf(buf1, 256, "$non_lazy_ptr-L%s$pb", fname);
+		snprintf(buf1, 256, "$non_lazy_ptr", fname);
+		sp = picsymtab("L", name, buf1);
+		addstub(&nlplist, name);
 	}
 
 	sp->stype = p->n_sp->stype;
@@ -227,6 +236,7 @@ picext(P1ND *p)
 	q->n_sp = p->n_sp; /* for init */
 	p1nfree(p);
 	return q;
+#endif
 
 #else /* defined(PECOFFABI) || defined(AOUTABI) */
 
@@ -270,17 +280,19 @@ picstatic(P1ND *p)
 
 	P1ND *q, *r;
 	struct symtab *sp;
-	char buf2[256];
+	char buf1[256];
 
-	snprintf(buf2, 256, "-L%s$pb", getexname(cftnsp));
+	snprintf(buf1, 256, "-L_%s$pb", getsoname(cftnsp));
 
 	if (p->n_sp->slevel > 0) {
-		char buf1[32];
-		snprintf(buf1, 32, LABFMT, (int)p->n_sp->soffset);
-		sp = picsymtab("", buf1, buf2);
+		char buf2[32];
+		if ((p->n_sp->sflags & SMASK) == SSTRING)
+			p->n_sp->sflags |= SASG;
+		snprintf(buf2, 32, LABFMT, (int)p->n_sp->soffset);
+		sp = picsymtab("", buf2, buf1);
 	} else  {
 		char *name = getexname(p->n_sp);
-		sp = picsymtab("", name, buf2);
+		sp = picsymtab("", name, buf1);
 	}
 	sp->sclass = STATIC;
 	sp->stype = p->n_sp->stype;
@@ -816,10 +828,11 @@ fixnames(P1ND *p, void *arg)
 		if (!ISFTN(sp->stype))
 			return; /* function pointer */
 
+
 		if ((ap2 = attr_find(sp->sap, ATTR_SONAME)) == NULL ||
 		    (c = strchr(ap2->sarg(0), '$')) == NULL)
 			cerror("fixnames2: %p %s", ap2, c);
-		*c = 0;
+
 #endif
 		p1nfree(q->n_left);
 		q = q->n_right;
@@ -829,6 +842,7 @@ fixnames(P1ND *p, void *arg)
 		p->n_left = q;
 		q->n_ap = ap;
 	}
+
 #endif
 }
 
@@ -838,9 +852,13 @@ void
 myp2tree(P1ND *p)
 {
 	struct symtab *sp;
-
+	
+#if defined(ELFABI)
 	if (kflag)
 		fixnames(p, 0);
+#elif defined(MACHOABI)
+		fixnames(p, 0);
+#endif
 
 	mangle(p);
 
