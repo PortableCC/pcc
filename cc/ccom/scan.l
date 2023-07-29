@@ -231,6 +231,7 @@ struct keywords {
 	{ "continue", C_CONTINUE, DEFKW },
 	{ "_Complex", COMPLEX, C_TYPE },
 	{ "const", CON, C_QUALIFIER },
+	{ "constexpr", CCONST, C_CLASS },
 	{ "default", C_DEFAULT, DEFKW },
 	{ "do", C_DO, DEFKW },
 	{ "double", DOUBLE, C_TYPE },

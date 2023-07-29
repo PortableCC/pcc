@@ -1312,6 +1312,11 @@ simpleinit(struct symtab *sp, NODE *p)
 		ecomp(r);
 		break;
 
+	case CCONST:
+		sp->soffset = icons(p);
+		p1nfree(nt);
+		break;
+
 	default:
 		uerror("illegal initialization");
 	}

@@ -2189,6 +2189,7 @@ fixclass(int class, TWORD type)
 	case TYPEDEF:
 	case USTATIC:
 	case PARAM:
+	case CCONST:
 		return( class );
 
 	default:
