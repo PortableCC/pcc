@@ -70,7 +70,8 @@ typedef unsigned int bittype; /* XXX - for basicblock */
 #define TYPEDEF		13
 /* #define FORTRAN		14 */
 #define ENAME		15
-#define MOE		16
+//#define MOE		16
+#define CCONST		16
 /* #define UFORTRAN 	17 */
 #define USTATIC		18
 
@@ -356,7 +357,7 @@ void inline_args(struct symtab **, int);
 P1ND *inlinetree(struct symtab *, P1ND *, P1ND *);
 void argsave(P1ND *p);
 struct rstack *bstruct(char *, int, P1ND *);
-void moedef(char *);
+void moedef(char *, int);
 void beginit(struct symtab *);
 void simpleinit(struct symtab *, P1ND *);
 struct symtab *lookup(char *, int);

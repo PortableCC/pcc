@@ -285,7 +285,7 @@ struct savbc {
 		attribute_list attr_spec_list attr_var /* COMPAT_GCC */
 
 %type <g>	gen_ass_list gen_assoc
-%type <strp>	string svstr
+%type <strp>	string svstr moe
 %type <rp>	str_head
 %type <symp>	xnfdeclarator clbrace enum_head
 
@@ -615,14 +615,14 @@ enum_head:	   C_ENUM { $$ = enumhd(NULL); }
 		|  C_ENUM C_NAME {  $$ = enumhd($2); }
 		;
 
-moe_list:	   moe
-		|  moe_list ',' moe
+moe_list:	   moe { moedef($1, enummer++); }
+		|  moe_list ',' moe { moedef($3, enummer++); }
 		;
 
-moe:		   C_NAME {  moedef($1); }
-		|  C_TYPENAME {  moedef($1); }
-		|  C_NAME '=' e { enummer = con_e($3); moedef($1); }
-		|  C_TYPENAME '=' e { enummer = con_e($3); moedef($1); }
+moe:		   C_NAME
+		|  C_TYPENAME
+		|  C_NAME '=' e { enummer = con_e($3); $$ = $1; }
+		|  C_TYPENAME '=' e { enummer = con_e($3); $$ = $1; }
 		;
 
 struct_dcl:	   str_head '{' struct_dcl_list '}' {

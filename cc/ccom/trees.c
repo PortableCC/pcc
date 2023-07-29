@@ -747,7 +747,7 @@ nametree(struct symtab *sp)
 		p->n_df = NULL;
 		defid(p, SNULL);
 	}
-	if (sp->sclass == MOE) {
+	if (sp->sclass == CCONST) {
 		p->n_op = ICON;
 		slval(p, sp->soffset);
 		p->n_df = NULL;

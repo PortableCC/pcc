@@ -765,7 +765,7 @@ int enummer;
  * Declare a member of enum.
  */
 void
-moedef(char *name)
+moedef(char *name, int num)
 {
 	struct symtab *sp;
 
@@ -774,15 +774,14 @@ moedef(char *name)
 		if (sp->stype != UNDEF)
 			sp = hide(sp);
 		sp->stype = INT; /* always */
-		sp->sclass = MOE;
-		sp->soffset = enummer;
+		sp->sclass = CCONST;
+		sp->soffset = num;
 	} else
 		uerror("%s redeclared", name);
-	if (enummer < enumlow)
-		enumlow = enummer;
-	if (enummer > enumhigh)
-		enumhigh = enummer;
-	enummer++;
+	if (num < enumlow)
+		enumlow = num;
+	if (num > enumhigh)
+		enumhigh = num;
 }
 
 /*

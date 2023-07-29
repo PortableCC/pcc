@@ -342,7 +342,7 @@ stabs_newsym(struct symtab *s)
 		return; /* functions are handled separate */
 
 	if (s->sclass == STNAME || s->sclass == UNAME || s->sclass == MOS ||
-	    s->sclass == ENAME || s->sclass == MOU || s->sclass == MOE ||
+	    s->sclass == ENAME || s->sclass == MOU || s->sclass == CCONST ||
 	    s->sclass == TYPEDEF || (s->sclass & FIELD) || ISSOU(s->stype))
 		return; /* XXX - fix structs */
 
