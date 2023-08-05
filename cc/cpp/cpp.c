@@ -1467,7 +1467,10 @@ blkget(struct symtab *sp, int id)
 		blokx[upper] = xmalloc(CPPBUF);
 	blokx[upper][off].sp = sp;
 	blokx[upper][off].nidx = id;
-	return blkidp++;
+	id = blkidp++;
+	if ((blkidp & 0377) == 0)
+		blkidp++;
+	return id;
 }
 
 static int

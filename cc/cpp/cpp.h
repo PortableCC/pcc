@@ -99,7 +99,6 @@ extern usch pbbeg[], *pbinp, *pbend;
 
 /* Used in macro expansion */
 #define	L2MAX	64			/* max index into blocker pages */
-#define	MKB(l,h)	(l+((h)<<8))
 
 /* quick checks for some characters */
 #define C_SPEC	0001		/* for fastscan() parsing */
