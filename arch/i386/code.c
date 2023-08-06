@@ -196,11 +196,12 @@ mycallspec(struct callspec *cs)
 		}
 		break;
 
-	case CHAR: case UCHAR: case SHORT: case USHORT:
+	case BOOL: case CHAR: case UCHAR:
+	case SHORT: case USHORT:
 	case INT: case UNSIGNED: case LONG: case ULONG:
 		cs->rv.flags |= RV_RETREG;
 		cs->rv.reg[0] = EAX;
-		cs->rv.rtp = cs->rv.type;
+		cs->rv.rtp = INT;
 		break;
 
 	case LONGLONG: case ULONGLONG:
