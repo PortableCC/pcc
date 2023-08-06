@@ -785,6 +785,7 @@ insbf(OFFSZ off, int fsz, int val)
 	sym.stype = typ;
 	sym.squal = 0;
 	sym.sdf = 0;
+	sym.sss = 0;
 	sym.sap = NULL;
 	sym.soffset = (int)off;
 	sym.sclass = (char)(typ == INT ? FIELD | fsz : MOU);
