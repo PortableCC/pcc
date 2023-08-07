@@ -952,7 +952,7 @@ include_next(void)
 	fn = addname(&ob->buf[1]);
 	bufree(ob);
 	if (fsrch(fn, ifiles->idx, ifiles->incs) == 0)
-		error("cannot find '%s'", &ob->buf[1]);
+		error("cannot find '%s'", fn);
 
 	prtline(1);
 }
