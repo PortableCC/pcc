@@ -1677,6 +1677,49 @@ unionize(NODE *p, int bb)
 }
 
 /*
+ * delete an interference edge between two nodes.
+ */
+static void
+deledge(REGW *u, REGW *v)
+{
+	struct AdjSet *w, **ww;
+	ADJL *x, **xx;
+
+	ww = &edgehash[(u->nodnum+v->nodnum)& (HASHSZ-1)];
+
+	if (*ww == NULL)
+		return; /* no edges */
+
+	/*
+	 * Remove from the adjacent set.
+	 */
+	for (w = *ww; w; ww = &w->next, w = w->next) {
+		if ((u == w->u && v == w->v) || (u == w->v && v == w->u)) {
+			*ww = w->next;
+			RDEBUG(("deledge: %d <> %d\n", u->nodnum, v->nodnum));
+		}
+	}
+
+	/*
+	 * remove from adjacent lists.
+	 */
+	if (ONLIST(u) != &precolored) {
+		xx = &ADJLIST(u);
+		for (x = *xx; x; xx = &x->r_next, x = x->r_next) {
+			if (x->a_temp == v)
+				*xx = x->r_next;
+		}
+	}
+	if (ONLIST(v) != &precolored) {
+		xx = &ADJLIST(v);
+		for (x = *xx; x; xx = &x->r_next, x = x->r_next) {
+			if (x->a_temp == u)
+				*xx = x->r_next;
+		}
+	}
+}
+
+/*
  * Do variable liveness analysis.  Only analyze the long-lived 
  * variables, and save the live-on-exit temporaries in a bit-field
  * at the end of each basic block. This bit-field is later used
@@ -1859,6 +1902,25 @@ livagain:
 			}
 			if (ip == bb->first)
 				break;
+		}
+	}
+
+	if (xssa) {
+		REGW *u, *v;
+		MOVL *m;
+		/*
+		 * Remove edges between nodes where there also is a move.
+		 * It cannot exist since in SSA there are only one assignment.
+		 */
+		DLIST_FOREACH(u, &initial, link) {
+			if (MOVELIST(u) == NULL)
+				continue;
+			for (m = MOVELIST(u); m; m = m->next) {
+				v = m->regm->src == u ?
+				    m->regm->dst : m->regm->src;
+//				if (adjSet(u, v))
+					deledge(u, v);
+			}
 		}
 	}
 
