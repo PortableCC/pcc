@@ -290,36 +290,12 @@ bfcode(struct symtab **sp, int cnt)
 
 	/* Take care of PIC stuff first */
         if (kflag) {
-#define STL     200
-                char *str = xmalloc(STL);
-#if !defined(MACHOABI)
-                int l = getlab();
-#else
-                char *name;
-#endif
-
-                /* Generate extended assembler for PIC prolog */
-                p = tempnode(0, INT, 0, 0);
-                gotnr = regno(p);
-                p = block(XARG, p, NIL, INT, 0, 0);
-                p->n_name = "=g";
-                p = block(XASM, p, bcon(0), INT, 0, 0);
-
-#if defined(MACHOABI)
-		name = getexname(cftnsp);
-                if (snprintf(str, STL, "call L%s$pb\nL%s$pb:\n\tpopl %%0\n",
-                    name, name) >= STL)
-                        cerror("bfcode");
-#else
-                if (snprintf(str, STL,
-                    "call " LABFMT ";" LABFMT ":;\tpopl %%0;"
-                    "\taddl $_GLOBAL_OFFSET_TABLE_+[.-" LABFMT "], %%0;",
-                    l, l, l) >= STL)
-                        cerror("bfcode");
-#endif
-                p->n_name = addstring(str);
-                p->n_right->n_type = STRTY;
-		free(str);
+		NODE *q;
+		p = tempnode(0, INT, 0, 0);
+		gotnr = regno(p);
+		q = block(REG, 0, 0, INT, 0, 0);
+		regno(q) = EBX;
+		p = buildtree(ASSIGN, p, q);
                 ecomp(p);
         }
 }
