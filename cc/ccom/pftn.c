@@ -1036,7 +1036,6 @@ soumemb(NODE *n, char *name, int class)
 	} else {
 		rpole->maxsz = rpole->curpos;
 	}
-if (ddebug)printf("soumemb: name %s tsz %d al %d sympos %d curpos %d totsz %d\n", name, tsz, al, sp->soffset, rpole->curpos, rpole->maxsz);
 	if (al > rpole->ss->al)
 		rpole->ss->al = al;
 
