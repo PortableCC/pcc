@@ -990,6 +990,11 @@ soumemb(NODE *n, char *name, int class)
 	if (rpole == NULL)
 		cerror("soumemb");
  
+#ifdef PCC_DEBUG
+        if (ddebug) {
+		printf("soumemb %s\n", name);
+	}
+#endif
 	/* check if tag name exists */
 	lsp = NULL;
 	for (sp = rpole->rb; sp != NULL; lsp = sp, sp = sp->snext)
@@ -1014,6 +1019,7 @@ soumemb(NODE *n, char *name, int class)
 		sp->sclass = (char)class;
 		falloc(sp, class&FLDSIZ, NIL);
 		al = talign(sp->stype, sp->sss);
+		tsz = sp->sclass&FLDSIZ;
 	} else if (rpole->rsou == STNAME || rpole->rsou == UNAME) {
 		sp->sclass = rpole->rsou == STNAME ? MOS : MOU;
 
