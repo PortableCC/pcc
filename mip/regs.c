@@ -1685,6 +1685,9 @@ deledge(REGW *u, REGW *v)
 	struct AdjSet *w, **ww;
 	ADJL *x, **xx;
 
+	if (ONLIST(v) == &precolored || ONLIST(u) == &precolored)
+		return; /* registers can be assigned */
+
 	ww = &edgehash[(u->nodnum+v->nodnum)& (HASHSZ-1)];
 
 	if (*ww == NULL)
@@ -1905,7 +1908,7 @@ livagain:
 		}
 	}
 
-	if (xssa) {
+	if (xssa && 0) {
 		REGW *u, *v;
 		MOVL *m;
 		/*
@@ -1918,8 +1921,7 @@ livagain:
 			for (m = MOVELIST(u); m; m = m->next) {
 				v = m->regm->src == u ?
 				    m->regm->dst : m->regm->src;
-//				if (adjSet(u, v))
-					deledge(u, v);
+				deledge(u, v);
 			}
 		}
 	}
