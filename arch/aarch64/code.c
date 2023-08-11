@@ -38,6 +38,8 @@
 #define n_qual pqual
 #undef n_df
 #define n_df pdf
+#define	sap sss
+#define	n_ap pss
 #endif
 
 static int rvnr;

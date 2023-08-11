@@ -160,6 +160,7 @@ setuni(NODE *p, int cookie)
 	return 0;
 }
 
+#if 0
 /*
  * Special handling of some instruction register allocation.
  *
@@ -283,6 +284,7 @@ nspecial(struct optab *q)
 #endif
 	return 0; /* XXX gcc */
 }
+#endif
 
 /*
  * Set evaluation order of a binary node ('+','-', '*', '/', etc) if it
