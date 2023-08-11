@@ -44,6 +44,13 @@
 #define talloc p1alloc
 #define tcopy p1tcopy
 #define nfree p1nfree
+#define	sap sss
+#undef n_df
+#define n_df pdf
+#undef n_type
+#define n_type ptype
+#undef n_ap
+#define n_ap pss
 #endif
 
 static int rvnr;

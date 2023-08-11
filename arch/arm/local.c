@@ -45,6 +45,13 @@
 #define talloc p1alloc
 #define tcopy p1tcopy
 #define nfree p1nfree
+#undef n_df
+#define n_df pdf
+#undef n_type
+#define n_type ptype
+#undef n_ap
+#define n_ap pss
+#define	n_qual pqual
 #endif
 
 extern void defalign(int);
@@ -57,6 +64,9 @@ getsoname(struct symtab *sp)
 	    ap->sarg(0) : sp->sname;
 }
 
+#ifndef LANG_CXX
+#define sap sss
+#endif
 
 /*
  * clocal() is called to do local transformations on
