@@ -34,6 +34,13 @@
 #define NODE P1ND
 #define talloc p1alloc
 #define tfree p1tfree
+#define	sap sss
+#undef n_df
+#define	n_df pdf
+#undef n_type
+#define	n_type ptype
+#undef n_ap
+#define	n_ap pss
 #endif
 
 extern int gotnr;

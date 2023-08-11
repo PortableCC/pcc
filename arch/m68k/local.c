@@ -39,6 +39,13 @@
 #define	NODE P1ND
 #define	nfree p1nfree
 #define	fwalk p1fwalk
+#undef n_df     
+#define n_df pdf
+#undef n_type
+#define n_type ptype
+#undef n_ap
+#define n_ap pss
+#define n_qual pqual
 #endif
 
 /* this file contains code which is dependent on the target machine */
@@ -112,6 +119,10 @@ getsoname(struct symtab *sp)
 	    ap->sarg(0) : sp->sname;
 	
 }
+
+#ifndef LANG_CXX
+#define sap sss
+#endif
 
 static NODE *
 picstatic(NODE *p)
@@ -504,6 +515,10 @@ mypragma(char *str)
 {
 	return 0;
 }
+
+#ifndef LANG_CXX
+#undef sap
+#endif
 
 /*
  * Called when a identifier has been declared.

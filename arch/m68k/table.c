@@ -44,6 +44,13 @@
 #define	 SHFL	SCREG	/* shape for long double */
 #define	 INFL	INCREG	/* shape for long double */
 
+#define XSL(c)  NEEDS(NREG(c, 1), NSL(c))
+#define	NAREG	NEEDS(NREG(A, 1))
+#define	NBREG	NEEDS(NREG(B, 1))
+#define	NCREG	NEEDS(NREG(C, 1))
+#define	NDREG	NEEDS(NREG(D, 1))
+#define	NADL	NEEDS(NREG(A, 1), NREG(D, 1), NSL(D))
+
 struct optab table[] = {
 /* First entry must be an empty entry */
 { -1, FOREFF, SANY, TANY, SANY, TANY, 0, 0, "", },
@@ -154,7 +161,7 @@ struct optab table[] = {
 { SCONV,	INDREG,
 	SAREG,		TUCHAR,
 	SDREG,		TFP,
-		NAREG|NDREG,	RESC2,
+		NEEDS(NREG(A, 1), NREG(D, 1)),	RESC2,
 		"	clr.l A1\n	move.b AL,A1\n	fmove.w A1,A2\n", },
 
 /* (u)short -> (u)char */
@@ -212,14 +219,14 @@ struct optab table[] = {
 { SCONV,	INDREG,
 	SAREG|SNAME|SOREG,	TSHORT,
 	SDREG,			TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	fmove.w AL,A1\n", },
 
 /* ushort -> float/(l)double */
 { SCONV,	INDREG,
 	SAREG|SNAME|SOREG,	TUSHORT,
 	SAREG|SDREG,		TFP,
-		NAREG|NDREG|NDSL,	RESC2,
+		NADL,	RESC2,
 		"	move.w AL,A1\n	and.l #65535,A1\n"
 		"	fmove.l A1,A2\n", },
 
@@ -269,14 +276,14 @@ struct optab table[] = {
 { SCONV,	INDREG,
 	SAREG|SNAME|SOREG,	TINT,
 	SDREG,			TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	fmove.l AL,A1\n", },
 
 /* uint -> double */
 { SCONV,	INDREG,
 	SAREG,		TUNSIGNED,
 	SDREG,		TFLOAT|TDOUBLE,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	fmove.l AL,A1\n"
 		"	tst.l AL\n"
 		"	jge 1f\n"
@@ -308,7 +315,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SDREG,	TFLOAT,
 	SAREG,	TUNSIGNED,
-		NAREG|NDREG|NDSL,	RESC1,
+		NADL,	RESC1,
 		"Z2	fcmp.s #0x4f000000,A2\n"
 		"	fjge 2f\n"
 		"	fintrz.x A2,A2\n"
@@ -337,21 +344,21 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SDREG,	TDOUBLE,
 	SAREG,	TUCHAR,
-		NAREG|NDREG|NDSL,	RESC1,
+		NADL,	RESC1,
 		"	fintrz.x AL,A2\n	fmove.w A2,A1\n", },
 
 /* double -> ushort */
 { SCONV,	INAREG,
 	SDREG,	TDOUBLE,
 	SAREG,	TUSHORT,
-		NAREG|NDREG|NDSL,	RESC1,
+		NADL,	RESC1,
 		"	fintrz.x AL,A2\n	fmove.l A2,A1\n", },
 
 /* double -> unsigned */
 { SCONV,	INAREG,
 	SDREG,	TDOUBLE,
 	SAREG,	TUNSIGNED,
-		NAREG|NDREG|NDSL,	RESC1,
+		NADL,	RESC1,
 		"Z2	fcmp.d #0x41e0000000000000,A2\n"
 		"	fjge 2f\n"
 		"	fintrz.x A2,A2\n"
@@ -373,7 +380,7 @@ struct optab table[] = {
 { SCONV,	INDREG,
 	SDREG,	TLDOUBLE,
 	SDREG,	TDOUBLE,
-		NTEMP*2,	RLEFT,
+		NEEDS(NTEMP(1)),	RLEFT,
 		"	fmove.d AL,A1\n	fmove.d A1,AL\n", },
 
 /* assignment */
@@ -437,7 +444,7 @@ struct optab table[] = {
 { STASG,	INBREG|FOREFF,
 	SOREG|SNAME,	TANY,
 	SBREG,		TPTRTO|TANY,
-		NSPECIAL,	RDEST,
+		NEEDS(NEVER(D0),NEVER(D1),NEVER(A0),NEVER(A1)),	RDEST,
 		"ZQ", },
 /* 
  * Simple ops (add, sub, and, or, xor)
@@ -621,31 +628,31 @@ struct optab table[] = {
 { OPLTYPE,	INCREG,
 	SANY,			TANY,
 	SCREG|SCON|SOREG|SNAME,	TLL,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
 		"	move.l AL,A1\n	move.l UL,U1\n", },
 
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SAREG|SCON|SOREG|SNAME, TAREG,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	move.ZA AL,A1\n", },
 
 { OPLTYPE,	INBREG,
 	SANY,	TANY,
 	SBREG|SCON|SOREG|SNAME, TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	move.l AL,A1\n", },
 
 { OPLTYPE,	INDREG,
 	SANY,		TANY,
 	SNAME|SOREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	fmove.ZA AL,A1\n", },
 
 { OPLTYPE,	INDREG,
 	SANY,	TANY,
 	SDREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	fmove.x AL,A1\n", },
 
 /*
@@ -660,31 +667,31 @@ struct optab table[] = {
 { UMUL, INAREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TPOINT|TWORD,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	move.l AL,A1\n", },
 
 { UMUL, INBREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TPOINT|TWORD,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	move.l AL,A1\n", },
 
 { UMUL, INDREG,
 	SANY,	TPOINT|TFP,
 	SOREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	fmove.ZA AL,A1\n", },
 
 { UMUL, INAREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TSHORT|TUSHORT,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	move.w AL,A1\n", },
 
 { UMUL, INAREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	move.b AL,A1\n", },
 
 
@@ -724,13 +731,13 @@ struct optab table[] = {
 { MOD,	INAREG | FEATURE_LONGDIV,
 	SAREG,			TINT,
 	SAREG|SNAME|SOREG,	TINT,
-		NAREG*2,	RESC1,
+		NEEDS(NREG(A, 2)),	RESC1,
 		"	move.l AL,A2\n	divsl.l AR,A1:A2\n", },
 
 { MOD,	INAREG | FEATURE_LONGDIV,
 	SAREG,			TUNSIGNED,
 	SAREG|SNAME|SOREG,	TUNSIGNED,
-		NAREG*2,	RESC1,
+		NEEDS(NREG(A, 2)),	RESC1,
 		"	move.l AL,A2\n	divul.l AR,A1:A2\n", },
 
 { MUL,	INAREG | FEATURE_LONGDIV,
@@ -790,100 +797,100 @@ struct optab table[] = {
 { UCALL,	INAREG,
 	SCON,	TANY,
 	SAREG,	TAREG,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	ZC CL\n", },
 
 { CALL,		INAREG,
 	SCON,	TANY,
 	SAREG,	TAREG,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	ZC CL\nZB", },
 
 { UCALL,	INAREG,
 	SBREG,	TANY,
 	SAREG,	TAREG,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	jsr (AL)\n", },
 
 { CALL,		INAREG,
 	SBREG,	TANY,
 	SAREG,	TAREG,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	jsr (AL)\nZB", },
 
 /* long long both direct and indirect */
 { UCALL,	INCREG,
 	SCON,	TANY,
 	SCREG,	TLL,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
 		"	ZC CL\n", },
 
 { CALL,		INCREG,
 	SCON,	TANY,
 	SCREG,	TLL,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
 		"	ZC CL\nZB", },
 
 { UCALL,	INCREG,
 	SBREG,	TANY,
 	SCREG,	TLL,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
 		"	jsr (AL)\n", },
 
 { CALL,		INCREG,
 	SBREG,	TANY,
 	SCREG,	TLL,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
 		"	jsr (AL)\nZB", },
 
 /* floats both direct and indirect */
 { UCALL,	INDREG,
 	SCON,	TANY,
 	SDREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	ZC CL\n", },
 
 { CALL,		INDREG,
 	SCON,	TANY,
 	SDREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	ZC CL\nZB", },
 
 { UCALL,	INDREG,
 	SBREG,	TANY,
 	SDREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	jsr (AL)\n", },
 
 { CALL,		INDREG,
 	SBREG,	TANY,
 	SDREG,	TFP,
-		NDREG|NDSL,	RESC1,
+		XSL(D),	RESC1,
 		"	jsr (AL)\nZB", },
 
 /* pointers both direct and indirect */
 { UCALL,	INBREG,
 	SCON,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	ZC CL\n", },
 
 { CALL,		INBREG,
 	SCON,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	ZC CL\nZB", },
 
 { UCALL,	INBREG,
 	SBREG,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	jsr (AL)\n", },
 
 { CALL,		INBREG,
 	SBREG,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	jsr (AL)\nZB", },
 
 
@@ -891,25 +898,25 @@ struct optab table[] = {
 { USTCALL,	INBREG|FOREFF,
 	SCON,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"ZP	ZC CL\n", },
 
 { STCALL,	INBREG|FOREFF,
 	SCON,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"ZP	ZC CL\nZB", },
 
 { USTCALL,	INBREG|FOREFF,
 	SBREG,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"ZP	jsr (AL)\n", },
 
 { STCALL,		INBREG|FOREFF,
 	SBREG,	TANY,
 	SBREG,	TWORD|TPOINT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"ZP	jsr (AL)\nZB", },
 
 
@@ -955,7 +962,7 @@ struct optab table[] = {
 { STARG,	FOREFF,
 	SBREG,	TPTRTO|TSTRUCT,
 	SANY,	TSTRUCT,
-		NAREG|NBREG,	RNULL,
+		NEEDS(NREG(A, 1), NREG(B, 1)),	RNULL,
 		"ZS", },
 
 /*
@@ -1044,7 +1051,7 @@ struct optab table[] = {
 		"	jmp (AL)\n", },
 #endif
 
-# define DF(x) FORREW,SANY,TANY,SANY,TANY,REWRITE,x,""
+# define DF(x) FORREW,SANY,TANY,SANY,TANY,NEEDS(NREWRITE),x,""
 
 { UMUL, DF( UMUL ), },
 
@@ -1062,7 +1069,7 @@ struct optab table[] = {
 
 { OPANY, DF(BITYPE), },
 
-{ FREE, FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	"help; I'm in trouble\n" },
+{ FREE, FREE,	FREE,	FREE,	FREE,	FREE,	0,	FREE,	"help; I'm in trouble\n" },
 };
 
 int tablesize = sizeof(table)/sizeof(table[0]);
