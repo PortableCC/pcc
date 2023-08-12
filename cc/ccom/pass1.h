@@ -314,7 +314,7 @@ extern	P1ND
 	*tymerge(P1ND *, P1ND *),
 	*stref(P1ND *),
 #ifdef WORD_ADDRESSED
-	*offcon(OFFSZ, struct tdef *);
+	*offcon(OFFSZ, struct tdef *),
 #endif
 	*bcon(int),
 	*xbcon(CONSZ, struct symtab *, TWORD),
