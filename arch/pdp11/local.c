@@ -33,6 +33,12 @@
 #define NIL NULL
 #define fwalk p1fwalk
 #define nfree p1nfree
+#define	n_type	ptype
+#undef n_df
+#define	n_df pdf
+#undef n_ap
+#define	n_ap pss
+#define	sap sss
 #endif
 
 /*	this file contains code which is dependent on the target machine */

@@ -249,6 +249,8 @@ int COLORMAP(int c, int *r);
 #define	SARGSUB		(MAXSPECIAL+4)	/* arg pointer to array */
 #define	SARGINC		(MAXSPECIAL+5)	/* post-increment arg */
 
+#define	NEWNEED
+
 /* floating point definitions */
 #define	FDFLOAT
 #define	DEFAULT_FPI_DEFS { &fpi_ffloat, &fpi_dfloat, &fpi_dfloat }

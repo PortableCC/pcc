@@ -34,6 +34,12 @@
 #undef NIL
 #define NIL NULL
 #define	talloc p1alloc
+#define	sap sss
+#define	n_type ptype
+#undef	n_ap
+#define	n_ap pss
+#undef	n_df
+#define	n_df pdf
 #endif
 
 /*
