@@ -34,6 +34,14 @@
 #define	p1nfree nfree
 #define	p1fwalk fwalk
 #define	p1tcopy ccopy
+#else
+#define	n_type ptype
+#define	n_qual pqual
+#undef	n_ap
+#define	n_ap pss
+#undef	n_df
+#define	n_df pdf
+#define	sap sss
 #endif
 
 /*	this file contains code which is dependent on the target machine */

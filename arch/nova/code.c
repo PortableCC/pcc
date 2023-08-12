@@ -36,6 +36,13 @@
 #define p1fwalk fwalk
 #define p1tcopy ccopy
 #define p1listf listf
+#else
+#define	sap sss
+#define	n_type ptype
+#undef	n_ap
+#define	n_ap pss
+#undef	n_df
+#define	n_df pdf
 #endif
 
 /*
