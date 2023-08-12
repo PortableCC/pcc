@@ -42,6 +42,11 @@
 #define nfree p1nfree
 #define ccopy p1tcopy
 #define tfree p1tfree
+#define	sap sss
+#define	n_ap pss
+#define	n_type ptype
+#undef n_df
+#define n_df pdf
 #endif
 
 /*

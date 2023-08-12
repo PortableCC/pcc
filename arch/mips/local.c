@@ -39,6 +39,12 @@
 #define nfree p1nfree
 #define fwalk p1fwalk
 #define talloc p1alloc
+#define	n_type ptype
+#undef n_df
+#define	n_df pdf
+#define	n_ap pss
+#define	n_qual pqual
+#define	sap sss
 #endif
 
 #define IALLOC(sz) (isinlining ? permalloc(sz) : tmpalloc(sz))
