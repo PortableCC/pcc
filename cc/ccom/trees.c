@@ -158,7 +158,7 @@ int p1negrel[] = { NE, EQ, GT, GE, LT, LE, UGT, UGE, ULT, ULE };
 
 /* Have some defaults for most common targets */
 #ifndef WORD_ADDRESSED
-#define	offcon(o,t,d,ap) xbcon((o/SZCHAR), NULL, INTPTR)
+#define	offcon(o,td) xbcon((o/SZCHAR), NULL, INTPTR)
 #define	VBLOCK(p,b,t,d,a) buildtree(DIV, p, b)
 #define	MBLOCK(p,b,t,d,a) buildtree(MUL, p, b)
 #else
@@ -1183,11 +1183,11 @@ chkpun(P1ND *p)
 }
 
 static P1ND *
-offplus(P1ND *p, int off, TWORD t, TWORD q, union dimfun *d, struct ssdesc *ss)
+offplus(P1ND *p, int off, struct tdef *td)
 {
 	if (off != 0) {
-		p = block(PLUS, p, offcon(off, t, d, ss), t, d, ss);
-		p->n_qual = q;
+		p = block(PLUS, p, offcon(off, td), td->type, td->df, td->ss);
+		p->n_qual = td->qual;
 		p = optim(p);
 	}
 
@@ -1197,11 +1197,9 @@ offplus(P1ND *p, int off, TWORD t, TWORD q, union dimfun *d, struct ssdesc *ss)
 P1ND *
 stref(P1ND *p)
 {
+	struct tdef td[1];
 	P1ND *r;
-	struct ssdesc *ss;
 	struct attr *ap, *xap, *yap;
-	union dimfun *d;
-	TWORD t, q;
 	int dsc, fsz;
 	OFFSZ off;
 	struct symtab *s;
@@ -1225,11 +1223,8 @@ stref(P1ND *p)
 	if (!ISPTR(p->n_type))
 		p->n_type = PTR+UNIONTY;
 
-	t = INCREF(s->stype);
-	q = INCQAL(s->squal);
-	d = s->sdf;
+	incref(td, s->td);
 	ap = s->sap;
-	ss = s->sss;
 #ifdef GCC_COMPAT
 	if ((yap = attr_find(ap, GCC_ATYP_PACKED)) != NULL)
 		xap = yap;
@@ -1240,7 +1235,7 @@ stref(P1ND *p)
 	yap = NULL;
 #endif
 
-	p = makety(p, t, q, d, ss);
+	p = makety(p, td->type, td->qual, td->df, td->ss);
 
 	/* compute the offset to be added */
 
@@ -1249,12 +1244,12 @@ stref(P1ND *p)
 
 	if (dsc & FIELD) {
 		TWORD ftyp = s->stype;
-		int fal = talign(ftyp, ss);
+		int fal = talign(ftyp, s->sss);
 		fsz = dsc&FLDSIZ;
 		off = (off/fal)*fal;
-		p = offplus(p, off, t, q, d, ss);
-		p = block(FLD, p, NULL, ftyp, 0, ss);
-		p->n_qual = q;
+		p = offplus(p, off, td);
+		p = block(FLD, p, NULL, ftyp, 0, s->sss);
+		p->n_qual = td->qual;
 		p->n_rval = PKFIELD(fsz, s->soffset%fal);
 		/* make type int or some other signed type */
 		if (fsz < SZINT)
@@ -1266,7 +1261,7 @@ stref(P1ND *p)
 		if (ftyp != p->n_type)
 			p = makety(p, ftyp, 0, 0, 0);
 	} else {
-		p = offplus(p, off, t, q, d, ss);
+		p = offplus(p, off, td);
 #ifndef CAN_UNALIGN
 		/* if target cannot handle unaligned addresses, fix here */
 #endif
@@ -1349,7 +1344,7 @@ bpsize(P1ND *p)
 		sz = (int)tsize(t, s.sdf, p->pss);
 		p = buildtree(MUL, q, bcon(sz/SZCHAR));
 	} else
-		p = (offcon(psize(p), p->n_type, p->n_df, p->n_ap));
+		p = offcon(psize(p), p->n_td);
 	return p;
 }
 
@@ -1394,7 +1389,7 @@ convert(P1ND *p, int f)
 	while (ISARY(ty))
 		ty = DECREF(ty);
 
-	r = offcon(tsize(ty, s->n_df, s->pss), s->n_type, s->n_df, s->n_ap);
+	r = offcon(tsize(ty, s->n_df, s->pss), s->n_td);
 	ty = ty2;
 	rv = bcon(1);
 	df = s->n_df;
