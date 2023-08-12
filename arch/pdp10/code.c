@@ -32,9 +32,15 @@
 #ifdef LANG_CXX
 #define p1listf listf
 #define p1tfree tfree
+#define p1nfree nfree
 #else
 #define NODE P1ND
 #define talloc p1alloc
+#define	sap sss
+#define	n_ap pss
+#undef	n_df
+#define	n_df pdf
+#define	n_type ptype
 #endif
 
 /*
