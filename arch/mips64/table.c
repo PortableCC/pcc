@@ -47,6 +47,19 @@
 #define TSWORD TINT|TLONG
 #define TWORD TUWORD|TSWORD
 
+#define XSL(c)	NEEDS(NREG(c, 1), NSL(c))
+#define NAREG	NEEDS(NREG(A, 1))
+#define NBREG	NEEDS(NREG(B, 1))
+#define NCREG	NEEDS(NREG(C, 1))   
+#define NCA	NEEDS(NREG(A, 1), NREG(C, 1))
+#define NSCBC	NEEDS(NREG(C, 1), NLEFT(A0A1), NRES(F0))
+#define NSCCB	NEEDS(NREG(B, 1), NLEFT(F0), NRES(A0A1))
+#define NARL	NEEDS(NREG(A, 1), NSL(A), NSR(A))
+#define NBRL	NEEDS(NREG(B, 1), NSL(B), NSR(B))
+#define NBBL	NEEDS(NREG(A, 1), NREG(B, 1), NSL(B))
+#define NDIVB	NEEDS(NREG(B, 1), NLEFT(A0A1), NRIGHT(A2A3), NRES(V0V1))
+#define NSHB	NEEDS(NREG(B, 1), NLEFT(A0A1), NRIGHT(A2), NRES(V0V1))
+
 struct optab table[] = {
 /* First entry must be an empty entry */
 { -1, FOREFF, SANY, TANY, SANY, TANY, 0, 0, "", },
@@ -63,13 +76,13 @@ struct optab table[] = {
  *
  * For each deunsigned type, they look something like this:
  *
- * signed -> bigger signed      - nothing to do
- * unsigned -> bigger           - nothing to do
+ * signed -> bigger signed	- nothing to do
+ * unsigned -> bigger		- nothing to do
  *
- * signed -> bigger unsigned    - clear the top bits (of source type)
- * signed -> smaller signed     - sign-extend the bits (to dest type)
- * signed -> smaller unsigned   - clear the top bits (of dest type)
- * unsigned -> smaller signed   - sign-extend top bits (to dest type)
+ * signed -> bigger unsigned	- clear the top bits (of source type)
+ * signed -> smaller signed	- sign-extend the bits (to dest type)
+ * signed -> smaller unsigned	- clear the top bits (of dest type)
+ * unsigned -> smaller signed	- sign-extend top bits (to dest type)
  * unsigned -> smaller unsigned - clear the top bits (of dest type)
  *
  */
@@ -113,7 +126,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	TWORD|TSHORT|TUSHORT,
 	SAREG,	TCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsll A1,AL,24\n"
 		"	dsra A1,A1,24\n", },
 
@@ -121,14 +134,14 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	TWORD|TSHORT|TUSHORT,
 	SAREG,	TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	andi A1,AL,255\n", },
 
 /* (u)int to short */
 { SCONV,	INAREG,
 	SAREG,	TWORD,
 	SAREG,	TSHORT,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsll A1,AL,16\n"
 		"	dsra A1,A1,16\n", },
 
@@ -136,7 +149,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	TWORD,
 	SAREG,	TUSHORT,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	andi A1,AL,65535\n", },
 
 /* longlong casts below */
@@ -238,7 +251,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SCREG,	TFLOAT,
 	SAREG,	TWORD,
-		NCREG|NAREG,	RESC1,
+		NCA,	RESC1,
 		"	cvt.w.s A2,AL	# convert float to (u)int\n"
 		"	dmfc1 A1,A2\n"
 		"	nop\n", },
@@ -254,7 +267,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SAREG,	TWORD,
-		NCREG|NAREG,	RESC1,
+		NCA,	RESC1,
 		"	cvt.w.d A2,AL	# convert (l)double to (u)int\n"
 		"	dmfc1 A1,A2\n"
 		"	nop\n", },
@@ -268,25 +281,25 @@ struct optab table[] = {
 { SCONV,	INCREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SCREG,	TFLOAT,
-		NSPECIAL|NCREG,	RESC1,
+		NSCBC,	RESC1,
 		"ZF", },
 
 { SCONV,	INCREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SCREG,	TDOUBLE|TLDOUBLE,
-		NSPECIAL|NCREG,	RESC1,
+		NSCBC,	RESC1,
 		"ZF", },
 
 { SCONV,	INBREG,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SBREG,	TLONGLONG|TULONGLONG,
-		NSPECIAL|NBREG,		RESC1,
+		NSCCB,		RESC1,
 		"ZF", },
 
 { SCONV,	INBREG,
 	SCREG,	TFLOAT,
 	SBREG,	TLONGLONG|TULONGLONG,
-		NSPECIAL|NBREG,		RESC1,
+		NSCCB,		RESC1,
 		"ZF", },
 
 /*
@@ -296,7 +309,7 @@ struct optab table[] = {
 { MUL,	INAREG,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	dmultu AL,AR	# unsigned multiply\n"
 		"	nop\n"
 		"	nop\n"
@@ -306,7 +319,7 @@ struct optab table[] = {
 { MUL,	INAREG,
 	SAREG,	TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
 	SAREG,	TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	dmult AL,AR	# signed multiply\n"
 		"	nop\n"
 		"	nop\n"
@@ -315,7 +328,7 @@ struct optab table[] = {
 { MUL,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SBREG,	TLONGLONG|TULONGLONG,
-		2*NBREG,	RESC1,
+		NEEDS(NREG(B, 2)),	RESC1,
 		"	dmultu AL,AR\n"
 		"	mfhi U1\n"
 		"	mflo A1\n"
@@ -345,7 +358,7 @@ struct optab table[] = {
 { DIV,	INAREG,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	ddivu AL,AR	# unsigned division\n"
 		"	mflo A1\n"
 		"	nop\n"
@@ -355,7 +368,7 @@ struct optab table[] = {
 { DIV,	INAREG,
 	SAREG,	TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
 	SAREG,	TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	ddiv AL,AR	# signed division\n"
 		"	mflo A1\n"
 		"	nop\n"
@@ -364,7 +377,7 @@ struct optab table[] = {
 { DIV, INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SBREG,	TLONGLONG|TULONGLONG,
-		NSPECIAL|NBREG,	RESC1,
+		NDIVB,	RESC1,
 		"ZE", },
 
 { DIV,	INCREG,
@@ -379,129 +392,129 @@ struct optab table[] = {
 		NCREG,	RESC1, 
 		"	div.d	A1,AL,AR	# double-floating-point division\n", },
 
-{ MOD,  INAREG,
-        SAREG,  TUWORD|TUSHORT|TUCHAR,
-        SAREG,  TUWORD|TUSHORT|TUCHAR,
-                NAREG,  RESC1,
-                "       ddivu AL,AR	# signed modulo\n"
+{ MOD,	INAREG,
+	SAREG,	TUWORD|TUSHORT|TUCHAR,
+	SAREG,	TUWORD|TUSHORT|TUCHAR,
+		NAREG,	RESC1,
+		"	ddivu AL,AR	# signed modulo\n"
 		"	mfhi A1\n"
 		"	nop\n"
 		"	nop\n", },
 
 /* the previous rule will match unsigned%unsigned first */
-{ MOD,  INAREG,
-        SAREG,  TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
-        SAREG,  TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
-                NAREG,  RESC1,
-                "	ddiv AL,AR	# signed modulo\n"
+{ MOD,	INAREG,
+	SAREG,	TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
+	SAREG,	TWORD|TUSHORT|TSHORT|TUCHAR|TCHAR,
+		NAREG,	RESC1,
+		"	ddiv AL,AR	# signed modulo\n"
 		"	mfhi A1\n"
 		"	nop\n"
 		"	nop\n", },
 
-{ MOD,  INBREG,
+{ MOD,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SBREG,	TLONGLONG|TULONGLONG,
-                NSPECIAL|NBREG,  RESC1,
-                "ZE", },
+		NDIVB,	RESC1,
+		"ZE", },
     
 /*
  * Templates for unsigned values needs to come before OPSIMP 
  */
 
-{ PLUS,	INBREG,
+{ PLUS, INBREG,
 	SBREG,	TULONGLONG|TLONGLONG,
 	SBREG,	TULONGLONG|TLONGLONG,
-		2*NBREG,	RESC1,
-      		"	daddu A1,AL,AR	# 64-bit addition\n"
-      		"	sltu A2,A1,AR\n"
-      		"	daddu U1,UL,UR\n"
-      		"	daddu U1,U1,A2\n", },
+		NEEDS(NREG(B, 2)),	RESC1,
+		"	daddu A1,AL,AR	# 64-bit addition\n"
+		"	sltu A2,A1,AR\n"
+		"	daddu U1,UL,UR\n"
+		"	daddu U1,U1,A2\n", },
 
-{ PLUS,	INAREG,
+{ PLUS, INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SSCON,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	addi A1,AL,AR\n", },
 
-{ PLUS,	INAREG,
+{ PLUS, INAREG,
 	SAREG,	TUWORD|TPOINT|TUSHORT|TUCHAR,
 	SSCON,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	daddiu A1,AL,AR\n", },
 
-{ PLUS,	INAREG,
+{ PLUS, INAREG,
 	SAREG,	TUWORD|TPOINT|TUSHORT|TUCHAR,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
-		NAREG|NASL,	RESC1,
-      		"	daddu A1,AL,AR\n", },
+		XSL(A), RESC1,
+		"	daddu A1,AL,AR\n", },
 
-{ PLUS,	INAREG,
+{ PLUS, INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SAREG,	TSWORD|TSHORT|TCHAR,
-		NAREG|NASL,	RESC1,
-      		"	dadd A1,AL,AR\n", },
+		XSL(A), RESC1,
+		"	dadd A1,AL,AR\n", },
 
-{ PLUS,	INCREG,
+{ PLUS, INCREG,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
-		NCREG|NCSL,	RESC1,
+		XSL(C), RESC1,
 		"	add.s A1,AL,AR\n", },
 
-{ PLUS,	INCREG,
+{ PLUS, INCREG,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TDOUBLE|TLDOUBLE,
-		NCREG|NCSL,	RESC1,
+		XSL(C), RESC1,
 		"	add.d A1,AL,AR\n", },
 
 { MINUS,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SBREG,	TLONGLONG|TULONGLONG,
-		2*NBREG,	RESC1,
-      		"	sltu A2,AL,AR	# 64-bit subtraction\n"
-      		"	dsubu A1,AL,AR\n"
-      		"	dsubu U1,UL,UR\n"
-      		"	dsubu U1,U1,A2\n", },
+		NEEDS(NREG(B, 2)),	RESC1,
+		"	sltu A2,AL,AR	# 64-bit subtraction\n"
+		"	dsubu A1,AL,AR\n"
+		"	dsubu U1,UL,UR\n"
+		"	dsubu U1,U1,A2\n", },
 
 { MINUS,	INAREG,
 	SAREG,	TUWORD|TPOINT|TUSHORT|TUCHAR,
 	SSCON,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsubu A1,AL,AR\n", },
 
 { MINUS,	INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SSCON,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsub A1,AL,AR\n", },
 
 { MINUS,	INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SAREG,	TSWORD|TSHORT|TCHAR,
-		NAREG|NASL,	RESC1,
-      		"	dsub A1,AL,AR\n", },
+		XSL(A), RESC1,
+		"	dsub A1,AL,AR\n", },
 
 { MINUS,	INCREG,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
-		NCREG|NCSL,	RESC1,
+		XSL(C), RESC1,
 		"	sub.s A1,AL,AR\n", },
 
 { MINUS,	INCREG,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TDOUBLE|TLDOUBLE,
-		NCREG|NCSL,	RESC1,
+		XSL(C), RESC1,
 		"	sub.d A1,AL,AR\n", },
 
 { UMINUS,	INAREG,
 	SAREG,	TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	neg A1,AL\n", },
 
 { UMINUS,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SANY,	TANY,
-		NBREG|NAREG|NBSL,	RESC2,
+		NBBL,	RESC2,
 		"	dsubu A1,$zero,AL\n"
 		"	dsubu U1,$zero,UL\n"
 		"	sltu A2,$zero,A1\n"
@@ -510,13 +523,13 @@ struct optab table[] = {
 { UMINUS,	INCREG,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
-		NCREG|NCSL,	RESC1,
+		XSL(C), RESC1,
 		"	neg.s A1,AL\n", },
 
 { UMINUS,	INCREG,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TDOUBLE|TLDOUBLE,
-		NCREG|NCSL,	RESC1,
+		XSL(C), RESC1,
 		"	neg.d A1,AL\n", },
 
 /* Simple 'op rd, rs, rt' or 'op rt, rs, imm' operations */
@@ -524,20 +537,20 @@ struct optab table[] = {
 { OPSIMP,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SBREG,	TLONGLONG|TULONGLONG,
-		NBREG|NBSR|NBSL,	RESC1,
-      		"	O A1,AL,AR\n"
-      		"	O U1,UL,UR\n", },
+		NBRL,	RESC1,
+		"	O A1,AL,AR\n"
+		"	O U1,UL,UR\n", },
     
 { OPSIMP,	INAREG,
 	SAREG,	TWORD|TPOINT|TSHORT|TUSHORT|TUCHAR|TCHAR,
 	SAREG,	TWORD|TPOINT|TSHORT|TUSHORT|TUCHAR|TCHAR,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	O A1,AL,AR\n", },
 
 { OPSIMP,	INAREG,
 	SAREG,	TWORD|TPOINT|TSHORT|TUSHORT|TUCHAR|TCHAR,
 	SPCON,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	Oi A1,AL,AR\n", },
 
 /*
@@ -547,38 +560,38 @@ struct optab table[] = {
 { RS,	INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SCON,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsra A1,AL,AR	# shift right by constant\n", },
 
 { RS,	INAREG,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
 	SCON,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsrl A1,AL,AR	# shift right by constant\n", },
 
 { LS,	INAREG,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SCON,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsll A1,AL,AR	# shift left by constant\n", },
     
 { RS,	INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsrav A1,AL,AR	# shift right by register\n", },
 
 { RS,	INAREG,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A), RESC1,
 		"	dsrlv A1,AL,AR	# shift right by register\n", },
 
 { LS,	INAREG,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
-		"	dsllv A1,AL,AR	# shift left by register\n", },	
+		XSL(A), RESC1,
+		"	dsllv A1,AL,AR	# shift left by register\n", }, 
 
 { RS,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
@@ -595,31 +608,31 @@ struct optab table[] = {
 { RS,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NSPECIAL|NBREG,	RESC1,
+		NSHB,	RESC1,
 		"ZE", },
 
 { LS,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NSPECIAL|NBREG,	RESC1,
+		NSHB,	RESC1,
 		"ZE", },
 
 /*
  * Rule for unary one's complement
  */
 
-{ COMPL,        INAREG,
-        SAREG,  TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SANY,   TANY,
-                NAREG|NASL,   RESC1,
-                "	nor A1,$zero,AL	# complement\n", },
+{ COMPL,	INAREG,
+	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SANY,	TANY,
+		XSL(A),	  RESC1,
+		"	nor A1,$zero,AL # complement\n", },
     
-{ COMPL,        INBREG,
+{ COMPL,	INBREG,
 	SBREG,	TLONGLONG|TULONGLONG,
-        SANY,   TANY,
-                NBREG|NBSL,   RESC1,
-                "	nor A1,$zero,AL	# complement\n"
-                "	nor U1,$zero,UL\n", },
+	SANY,	TANY,
+		XSL(B),	  RESC1,
+		"	nor A1,$zero,AL # complement\n"
+		"	nor U1,$zero,UL\n", },
     
 /*
  * The next rules takes care of assignments. "=".
@@ -636,46 +649,46 @@ struct optab table[] = {
 	SOREG|SNAME,	TSHORT|TUSHORT,
 	SAREG,		TSHORT|TUSHORT,
 		0,	RDEST,
-        	"	sh AR,AL		# store (u)short\n"
+		"	sh AR,AL		# store (u)short\n"
 		"	nop\n", },	
 
 { ASSIGN,	FOREFF|INAREG,
 	SOREG|SNAME,	TCHAR|TUCHAR,
 	SAREG,		TCHAR|TUCHAR,
 		0,	RDEST,
-        	"	sb AR,AL		# store (u)char\n"
+		"	sb AR,AL		# store (u)char\n"
 		"	nop\n", },	
 
 { ASSIGN,	FOREFF|INBREG,
 	SOREG|SNAME,	TLONGLONG|TULONGLONG,
 	SBREG,		TLONGLONG|TULONGLONG,
 		0,	RDEST,
-      		"	sd AR,AL		# store (u)longlong\n"
+		"	sd AR,AL		# store (u)longlong\n"
 		"	nop\n", },
 
 { ASSIGN,	FOREFF|INBREG,
 	SBREG,		TLONGLONG|TULONGLONG,
 	SBREG,		TLONGLONG|TULONGLONG,
 		0,	RDEST,
-      		"	move AL,AR		# register move\n", },
+		"	move AL,AR		# register move\n", },
     
 { ASSIGN,	FOREFF|INAREG,
 	SAREG,	TANY,
 	SAREG,	TANY,
 		0,	RDEST,
-        	"	move AL,AR		# register move\n", },
+		"	move AL,AR		# register move\n", },
 
 { ASSIGN,	FOREFF|INCREG,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
 		0,	RDEST,
-        	"	mov.s AL,AR		# register move\n", },
+		"	mov.s AL,AR		# register move\n", },
 
 { ASSIGN,	FOREFF|INCREG,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TDOUBLE|TLDOUBLE,
 		0,	RDEST,
-        	"	mov.d AL,AR		# register move\n", },
+		"	mov.d AL,AR		# register move\n", },
 
 { ASSIGN,	FOREFF|INCREG,
 	SNAME|SOREG,	TFLOAT,
@@ -694,7 +707,7 @@ struct optab table[] = {
 { ASSIGN,	FOREFF|INAREG,
 	SFLD,		TANY,
 	SOREG|SNAME,	TANY,
-		3*NAREG,	RDEST,
+		NEEDS(NREG(A, 3)),	RDEST,
 		"	ld A1,AR		# bit-field assignment\n"
 		"	dli A3,M\n"
 		"	ld A2,AL\n"
@@ -713,7 +726,7 @@ struct optab table[] = {
 { ASSIGN,	FOREFF|INAREG,
 	SFLD,		TANY,
 	SCON,		TANY,
-		3*NAREG,	RDEST,
+		NEEDS(NREG(A, 3)),	RDEST,
 		"	dli A1,AR		# bit-field assignment\n"
 		"	ld A2,AL\n"
 		"	dli A3,M\n"
@@ -730,7 +743,7 @@ struct optab table[] = {
 { ASSIGN,	FOREFF|INAREG,
 	SFLD,		TANY,
 	SAREG,		TANY,
-		3*NAREG,	RDEST,
+		NEEDS(NREG(A, 3)),	RDEST,
 		"	move A1,AR		# bit-field assignment\n"
 		"	ld A2,AL\n"
 		"	dli A3,M\n"
@@ -744,51 +757,51 @@ struct optab table[] = {
 		"F	dsll AD,AD,32-S\n"
 		"F	dsra AD,AD,32-S\n", },
 
-{ STASG,        INAREG|FOREFF,
-        SOREG|SNAME,	TANY,
-        SAREG,  	TPTRTO|TANY,
-                NSPECIAL,       RDEST,
-                "ZQ", },
+{ STASG,	INAREG|FOREFF,
+	SOREG|SNAME,	TANY,
+	SAREG,		TPTRTO|TANY,
+		NEEDS(NEVER(A0), NRIGHT(A1), NEVER(A2)),       RDEST,
+		"ZQ", },
 
 /*
  * Compare instructions
  */
 
 { EQ,	FORCC,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-                0,      RESCC,
-                "	beq AL,AR,LC\n"
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+		0,	RESCC,
+		"	beq AL,AR,LC\n"
 		"	nop\n", },
 
 { NE,	FORCC,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-                0,      RESCC,
-                "	bne AL,AR,LC\n"
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+		0,	RESCC,
+		"	bne AL,AR,LC\n"
 		"	nop\n", },
 
 { OPLOG,	FORCC,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SZERO,		TANY,
-                0,      RESCC,
-                "	O AL,LC\n"
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SZERO,		TANY,
+		0,	RESCC,
+		"	O AL,LC\n"
 		"	nop\n", },
 
 { OPLOG,	FORCC,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-                NAREG|NASL,     RESCC,
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+		XSL(A),	    RESCC,
 		"	dsub A1,AL,AR\n"
-                "	O A1,LC\n"
+		"	O A1,LC\n"
 		"	nop\n", },
 
 { OPLOG,	FORCC,
-        SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SSCON,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
-                NAREG|NASL,     RESCC,
+	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SSCON,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
+		XSL(A),	    RESCC,
 		"	dsub A1,AL,AR\n"
-                "	O A1,LC\n"
+		"	O A1,LC\n"
 		"	nop\n", },
 
 { OPLOG,	FORCC,
@@ -847,7 +860,7 @@ struct optab table[] = {
 	SOREG|SNAME,	TLONGLONG|TULONGLONG,
 		NBREG,	RESC1,
 		"	ld A1,AL	# load (u)longlong to reg\n"
-      		"	nop\n", },
+		"	nop\n", },
 
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
@@ -917,7 +930,7 @@ struct optab table[] = {
 /*
  * Jumps.
  */
-{ GOTO, 	FOREFF,
+{ GOTO,		FOREFF,
 	SCON,	TANY,
 	SANY,	TANY,
 		0,	RNOP,
@@ -929,212 +942,212 @@ struct optab table[] = {
  * Subroutine calls.
  */
 
-{ CALL,         FOREFF,
-        SCON,		TANY,
-        SANY,           TANY,
-                0,      0,
-                "	dsubu $sp,$sp,32	# call (args, no result) to scon/sname\n"
-                "	jal CL\n"
-		"	nop\n"
-		"ZC", },
-
-{ UCALL,        FOREFF,
-        SCON,		TANY,
-        SANY,           TANY,
-                0,      0,
-                "	jal CL		# call (no args, no result) to scon/sname\n"
-		"	nop\n", },
-
-{ CALL,         INAREG,
-        SCON,		TANY,
-        SAREG,          TANY,
-                NAREG,     RESC1,  /* should be 0 */
-                "	dsubu $sp,$sp,32	# call (args, result in v0) to scon/sname\n"
+{ CALL,		FOREFF,
+	SCON,		TANY,
+	SANY,		TANY,
+		0,	0,
+		"	dsubu $sp,$sp,32	# call (args, no result) to scon/sname\n"
 		"	jal CL\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        INAREG,
-        SCON,		TANY,
-        SAREG,          TANY,
-                NAREG,     RESC1,  /* should be 0 */
-                "	jal CL   # call (no args, result in v0) to scon/sname\n"
-		"	nop\n",
- },
+{ UCALL,	FOREFF,
+	SCON,		TANY,
+	SANY,		TANY,
+		0,	0,
+		"	jal CL		# call (no args, no result) to scon/sname\n"
+		"	nop\n", },
 
-{ CALL,         INBREG,
-        SCON,		TANY,
-        SBREG,          TANY,
-                NBREG,     RESC1,  /* should be 0 */
-                "	dsubu $sp,$sp,32	# call (args, result in v0:v1) to scon/sname\n"
+{ CALL,		INAREG,
+	SCON,		TANY,
+	SAREG,		TANY,
+		NAREG,	   RESC1,  /* should be 0 */
+		"	dsubu $sp,$sp,32	# call (args, result in v0) to scon/sname\n"
 		"	jal CL\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        INBREG,
-        SCON,		TANY,
-        SBREG,          TANY,
-                NBREG,     RESC1,  /* should be 0 */
-                "	jal CL   # call (no args, result in v0:v1) to scon/sname\n"
+{ UCALL,	INAREG,
+	SCON,		TANY,
+	SAREG,		TANY,
+		NAREG,	   RESC1,  /* should be 0 */
+		"	jal CL	 # call (no args, result in v0) to scon/sname\n"
 		"	nop\n",
  },
 
-{ CALL,         INCREG,
-        SCON,		TANY,
-        SCREG,          TANY,
-                NCREG,     RESC1,  /* should be 0 */
-                "	dsubu $sp,$sp,32	# call (args, result in f0:f1) to scon/sname\n"
+{ CALL,		INBREG,
+	SCON,		TANY,
+	SBREG,		TANY,
+		NBREG,	   RESC1,  /* should be 0 */
+		"	dsubu $sp,$sp,32	# call (args, result in v0:v1) to scon/sname\n"
 		"	jal CL\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        INCREG,
-        SCON,		TANY,
-        SCREG,          TANY,
-                NCREG,     RESC1,  /* should be 0 */
-                "	jal CL   # call (no args, result in v0:v1) to scon/sname\n"
+{ UCALL,	INBREG,
+	SCON,		TANY,
+	SBREG,		TANY,
+		NBREG,	   RESC1,  /* should be 0 */
+		"	jal CL	 # call (no args, result in v0:v1) to scon/sname\n"
 		"	nop\n",
  },
 
-{ CALL,         FOREFF,
-        SAREG,		TANY,
-        SANY,		TANY,
-                0,      0,
-                "	dsubu $sp,$sp,32	# call (args, no result) to reg\n"
-		"	move $25,AL\n"
-                "	jal $25\n"
+{ CALL,		INCREG,
+	SCON,		TANY,
+	SCREG,		TANY,
+		NCREG,	   RESC1,  /* should be 0 */
+		"	dsubu $sp,$sp,32	# call (args, result in f0:f1) to scon/sname\n"
+		"	jal CL\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        FOREFF,
-        SAREG,		TANY,
-        SANY,		TANY,
-                0,      0,
+{ UCALL,	INCREG,
+	SCON,		TANY,
+	SCREG,		TANY,
+		NCREG,	   RESC1,  /* should be 0 */
+		"	jal CL	 # call (no args, result in v0:v1) to scon/sname\n"
+		"	nop\n",
+ },
+
+{ CALL,		FOREFF,
+	SAREG,		TANY,
+	SANY,		TANY,
+		0,	0,
+		"	dsubu $sp,$sp,32	# call (args, no result) to reg\n"
 		"	move $25,AL\n"
-                "	jal $25			# call (no args, no result) to reg\n"
+		"	jal $25\n"
+		"	nop\n"
+		"ZC", },
+
+{ UCALL,	FOREFF,
+	SAREG,		TANY,
+	SANY,		TANY,
+		0,	0,
+		"	move $25,AL\n"
+		"	jal $25			# call (no args, no result) to reg\n"
 		"	nop\n", },
 
-{ CALL,         INAREG,
-        SAREG,		TANY,
-        SAREG,		TANY,
-                NAREG,     RESC1,  /* should be 0 */
-                "	dsubu $sp,$sp,32	# call (args, result) to reg\n"
+{ CALL,		INAREG,
+	SAREG,		TANY,
+	SAREG,		TANY,
+		NAREG,	   RESC1,  /* should be 0 */
+		"	dsubu $sp,$sp,32	# call (args, result) to reg\n"
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        INAREG,
-        SAREG,		TANY,
-        SAREG,		TANY,
-                NAREG,     RESC1,  /* should be 0 */
+{ UCALL,	INAREG,
+	SAREG,		TANY,
+	SAREG,		TANY,
+		NAREG,	   RESC1,  /* should be 0 */
 		"	move $25,AL\n"
-                "	jal $25		# call (no args, result) to reg\n"
+		"	jal $25		# call (no args, result) to reg\n"
 		"	nop\n", },
 
-{ CALL,         INBREG,
-        SAREG,		TANY,
-        SBREG,		TANY,
-                NBREG,     RESC1,  /* should be 0 */
-                "	dsubu $sp,$sp,32	# call (args, result) to reg\n"
+{ CALL,		INBREG,
+	SAREG,		TANY,
+	SBREG,		TANY,
+		NBREG,	   RESC1,  /* should be 0 */
+		"	dsubu $sp,$sp,32	# call (args, result) to reg\n"
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        INBREG,
-        SAREG,		TANY,
-        SBREG,		TANY,
-                NBREG,     RESC1,  /* should be 0 */
+{ UCALL,	INBREG,
+	SAREG,		TANY,
+	SBREG,		TANY,
+		NBREG,	   RESC1,  /* should be 0 */
 		"	move $25,AL\n"
-                "	jal $25			# call (no args, result) to reg\n"
+		"	jal $25			# call (no args, result) to reg\n"
 		"	nop\n", },
 
-{ CALL,         INCREG,
-        SAREG,		TANY,
-        SCREG,		TANY,
-                NCREG,     RESC1,  /* should be 0 */
-                "	dsubu $sp,$sp,32	# call (args, result) to reg\n"
+{ CALL,		INCREG,
+	SAREG,		TANY,
+	SCREG,		TANY,
+		NCREG,	   RESC1,  /* should be 0 */
+		"	dsubu $sp,$sp,32	# call (args, result) to reg\n"
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n"
 		"ZC", },
 
-{ UCALL,        INCREG,
-        SCREG,		TANY,
-        SCREG,		TANY,
-                NCREG,     RESC1,  /* should be 0 */
+{ UCALL,	INCREG,
+	SCREG,		TANY,
+	SCREG,		TANY,
+		NCREG,	   RESC1,  /* should be 0 */
 		"	move $25,AL\n"
-                "	jal $25			# call (no args, result) to reg\n"
+		"	jal $25			# call (no args, result) to reg\n"
 		"	nop\n", },
 
 
 /* struct return */
-{ USTCALL,      FOREFF,
+{ USTCALL,	FOREFF,
 	SCON|SNAME,	TANY,
-	SANY,   	TANY,
+	SANY,		TANY,
 		0,	0,
 		"	jal CL\n"
 		"	nop\n", },
 
-{ USTCALL,      FOREFF,
+{ USTCALL,	FOREFF,
 	SAREG,		TANY,
-	SANY,   	TANY,
+	SANY,		TANY,
 		0,	0,
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n", },
 
-{ USTCALL,      INAREG,
+{ USTCALL,	INAREG,
 	SCON|SNAME,	TANY,
-	SANY,   	TANY,
-		NAREG|NASL,	RESC1,
+	SANY,		TANY,
+		XSL(A), RESC1,
 		"	jal CL\n"
 		"	nop\n", },
 
-{ USTCALL,      INAREG,
+{ USTCALL,	INAREG,
 	SAREG,		TANY,
-	SANY,   	TANY,
-		NAREG|NASL,	RESC1,
+	SANY,		TANY,
+		XSL(A), RESC1,
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n", },
 
 { STCALL,      FOREFF,
 	SCON|SNAME,	TANY,
-	SANY,   	TANY,
+	SANY,		TANY,
 		0,	0,
-                "	dsubu $sp,$sp,32\n"
+		"	dsubu $sp,$sp,32\n"
 		"	jal CL\n"
 		"	nop\n"
 		"ZC", },
 
 { STCALL,      FOREFF,
 	SAREG,	TANY,
-	SANY,   	TANY,
+	SANY,		TANY,
 		0,	0,
-                "	dsubu $sp,$sp,32\n"
+		"	dsubu $sp,$sp,32\n"
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n"
 		"ZC", },
 
 { STCALL,      INAREG,
 	SCON|SNAME,	TANY,
-	SANY,   	TANY,
-		NAREG|NASL,	RESC1,
-                "	dsubu $sp,$sp,32\n"
+	SANY,		TANY,
+		XSL(A), RESC1,
+		"	dsubu $sp,$sp,32\n"
 		"	jal CL\n"
 		"	nop\n"
 		"ZC", },
 
 { STCALL,      INAREG,
 	SAREG,	TANY,
-	SANY,   	TANY,
+	SANY,		TANY,
 		0,	0,
-                "	dsubu $sp,$sp,32\n"
+		"	dsubu $sp,$sp,32\n"
 		"	move $25,AL\n"
-                "	jal $25\n"
+		"	jal $25\n"
 		"	nop\n"
 		"ZC", },
 
@@ -1144,11 +1157,11 @@ struct optab table[] = {
  */
 
 /* intentionally write out the register for (u)short/(u)char */
-{ FUNARG,       FOREFF,
-        SAREG,  TWORD|TPOINT|TUSHORT|TSHORT|TUCHAR|TCHAR,
-        SANY,   TWORD|TPOINT|TUSHORT|TSHORT|TUCHAR|TCHAR,
-                0,      0,
-                "	dsubu $sp,$sp,8		# save function arg to stack\n"
+{ FUNARG,	FOREFF,
+	SAREG,	TWORD|TPOINT|TUSHORT|TSHORT|TUCHAR|TCHAR,
+	SANY,	TWORD|TPOINT|TUSHORT|TSHORT|TUCHAR|TCHAR,
+		0,	0,
+		"	dsubu $sp,$sp,8		# save function arg to stack\n"
 		"	sd AL,($sp)\n"
 		"	#nop\n", },
 
@@ -1179,7 +1192,7 @@ struct optab table[] = {
 { STARG,	FOREFF,
 	SAREG,		TANY,
 	SANY,		TSTRUCT,
-		NSPECIAL,	0,
+		NEEDS(NEVER(A0), NLEFT(A1), NEVER(A2)), 0,
 		"ZH", },
 
 /*
@@ -1188,39 +1201,39 @@ struct optab table[] = {
 { UMUL, INAREG,
 	SANY,	TPOINT|TWORD,
 	SOREG,	TPOINT|TWORD,
-    		NAREG,     RESC1,
-        	"	ld A1,AL		# word load\n"
+		NAREG,	   RESC1,
+		"	ld A1,AL		# word load\n"
 		"	nop\n", },
 
 { UMUL, INAREG,
 	SANY,	TSHORT|TUSHORT,
 	SOREG,	TSHORT|TUSHORT,
-    		NAREG,     RESC1,
-        	"	lh A1,AL		# (u)short load\n"
+		NAREG,	   RESC1,
+		"	lh A1,AL		# (u)short load\n"
 		"	nop\n", },
 
 { UMUL, INAREG,
 	SANY,	TCHAR|TUCHAR,
 	SOREG,	TCHAR|TUCHAR,
-    		NAREG,     RESC1,
-        	"	lb A1,AL		# (u)char load\n"
+		NAREG,	   RESC1,
+		"	lb A1,AL		# (u)char load\n"
 		"	nop\n", },
 
-{ UMUL,	INBREG,
+{ UMUL, INBREG,
 	SANY,	TLONGLONG|TULONGLONG,
 	SOREG,	TLONGLONG|TULONGLONG,
 		NBREG,	RESC1,
 		"	ld A1,AL		# (u)longlong load - endian problem here?\n"
 		"	nop\n", },
 
-{ UMUL,	INCREG,
+{ UMUL, INCREG,
 	SANY,	TFLOAT,
 	SOREG,	TFLOAT,
 		NCREG,	RESC1,
 		"	l.s A1,AL		# float load\n"
 		"	nop\n", },
 
-{ UMUL,	INCREG,
+{ UMUL, INCREG,
 	SANY,	TDOUBLE|TLDOUBLE,
 	SOREG,	TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
@@ -1228,7 +1241,7 @@ struct optab table[] = {
 		"	nop\n", },
 
 #if 0
-{ UMUL,	INCREG,
+{ UMUL, INCREG,
 	SANY,	TDOUBLE|TLDOUBLE,
 	SAREG,	TPOINT,
 		NCREG,	RESC1,
@@ -1238,24 +1251,24 @@ struct optab table[] = {
 { UMUL, INAREG,
 	SANY,	TPOINT|TWORD,
 	SNAME,	TPOINT|TWORD,
-    		NAREG,     RESC1,
-        	"	dla A1,AL		# sname word load\n"
+		NAREG,	   RESC1,
+		"	dla A1,AL		# sname word load\n"
 		"	ld A1,(A1)\n"
 		"	nop\n", },
 
 { UMUL, INAREG,
 	SANY,	TSHORT|TUSHORT,
 	SNAME,	TSHORT|TUSHORT,
-    		NAREG,     RESC1,
-        	"	dla A1,AL		# sname (u)short load\n"
+		NAREG,	   RESC1,
+		"	dla A1,AL		# sname (u)short load\n"
 		"	lh A1,(A1)\n"
 		"	nop\n", },
 
 { UMUL, INAREG,
 	SANY,	TCHAR|TUCHAR,
 	SNAME,	TCHAR|TUCHAR,
-    		NAREG,     RESC1,
-        	"	dla A1,AL		# sname (u)char load\n"
+		NAREG,	   RESC1,
+		"	dla A1,AL		# sname (u)char load\n"
 		"	lb A1,(A1)\n"
 		"	nop\n", },
 
@@ -1271,23 +1284,23 @@ struct optab table[] = {
 { UMUL, INAREG,
 	SANY,	TPOINT|TWORD,
 	SAREG,	TPOINT|TWORD,
-    		NAREG,     RESC1,
-        	"	ld A1,(AL)		# word load\n"
+		NAREG,	   RESC1,
+		"	ld A1,(AL)		# word load\n"
 		"	nop\n", },
 
 #if 0
 { UMUL, INAREG,
 	SANY,	TSHORT|TUSHORT,
 	SAREG,	TPTRTO|TSHORT|TUSHORT,
-    		NAREG,     RESC1,
-        	"	lh A1,(AL)		# (u)short load\n"
+		NAREG,	   RESC1,
+		"	lh A1,(AL)		# (u)short load\n"
 		"	nop\n", },
 
 { UMUL, INAREG,
 	SANY,	TCHAR|TUCHAR,
 	SAREG,	TPTRTO|TCHAR|TUCHAR,
-    		NAREG|NASL,     RESC1,
-        	"	lb A1,(AL)		# (u)char load\n"
+		XSL(A),	    RESC1,
+		"	lb A1,(AL)		# (u)char load\n"
 		"	nop\n", },
 
 { UMUL, INBREG,
@@ -1298,11 +1311,11 @@ struct optab table[] = {
 		"	nop\n", },
 #endif
 
-#define DF(x) FORREW,SANY,TANY,SANY,TANY,REWRITE,x,""
+#define DF(x) FORREW,SANY,TANY,SANY,TANY,NEEDS(NREWRITE),x,""
 
 { FLD, DF(FLD), },
 
-{ FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	"help; I'm in trouble\n" },
+{ FREE, FREE,	FREE,	FREE,	FREE,	FREE,	0,	FREE,	"help; I'm in trouble\n" },
 };
 
 int tablesize = sizeof(table)/sizeof(table[0]);
