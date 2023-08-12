@@ -314,7 +314,7 @@ extern	P1ND
 	*tymerge(P1ND *, P1ND *),
 	*stref(P1ND *),
 #ifdef WORD_ADDRESSED
-	*offcon(OFFSZ, TWORD, union dimfun *, struct attr *),
+	*offcon(OFFSZ, struct tdef *);
 #endif
 	*bcon(int),
 	*xbcon(CONSZ, struct symtab *, TWORD),
@@ -480,6 +480,7 @@ void pr_oldstyle(struct symtab **as, int nparams);
 int pr_hasell(int);
 struct tdef *intdef(struct tdef *, TWORD);
 struct tdef *intdefq(TWORD);
+void incref(struct tdef *d, struct tdef *s);
 
 void p1walkf(P1ND *, void (*f)(P1ND *, void *), void *);
 void p1fwalk(P1ND *t, void (*f)(P1ND *, int, int *, int *), int down);

@@ -2423,6 +2423,15 @@ strmemb(struct ssdesc *ss)
 	return ss->sp;
 }
 
+void
+incref(struct tdef *d, struct tdef *s)
+{
+	d->type = INCREF(s->type);
+	d->qual = INCREF(s->qual);
+	d->df = s->df;
+	d->ss = s->ss;
+}
+
 /*
  * Allocations:
  *	permalloc() Never freed. in pass2.
