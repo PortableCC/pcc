@@ -129,27 +129,6 @@ setuni(NODE *p, int cookie)
 }
 
 /*
- * Special handling of some instruction register allocation.
- */
-struct rspecial *
-nspecial(struct optab *q)
-{
-	switch (q->op) {
-	case ASSIGN:
-		if (q->lshape == STARREG && q->rshape == SNAME) {
-			static struct rspecial s[] = {
-				{ NEVER, AC }, { NRES, AC }, { 0 }
-			};
-			return s;
-		}
-		break;
-	default:
-		comperr("nspecial entry %d", q - table);
-	}
-	return 0;
-}
-
-/*
  * Set evaluation order of a binary node if it differs from default.
  */
 int

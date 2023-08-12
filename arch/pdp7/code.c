@@ -34,6 +34,11 @@
 #else
 #define	NODE P1ND
 #define	talloc p1alloc
+#define	n_type ptype
+#undef	n_df
+#define	n_df pdf
+#undef	n_ap
+#define	n_ap pss
 #endif
 
 /*
