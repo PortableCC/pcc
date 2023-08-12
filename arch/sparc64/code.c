@@ -18,6 +18,21 @@
 
 #include "pass1.h"
 
+#ifdef LANG_CXX
+#else
+#undef NIL
+#define	NIL NULL
+#define	NODE P1ND
+#define	sap sss
+#define	n_type ptype
+#undef	n_df
+#define	n_df pdf
+#undef	n_ap
+#define	n_ap pss
+#endif
+
+int tlen(NODE *p);	/* XXX */
+
 /*
  * Print out assembler segment name.
  */
@@ -56,8 +71,7 @@ defloc(struct symtab *sp)
 
 	t = sp->stype;
 
-	if ((name = sp->soname) == NULL)
-		name = exname(sp->sname);
+	name = getexname(sp);
 
 	if (!ISFTN(t)) {
 		printf("\t.type %s,#object\n", name);
@@ -101,7 +115,7 @@ bfcode(struct symtab **sp, int cnt)
 	for (off = V9RESERVE; i < cnt; i++) {
 		sym = sp[i];
 		p = tempnode(0, sym->stype, sym->sdf, sym->sap);
-		off = ALIGN(off, (tlen(p) - 1));
+		off = SALIGN(off, (tlen(p) - 1));
 		sym->soffset = off * SZCHAR;
 		off += tlen(p);
 		p = buildtree(ASSIGN, p, nametree(sym));
@@ -149,7 +163,7 @@ moveargs(NODE *p, int *regp, int *stacksize)
 		/* We are storing the stack offset in n_rval. */
 		r = block(FUNARG, r, NIL, r->n_type, r->n_df, r->n_ap);
 		/* Make sure we are appropriately aligned. */
-		*stacksize = ALIGN(*stacksize, (tlen(r) - 1));
+		*stacksize = SALIGN(*stacksize, (tlen(r) - 1));
 		r->n_rval = *stacksize;
 		*stacksize += tlen(r);
 	} else if (r->n_op == STARG)
@@ -209,24 +223,24 @@ funcode(NODE *p)
 		stacksize = V9STEP(stacksize); /* 16-bit alignment. */
 
 		r = block(REG, NIL, NIL, INT, 0, 0);
-		r->n_lval = 0;
+		slval(r, 0);
 		r->n_rval = SP;
 		r = block(MINUS, r, bcon(stacksize), INT, 0, 0);
 
 		l = block(REG, NIL, NIL, INT, 0, 0);
-		l->n_lval = 0;
+		slval(l, 0);
 		l->n_rval = SP;
 		r = buildtree(ASSIGN, l, r);
 
 		p = buildtree(COMOP, r, p);
 
 		r = block(REG, NIL, NIL, INT, 0, 0);
-		r->n_lval = 0;
+		slval(r, 0);
 		r->n_rval = SP;
 		r = block(PLUS, r, bcon(stacksize), INT, 0, 0);
 
 		l = block(REG, NIL, NIL, INT, 0, 0);
-		l->n_lval = 0;
+		slval(l, 0);
 		l->n_rval = SP;
 		r = buildtree(ASSIGN, l, r);
 

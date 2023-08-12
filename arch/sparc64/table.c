@@ -22,6 +22,14 @@
 #define TU64   TULONG|TULONGLONG|TPOINT
 #define T64    TS64|TU64
 
+#define XSL(c)  NEEDS(NREG(c, 1), NSL(c))
+#define NAREG   NEEDS(NREG(A, 1))
+#define NBREG   NEEDS(NREG(B, 1))
+#define NCREG   NEEDS(NREG(C, 1))   
+#define NARL    NEEDS(NREG(A, 1), NSL(A), NSR(A))
+#define NBRL    NEEDS(NREG(B, 1), NSL(B), NSR(B))
+#define NCRL    NEEDS(NREG(C, 1), NSL(C), NSR(C))
+
 struct optab table[] = {
 
 { -1, FOREFF, SANY, TANY, SANY, TANY, 0, 0, "", },      /* empty */
@@ -37,13 +45,13 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	T64|TUNSIGNED,
 	SAREG,	TINT,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sra AL,0,A1	\t\t! (u)int64/32 -> (u)int32\n", },
 
 { SCONV,	INAREG,
 	SAREG,	T64|TINT|TUNSIGNED,
 	SAREG,	TSHORT,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sll AL,16,A1	\t\t! (u)int64/32 -> int16\n"
 		"	sra AL,16,A1\n"
 		"	sra AL, 0,A1\n", },
@@ -51,14 +59,14 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	T64|TINT|TUNSIGNED,
 	SAREG,	TUSHORT,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sll AL,16,A1	\t\t! (u)int64/32 -> uint16\n"
 		"	srl AL,16,A1\n", },
 
 { SCONV,	INAREG,
 	SAREG,	T64|TINT|TUNSIGNED|TSHORT|TUSHORT,
 	SAREG,	TCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sll AL,24,A1	\t\t! (u)int64/32/16 -> int8\n"
 		"	sra AL,24,A1\n"
 		"	sra AL, 0,A1\n", },
@@ -66,7 +74,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	T64|TINT|TUNSIGNED|TSHORT|TUSHORT,
 	SAREG,	TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	and AL,0xff,A1	\t\t! (u)int64/32/16 -> uint8\n", },
 
 { SCONV,	INAREG,
@@ -96,25 +104,25 @@ struct optab table[] = {
 { SCONV,	INBREG,
 	SBREG,	TINT|TUNSIGNED,
 	SBREG,	TFLOAT,
-		NBREG|NASL,	RESC1,
+		XSL(B),	RESC1,
 		"	fitos AL,A1         \t\t! (u)int32 -> float\n", },
 
 { SCONV,	INBREG,
 	SBREG,	T64,
 	SBREG,	TFLOAT,
-		NBREG|NASL,	RESC1,
+		XSL(B),	RESC1,
 		"	fxtos AL,A1         \t\t! (u)int64 -> float\n", },
 
 { SCONV,	INCREG,
 	SCREG,	TINT|TUNSIGNED,
 	SCREG,	TDOUBLE,
-		NCREG|NASL,	RESC1,
+		XSL(C),	RESC1,
 		"	fitod AL,A1         \t\t! (u)int32 -> double\n", },
 
 { SCONV,	INCREG,
 	SCREG,	T64,
 	SCREG,	TDOUBLE,
-		NCREG|NASL,	RESC1,
+		XSL(C),	RESC1,
 		"	fxtod AL,A1         \t\t! (u)int64 -> double\n", },
 
 
@@ -123,7 +131,7 @@ struct optab table[] = {
 { SCONV, 	INAREG,
 	SOREG, 	TFLOAT,
 	SAREG,	TINT,
-		NAREG|(2*NBREG),	RESC1,
+		NEEDS(NREG(A, 1), NREG(B, 2)), RESC1,
 		" 	ld [AL],A2    \t\t! float -> int32\n"
 		"	nop\n"
 		"	fmovs A2,A3\n"
@@ -138,7 +146,7 @@ struct optab table[] = {
 { SCONV, 	INAREG,
 	SOREG, 	TDOUBLE,
 	SAREG,	TINT,
-		NAREG|(2*NCREG),	RESC1,
+		NEEDS(NREG(A, 1), NREG(B, 2)), RESC1,
 		" 	ld [AL],A2    \t\t! double -> int32\n"
 		"	nop\n"
 		"	fmovd A2,A3\n"
@@ -193,7 +201,7 @@ struct optab table[] = {
 { SCONV,    INAREG,
 	SBREG,  TFLOAT,
 	SAREG,  TINT,
-		NAREG|NBREG,    RESC1,
+		NEEDS(NREG(A, 1), NREG(B, 1)), RESC1,
 		"	fstoi AL,A2     \t\t! float -> int\n"
 		"	st A2,[%fp+2047]\n"
 		"	nop\n"
@@ -203,7 +211,7 @@ struct optab table[] = {
 { SCONV,    INAREG,
 	SCREG,  TDOUBLE,
 	SAREG,  TINT,
-		NAREG|NCREG,    RESC1,
+		NEEDS(NREG(A, 1), NREG(C, 1)), RESC1,
 		"	fdtoi AL,A2     \t\t! double -> int\n"
 		"	st A2,[%fp+2047]\n"
 		"	nop\n"
@@ -216,43 +224,43 @@ struct optab table[] = {
 { MUL,	INAREG,
 	SAREG,	TANY,
 	SAREG,	TANY,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	mulx AL,AR,A1		! multiply\n", },
 
 { MUL,	INBREG,
 	SBREG,	TFLOAT,
 	SBREG,	TFLOAT,
-		NBREG|NBSR|NBSL,	RESC1,
+		NBRL,	RESC1,
 		"	fmuls AL,AR,A1		! multiply float\n", },
 
 { MUL,	INCREG,
 	SCREG,	TDOUBLE,
 	SCREG,	TDOUBLE,
-		NCREG|NCSR|NCSL,	RESC1,
+		NCRL,	RESC1,
 		"	fmuld AL,AR,A1		! multiply double\n", },
 
 { DIV,	INAREG,
 	SAREG,	TUNSIGNED|TUSHORT|TUCHAR|TU64,
 	SAREG,	TUNSIGNED|TUSHORT|TUCHAR|TU64,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	udivx AL,AR,A1		! unsigned division\n", },
 
 { DIV,	INAREG,
 	SAREG,	TINT|TSHORT|TCHAR|TS64,
 	SAREG,	TINT|TSHORT|TCHAR|TS64,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	sdivx AL,AR,A1		! signed division\n", },
 
 { DIV,	INBREG,
 	SBREG,	TFLOAT,
 	SBREG,	TFLOAT,
-		NBREG|NBSR|NBSL,	RESC1,
+		NBRL,	RESC1,
 		"	fdivs AL,AR,A1		! divide float\n", },
 
 { DIV,	INCREG,
 	SCREG,	TDOUBLE,
 	SCREG,	TDOUBLE,
-		NCREG|NCSR|NCSL,	RESC1,
+		NCRL,	RESC1,
 		"	fdivd AL,AR,A1		! divide double\n", },
 
 { MOD,	INAREG,
@@ -274,67 +282,67 @@ struct optab table[] = {
 { PLUS,	INAREG,
 	SAREG,	TANY,
 	SAREG,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
       		"	add AL,AR,A1\n", },
 
 { PLUS,	INBREG,
 	SBREG,	TFLOAT,
 	SBREG,	TFLOAT,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
       		"	fadds AL,AR,A1\n", },
 
 { PLUS,	INCREG,
 	SCREG,	TDOUBLE,
 	SCREG,	TDOUBLE,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
       		"	faddd AL,AR,A1\n", },
 
 { PLUS,	INAREG,
 	SAREG,	TANY,
 	SCON,	TANY,
-		(3*NAREG),	RESC1,
+		NEEDS(NREG(A, 3)),	RESC1,
 		"ZA", },
 
 { MINUS,	INAREG,
 	SAREG,	TANY,
 	SAREG,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sub AL,AR,A1\n", },
 
 { MINUS,	INBREG,
 	SBREG,	TANY,
 	SBREG,	TANY,
-		NBREG|NBSL|NBSR,	RESC1,
+		NBRL,	RESC1,
       		"	fsubs AL,AR,A1\n", },
 
 { MINUS,	INCREG,
 	SCREG,	TANY,
 	SCREG,	TANY,
-		NCREG|NCSL|NBSR,	RESC1,
+		NCRL,	RESC1,
       		"	fsubd AL,AR,A1\n", },
 
 { MINUS,	INAREG,
 	SAREG,	TANY,
 	SCON,	TANY,
-		(3*NAREG),	RESC1,
+		NEEDS(NREG(A, 3)),	RESC1,
 		"ZB", },
 
 { UMINUS,	INAREG,
 	SAREG,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sub %g0,AL,A1\n", },
 
 { UMINUS,	INBREG,
 	SBREG,	TANY,
 	SANY,	TANY,
-		NBREG|NBSL,	RESC1,
+		XSL(B),	RESC1,
 		"	fsubs %g0,AL,A1\n", },
 
 { UMINUS,	INCREG,
 	SCREG,	TANY,
 	SANY,	TANY,
-		NCREG|NCSL,	RESC1,
+		XSL(C),	RESC1,
 		"	fsubd %g0,AL,A1\n", },
 
 /* Shifts */
@@ -342,31 +350,31 @@ struct optab table[] = {
 { RS,	INAREG,
 	SAREG,	TINT|TUNSIGNED|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SAREG|SCON,	TINT|TUNSIGNED|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	srl AL,AR,A1			! shift right\n", },
 
 { RS,	INAREG,
 	SAREG,	T64,
 	SAREG|SCON,	T64|TINT|TUNSIGNED|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	srlx AL,AR,A1			! shift right\n", },
 
 { LS,	INAREG,
 	SAREG,	TINT|TUNSIGNED|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SAREG|SCON,	TINT|TUNSIGNED|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sll AL,AR,A1			! shift left\n", },
 
 { LS,	INAREG,
 	SAREG,	T64,
 	SAREG|SCON,	TINT|TUNSIGNED|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	sllx AL,AR,A1			! shift left\n", },
 
 { COMPL,	INAREG,
 	SAREG,	TANY,
 	SANY,	TANY,
-		NAREG|NASL,	RESC1,
+		XSL(A),	RESC1,
 		"	not AL,A1			! complement\n", },
 
 /* Assignments */
@@ -521,7 +529,7 @@ struct optab table[] = {
 { STASG,	INAREG|FOREFF,
 	SOREG|SNAME,	TANY,
 	SAREG,		TPTRTO|TANY,
-		NSPECIAL,	RDEST,
+		NEEDS(NEVER(O0), NRIGHT(O1), NEVER(O2)),	RDEST,
 		"ZQ", },
 
 /* Comparisons. */
@@ -552,7 +560,7 @@ struct optab table[] = {
 { OPLOG,	FORCC,
 	SAREG,	TANY,
 	SAREG,	TANY,
-		NAREG|NASL,	RESCC,
+		XSL(A),	RESCC,
 		"	sub AL,AR,A1			! oplog\n"
 		"	O A1,LC\n"
 		"	nop\n", },
@@ -560,7 +568,7 @@ struct optab table[] = {
 { OPLOG,	FORCC,
 	SAREG,	TANY,
 	SCCON,	TANY,
-		NAREG|NASL,	RESCC,
+		XSL(A),	RESCC,
 		"	sub AL,AR,A1			! oplog sccon\n"
 		"	O A1,LC\n"
 		"	nop\n", },
@@ -668,7 +676,7 @@ struct optab table[] = {
 { OPLTYPE,	INBREG,
 	SBREG,	TANY,
 	SNAME,	TANY,
-		NAREG|NBREG,	RESC2,
+		NEEDS(NREG(A, 1), NREG(B, 1)),	RESC2,
 		"	sethi %h44(AL),A1\t\t! load const to fp reg\n"
 		"	or A1,%m44(AL),A1\n"
 		"	sllx A1,12,A1\n"
@@ -678,7 +686,7 @@ struct optab table[] = {
 { OPLTYPE,	INCREG,
 	SCREG,	TANY,
 	SNAME,	TANY,
-		NAREG|NCREG,	RESC2,
+		NEEDS(NREG(A, 1), NREG(C, 1)),	RESC2,
 		"	sethi %h44(AL),A1\t\t! load const to fp reg\n"
 		"	or A1,%m44(AL),A1\n"
 		"	sllx A1,12,A1\n"
@@ -688,7 +696,7 @@ struct optab table[] = {
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SCON,	TANY,
-		(2*NAREG),	RESC1,
+		NEEDS(NREG(A, 2)),	RESC1,
 		"ZC" },
 
 /* Convert LTYPE to reg. */
@@ -898,7 +906,7 @@ struct optab table[] = {
 { OPSIMP,	INAREG,
 	SAREG,	TANY,
 	SAREG,	TANY,
-		NAREG|NASR|NASL,	RESC1,
+		NARL,	RESC1,
 		"	O AL,AR,A1\n", },
 
 { UMUL, INAREG,
@@ -958,7 +966,7 @@ struct optab table[] = {
 		"	ldd [AL],A1		! load double\n"
 		"	nop\n", },
 
-{ FREE,FREE,FREE,FREE,FREE,FREE,FREE,FREE, "ERR: printing free op\n" },
+{ FREE,FREE,FREE,FREE,FREE,FREE,0,FREE, "ERR: printing free op\n" },
 
 };
 

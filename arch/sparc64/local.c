@@ -18,6 +18,23 @@
 
 #include "pass1.h"
 
+#ifdef LANG_CXX
+#else
+#define	fwalk p1fwalk
+#define	nfree p1nfree
+#undef NIL
+#define NIL NULL
+#define NODE P1ND
+#define sap sss
+#define n_type ptype
+#define n_qual pqual
+#undef  n_df
+#define n_df pdf
+#undef  n_ap
+#define n_ap pss
+#endif
+
+
 NODE *
 clocal(NODE *p)
 {
@@ -46,7 +63,7 @@ clocal(NODE *p)
 			 * write out frame pointer offsets.
 			 */
 			l = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
-			l->n_lval = 0;
+			slval(l, 0);
 			l->n_rval = FP;
 			r = p;
 			p = stref(block(STREF, l, r, 0, 0, 0));
@@ -103,23 +120,17 @@ clocal(NODE *p)
 		}
 
 		switch (p->n_type) {
-		case BOOL:      l->n_lval = (l->n_lval != 0); break;
-		case CHAR:      l->n_lval = (char)l->n_lval; break;
-		case UCHAR:     l->n_lval = l->n_lval & 0377; break;
-		case SHORT:     l->n_lval = (short)l->n_lval; break;
-		case USHORT:    l->n_lval = l->n_lval & 0177777; break;
-		case UNSIGNED:  l->n_lval = l->n_lval & 0xffffffff; break;
-		case INT:       l->n_lval = (int)l->n_lval; break;
+		case BOOL:      slval(l, glval(l) != 0); break;
+		case CHAR:      slval(l, (char)glval(l)); break;
+		case UCHAR:     slval(l, glval(l) & 0377); break;
+		case SHORT:     slval(l, (short)glval(l)); break;
+		case USHORT:    slval(l, glval(l) & 0177777); break;
+		case UNSIGNED:  slval(l, glval(l) & 0xffffffff); break;
+		case INT:       slval(l, (int)glval(l)); break;
 		case ULONG:
-		case ULONGLONG: l->n_lval = l->n_lval; break;
+		case ULONGLONG: break;
 		case LONG:
-		case LONGLONG:	l->n_lval = (long long)l->n_lval; break;
-		case FLOAT:
-		case DOUBLE:
-		case LDOUBLE:
-			l->n_op = FCON;
-			l->n_dcon = l->n_lval;
-			break;
+		case LONGLONG:	slval(l,  (long long)glval(l)); break;
 		case VOID:
 			break;
 		default:
@@ -170,7 +181,7 @@ myp2tree(NODE *p)
 	ninval(0, tsize(p->n_type, p->n_df, p->n_ap), p);
 
 	p->n_op = NAME;
-	p->n_lval = 0;
+	slval(p, 0);
 	p->n_sp = sp;
 }
 
@@ -196,21 +207,7 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; int i; long long l; } u;
-
-	switch (p->n_type) {
-	case FLOAT:
-		u.f = (float)p->n_dcon;
-		printf("\t.long %d\n", u.i);
-		break;
-	case DOUBLE:
-		u.d = (double)p->n_dcon;
-		printf("\t.xword %lld\n", u.l);
-		break;
-	default:
-		return 0;
-	}
-	return 1;
+	return 0;
 }
 
 char *
@@ -249,8 +246,7 @@ defzero(struct symtab *sp)
 	int off;
 	char *name;
 
-	if ((name = sp->soname) == NULL)
-		name = exname(sp->sname);
+	name = getexname(sp);
 	off = tsize(sp->stype, sp->sdf, sp->sap);
 	SETOFF(off,SZCHAR);
 	off /= SZCHAR;

@@ -146,9 +146,9 @@ zzzcode(NODE * p, int c)
 
 	case 'A':	/* Add const. */
 		if (ISPTR(l->n_type) && l->n_rval == FP)
-			r->n_lval += V9BIAS;
+			setlval(r, getlval(r) + V9BIAS);
 
-		if (SIMM13(r->n_lval))
+		if (SIMM13(getlval(r)))
 			expand(p, 0, "\tadd AL,AR,A1\t\t! add const\n");
 		else
 			expand(p, 0, "\tsetx AR,A3,A2\t\t! add const\n"
@@ -156,9 +156,9 @@ zzzcode(NODE * p, int c)
 		break;
 	case 'B':	/* Subtract const. */
 		if (ISPTR(l->n_type) && l->n_rval == FP)
-			r->n_lval -= V9BIAS;
+			setlval(r, getlval(r) - V9BIAS);
 
-		if (SIMM13(r->n_lval))
+		if (SIMM13(getlval(r)))
 			expand(p, 0, "\tsub AL,AR,A1\t\t! subtract const\n");
 		else
 			expand(p, 0, "\tsetx AR,A3,A2\t\t! subtract const\n"
@@ -171,7 +171,7 @@ zzzcode(NODE * p, int c)
 				"\tor A1,%m44(AL),A1\n"
 				"\tsllx A1,12,A1\n"
 				"\tor A1,%l44(AL),A1\n");
-		else if (SIMM13(p->n_lval))
+		else if (SIMM13(getlval(p)))
 			expand(p, 0, "\tor %g0,AL,A1\t\t\t! load const\n");
 		else
 			expand(p, 0, "\tsetx AL,A2,A1\t\t! load const\n");
@@ -261,12 +261,12 @@ conput(FILE * fp, NODE * p)
 
 	if (p->n_name[0] != '\0') {
 		fprintf(fp, "%s", p->n_name);
-		if (p->n_lval > 0)
+		if (getlval(p) > 0)
 			fprintf(fp, "+");
-		if (p->n_lval)
-			fprintf(fp, CONFMT, p->n_lval);
+		if (getlval(p))
+			fprintf(fp, CONFMT, getlval(p));
 	} else
-		fprintf(fp, CONFMT, p->n_lval);
+		fprintf(fp, CONFMT, getlval(p));
 }
 
 void
@@ -294,7 +294,7 @@ adrput(FILE * io, NODE * p)
 	if (p->n_op == UMUL && p->n_right == 0)
 		p = p->n_left;
 
-	off = p->n_lval;
+	off = getlval(p);
 
 	switch (p->n_op) {
 	case NAME:

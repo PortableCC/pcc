@@ -37,7 +37,7 @@ offstar(NODE *p, int shape)
 		printf("offstar(%p)\n", p);
 
 	if (p->n_op == PLUS || p->n_op == MINUS) {
-		if (p->n_right->n_op == ICON && SIMM13(p->n_right->n_lval)) {
+		if (p->n_right->n_op == ICON && SIMM13(getlval(p->n_right))) {
 			if (isreg(p->n_left) == 0)
 				(void)geninsn(p->n_left, INAREG);
 			/* Converted in ormake() */
@@ -76,25 +76,6 @@ int
 setuni(NODE *p, int cookie)
 {
 	return 0;
-}
-
-struct rspecial *
-nspecial(struct optab *q)
-{
-	switch (q->op) {
-	case STASG: {
-		static struct rspecial s[] = {
-			{ NEVER, O0 },
-			{ NRIGHT, O1 },
-			{ NEVER, O2 },
-			{ 0 }
-		};
-		return s;
-	}
-	}
-
-	comperr("unknown nspecial %d: %s", q - table, q->cstring);
-	return 0; /* XXX */
 }
 
 int
