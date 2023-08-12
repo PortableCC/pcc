@@ -263,3 +263,10 @@ P1ND *builtin_ffs(const struct bitable *, P1ND *a);
 P1ND *builtin_ffsl(const struct bitable *, P1ND *a);
 P1ND *builtin_ffsll(const struct bitable *, P1ND *a);
 #undef P1ND
+
+#define	NEWNEED
+
+/* floating point definitions */
+#define FDFLOAT
+#define DEFAULT_FPI_DEFS { &fpi_ffloat, &fpi_dfloat, &fpi_dfloat }
+

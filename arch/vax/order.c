@@ -599,37 +599,6 @@ argsize( p ) register NODE *p; {
 #endif
 
 /*
- * Special handling of some instruction register allocation.
- */
-struct rspecial *
-nspecial(struct optab *q)
-{
-	switch (q->op) {
-	case STARG:
-	case STASG:
-		{
-		static struct rspecial s[] = {
-		    { NEVER, R0, }, { NEVER, R1, }, { NEVER, R2, },
-		    { NEVER, R3, }, { NEVER, R4, }, { NEVER, R5 }, { 0 } };
-		return s;
-		}
-	case MOD:
-	case MUL:
-	case DIV:
-		{
-		static struct rspecial s[] = {
-		    { NEVER, R0, }, { NEVER, R1, }, { NEVER, R2, },
-		    { NEVER, R3, }, { NEVER, R4, }, { NEVER, R5 },
-		    { NRES, XR0 }, { 0 }, };
-		return s;
-		}
-	default:
-		comperr("nspecial");
-		return NULL;
-	}
-}
-
-/*
  * Set evaluation order of a binary node if it differs from default.
  */
 int

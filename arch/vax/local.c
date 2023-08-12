@@ -41,6 +41,12 @@
 #define	NIL NULL
 #define	nfree p1nfree
 #define	fwalk p1fwalk
+#define sap sss
+#undef  n_df
+#define n_df pdf
+#undef  n_ap
+#define n_ap pss
+#define n_type ptype
 #endif
 
 static void r1arg(NODE *p, NODE *q);
@@ -50,7 +56,8 @@ static void r1arg(NODE *p, NODE *q);
 /*	this file contains code which is dependent on the target machine */
 
 NODE *
-clocal(p) NODE *p; {
+clocal(NODE *p)
+{
 
 	/* this is called to do local transformations on
 	   an expression tree preparitory to its being
@@ -265,7 +272,8 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 }
 
 char *
-exname( p ) char *p; {
+exname(char *p)
+{
 	/* make a name look like an external name in the local machine */
 	/* vad is elf now */
 	if (p == NULL)
@@ -337,27 +345,7 @@ defzero(struct symtab *sp)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; long double l; int i[3]; } u;
-
-	switch (p->n_type) {
-	case LDOUBLE:
-		u.i[2] = 0;
-		u.l = (long double)((FLT *)p->n_dcon)->fp;
-		printf("\t.long\t0x%x,0x%x,0x%x\n", u.i[0], u.i[1], u.i[2]);
-		break;
-	case DOUBLE:
-		u.d = (double)((FLT *)p->n_dcon)->fp;
-		printf("\t.long\t0x%x,0x%x\n", u.i[0], u.i[1]);
-		break;
-	case FLOAT:
-		u.f = (float)((FLT *)p->n_dcon)->fp;
-		printf("\t.long\t0x%x\n", u.i[0]);
-		break;
-	default:
-		return 0;
-	}
-	return 1;
-
+	return 0;
 }
 /*
  * Give target the opportunity of handling pragmas.
