@@ -2432,6 +2432,16 @@ incref(struct tdef *d, struct tdef *s)
 	d->ss = s->ss;
 }
 
+struct tdef *
+mkqtyp(TWORD t)
+{
+	static struct tdef td[1];
+
+	td->type = t;
+	return td;
+}
+struct tdef tdint[] = { { INT, 0, 0, 0 } };
+
 /*
  * Allocations:
  *	permalloc() Never freed. in pass2.

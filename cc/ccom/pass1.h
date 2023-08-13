@@ -226,6 +226,7 @@ extern	int retlab;
 extern	int doing_init, statinit;
 extern	short sztable[];
 extern	char *astypnames[];
+extern struct tdef tdint[];
 
 /* pragma globals */
 extern int pragma_allpacked, pragma_packed, pragma_aligned;
@@ -323,9 +324,9 @@ extern	P1ND
 	*pconvert(P1ND *),
 	*oconvert(P1ND *),
 	*ptmatch(P1ND *),
-	*makety(P1ND *, TWORD, TWORD, union dimfun *, struct ssdesc *),
+	*makety(P1ND *, struct tdef *),
 	*block(int, P1ND *, P1ND *, TWORD, union dimfun *, struct ssdesc *),
-	*blck(int, P1ND *, P1ND *, struct tdef *),
+	*blk(int, P1ND *, P1ND *, struct tdef *),
 	*doszof(P1ND *),
 	*p1alloc(void),
 	*optim(P1ND *),
@@ -481,6 +482,8 @@ int pr_hasell(int);
 struct tdef *intdef(struct tdef *, TWORD);
 struct tdef *intdefq(TWORD);
 void incref(struct tdef *d, struct tdef *s);
+struct tdef *mkqtyp(TWORD t);
+
 
 void p1walkf(P1ND *, void (*f)(P1ND *, void *), void *);
 void p1fwalk(P1ND *t, void (*f)(P1ND *, int, int *, int *), int down);

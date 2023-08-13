@@ -342,8 +342,7 @@ again:	o = p->n_op;
 		else if( LCON(p) && RCON(p) && conval( p->n_left, o, p->n_right ) ){
 			zapright:
 			nfree(p->n_right);
-			q = makety(p->n_left, p->n_type, p->n_qual,
-			    p->n_df, p->pss);
+			q = makety(p->n_left, p->n_td);
 			nfree(p);
 			p = clocal(q);
 			break;
@@ -384,7 +383,7 @@ again:	o = p->n_op;
 			RV(p) = i;
 			q = p->n_right;
 			if(tsize(q->n_type, q->n_df, q->pss) > SZINT)
-				p->n_right = makety(q, INT, 0, 0, 0);
+				p->n_right = makety(q, tdint);
 
 			break;
 		}

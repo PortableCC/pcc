@@ -210,7 +210,7 @@ buildtree(int o, P1ND *l, P1ND *r)
 			break;
 		}
 	} else if (o == NOT && l->n_op == FCON) {
-		l = clocal(block(SCONV, l, NULL, INT, 0, 0));
+		l = clocal(blk(SCONV, l, NULL, tdint));
 	} else if( o == UMINUS && l->n_op == FCON){
 			FLOAT_NEG(l->n_scon);
 			return(l);
@@ -411,7 +411,7 @@ runtime:
 #endif
 	/* its real; we must make a new node */
 
-	p = block(o, l, r, INT, 0, 0);
+	p = blk(o, l, r, tdint);
 
 	actions = opact(p);
 
@@ -548,14 +548,14 @@ runtime:
 		case LS:
 		case RS: /* must make type size at least int... */
 			if (p->n_type == CHAR || p->n_type == SHORT) {
-				p->n_left = makety(l, INT, 0, 0, 0);
+				p->n_left = makety(l, tdint);
 			} else if (p->n_type == UCHAR || p->n_type == USHORT) {
-				p->n_left = makety(l, UNSIGNED, 0, 0, 0);
+				p->n_left = makety(l, mkqtyp(UNSIGNED));
 			}
 			l = p->n_left;
 			*p->n_td = *l->n_td;
 			if (tsize(r->n_type, r->n_df, r->pss) > SZINT)
-				p->n_right = makety(r, INT, 0, 0, 0);
+				p->n_right = makety(r, tdint);
 			break;
 
 		case RETURN:
@@ -571,7 +571,7 @@ runtime:
 
 			r = buildtree(ADDROF, r, NULL);
 
-			l = block(STASG, l, r, r->n_type, r->n_df, r->pss);
+			l = blk(STASG, l, r, r->n_td);
 			l = clocal(l);
 
 			if( o == RETURN ){
@@ -587,11 +587,9 @@ runtime:
 
 		case QUEST: /* fixup types of : */
 			if (r->n_left->n_type != p->n_type)
-				r->n_left = makety(r->n_left, p->n_type,
-				    p->n_qual, p->n_df, p->pss);
+				r->n_left = makety(r->n_left, p->n_td);
 			if (r->n_right->n_type != p->n_type)
-				r->n_right = makety(r->n_right, p->n_type,
-				    p->n_qual, p->n_df, p->pss);
+				r->n_right = makety(r->n_right, p->n_td);
 			break;
 
 		case COLON:
@@ -632,7 +630,7 @@ runtime:
 
 	/* fixup type in bit-field assignment */
 	if (p->n_op == ASSIGN && l->n_op == FLD && UPKFSZ(l->n_rval) < SZINT)
-		p = makety(p, INT, 0, 0, 0);
+		p = makety(p, tdint);
 
 	/*
 	 * Allow (void)0 casts.
@@ -715,7 +713,7 @@ nametree(struct symtab *sp)
 {
 	P1ND *p;
 
-	p = block(NAME, NULL, NULL, sp->stype, sp->sdf, sp->sss);
+	p = blk(NAME, NULL, NULL, sp->td);
 	p->n_qual = sp->squal;
 	p->n_sp = sp;
 
@@ -766,7 +764,7 @@ cast(P1ND *p, TWORD t, TWORD u)
 {
 	P1ND *q;
 
-	q = block(NAME, NULL, NULL, t, 0, 0);
+	q = blk(NAME, NULL, NULL, mkqtyp(t));
 	q->n_qual = u;
 	q = buildtree(CAST, q, p);
 	p = q->n_right;
@@ -892,7 +890,7 @@ strargs(register P1ND *p)
 		}
 
 	if( p->n_type == STRTY || p->n_type == UNIONTY ){
-		p = block(STARG, p, NULL, p->n_type, p->n_df, p->pss);
+		p = blk(STARG, p, NULL, p->n_td);
 		p->n_left = buildtree( ADDROF, p->n_left, NULL );
 		p = clocal(p);
 		}
@@ -919,9 +917,9 @@ conval(P1ND *p, int o, P1ND *q)
 			td = INT;
 		u = ISUNSIGNED(td);
 		if (tl != td)
-			p = makety(p, td, 0, 0, 0);
+			p = makety(p, mkqtyp(td));
 		if (tr != td)
-			q = makety(q, td, 0, 0, 0);
+			q = makety(q, mkqtyp(td));
 	} else
 		u = ISUNSIGNED(tl) || ISUNSIGNED(tr);
 	if( u && (o==LE||o==LT||o==GE||o==GT)) o += (UGE-GE);
@@ -1186,8 +1184,7 @@ static P1ND *
 offplus(P1ND *p, int off, struct tdef *td)
 {
 	if (off != 0) {
-		p = block(PLUS, p, offcon(off, td), td->type, td->df, td->ss);
-		p->n_qual = td->qual;
+		p = blk(PLUS, p, offcon(off, td), td);
 		p = optim(p);
 	}
 
@@ -1235,7 +1232,7 @@ stref(P1ND *p)
 	yap = NULL;
 #endif
 
-	p = makety(p, td->type, td->qual, td->df, td->ss);
+	p = makety(p, td);
 
 	/* compute the offset to be added */
 
@@ -1259,7 +1256,7 @@ stref(P1ND *p)
 		else if (fsz > SZLONG && fsz < SZLONGLONG && ftyp < LONGLONG)
 			ftyp = LONGLONG;
 		if (ftyp != p->n_type)
-			p = makety(p, ftyp, 0, 0, 0);
+			p = makety(p, mkqtyp(ftyp));
 	} else {
 		p = offplus(p, off, td);
 #ifndef CAN_UNALIGN
@@ -1310,7 +1307,7 @@ xbcon(CONSZ val, struct symtab *sp, TWORD type)
 {
 	P1ND *p;
 
-	p = block(ICON, NULL, NULL, type, 0, 0);
+	p = blk(ICON, NULL, NULL, mkqtyp(type));
 	slval(p, val);
 	p->n_sp = sp;
 	return clocal(p);
@@ -1410,7 +1407,7 @@ convert(P1ND *p, int f)
 	 * XXX - complain?
 	 */
 	if (r->n_type != INTPTR)
-		r = clocal(makety(r, INTPTR, 0, 0, 0));
+		r = clocal(makety(r, mkqtyp(INTPTR)));
 	if (f == CVTL)
 		p->n_left = r;
 	else
@@ -1475,20 +1472,12 @@ oconvert(register P1ND *p)
 P1ND *
 ptmatch(P1ND *p)
 {
-	struct ssdesc *ss, *ss2;
-	union dimfun *d, *d2;
-	TWORD t1, t2, t, q1, q2, q;
+	struct tdef td[1], td1[1], td2[1];
 	int o;
 
 	o = p->n_op;
-	t = t1 = p->n_left->n_type;
-	q = q1 = p->n_left->n_qual;
-	t2 = p->n_right->n_type;
-	q2 = p->n_right->n_qual;
-	d = p->n_left->n_df;
-	d2 = p->n_right->n_df;
-	ss = p->n_left->pss;
-	ss2 = p->n_right->pss;
+	*td = *td1 = *p->n_left->n_td;
+	*td2 = *p->n_right->n_td;
 
 	switch( o ){
 
@@ -1497,9 +1486,9 @@ ptmatch(P1ND *p)
 		{  break; }
 
 	case CAST:
-		if (t == VOID) {
+		if (td->type == VOID) {
 			/* just paint over */
-			p->n_right = block(SCONV, p->n_right, NULL, VOID, 0, 0);
+			p->n_right = blk(SCONV, p->n_right, NULL, mkqtyp(VOID));
 			return p;
 		}
 		break;
@@ -1508,10 +1497,10 @@ ptmatch(P1ND *p)
 		int isdyn(struct symtab *sp);
 		struct symtab s1, s2;
 
-		s1.stype = DECREF(t);
-		s1.sdf = d;
-		s2.stype = DECREF(t2);
-		s2.sdf = d2;
+		s1.stype = DECREF(td->type);
+		s1.sdf = td->df;
+		s2.stype = DECREF(td2->type);
+		s2.sdf = td2->df;
 		if (isdyn(&s1) || isdyn(&s2))
 			; /* We don't know */
 		else if (psize(p->n_left) != psize(p->n_right))
@@ -1520,20 +1509,18 @@ ptmatch(P1ND *p)
 		}
 
 	case COLON:
-		if (t1 != t2) {
+		if (td1->type != td2->type) {
 			/*
 			 * Check for void pointer types. They are allowed
 			 * to cast to/from any pointers; 6.5.15 #6.
 			 * XXX qualified versions of void?
 			 */
-			if (ISPTR(t1) && ISPTR(t2)) {
-				if (BTYPE(t1) == VOID) {
-					t = t2;
-					d = d2;
-					ss = ss2;
+			if (ISPTR(td1->type) && ISPTR(td2->type)) {
+				if (BTYPE(td1->type) == VOID) {
+					*td = *td2;
 					break;
 				}
-				if (BTYPE(t2) == VOID)
+				if (BTYPE(td2->type) == VOID)
 					break;
 			}
 			uerror("illegal types in :");
@@ -1542,34 +1529,26 @@ ptmatch(P1ND *p)
 
 	default:  /* must work harder: relationals or comparisons */
 
-		if( !ISPTR(t1) ){
-			t = t2;
-			q = q2;
-			d = d2;
-			ss = ss2;
+		if( !ISPTR(td1->type) ){
+			*td = *td2;
 			break;
 			}
-		if( !ISPTR(t2) ){
+		if( !ISPTR(td2->type) ){
 			break;
 			}
 
 		/* both are pointers */
-		if( talign(t2,ss2) < talign(t,ss) ){
-			t = t2;
-			q = q2;
-			ss = ss2;
+		if( talign(td2->type, td2->ss) < talign(td->type, td->ss) ){
+			*td = *td2;
 			}
 		break;
 		}
 
-	p->n_left = makety( p->n_left, t, q, d, ss );
-	p->n_right = makety( p->n_right, t, q, d, ss );
+	p->n_left = makety( p->n_left, td);
+	p->n_right = makety( p->n_right, td);
 	if( o!=MINUS && !clogop(o) ){
 
-		p->n_type = t;
-		p->n_qual = q;
-		p->n_df = d;
-		p->pss = ss;
+		*p->n_td = *td;
 		}
 
 	return(clocal(p));
@@ -1617,7 +1596,7 @@ tymatch(P1ND *p)
 			p->n_right = buildtree(QUEST, p->n_right,
 			     buildtree(COLON, bcon(1), bcon(0)));
 		}
-		p->n_right = makety(p->n_right, l->n_type, 0, 0, 0);
+		p->n_right = makety(p->n_right, l->n_td);
 		t = p->n_type = l->n_type;
 		p->n_ap = l->n_ap;
 	} else {
@@ -1625,8 +1604,8 @@ tymatch(P1ND *p)
 		/* This depends on ctype() called early */
 		if (o != COLON && t < INT)
 			t = INT;
-		if (tl != t) p->n_left = makety(p->n_left, t, 0, 0, 0);
-		if (tr != t) p->n_right = makety(p->n_right, t, 0, 0, 0);
+		if (tl != t) p->n_left = makety(p->n_left, mkqtyp(t));
+		if (tr != t) p->n_right = makety(p->n_right, mkqtyp(t));
 		if (o == COLON && l->n_type == BOOL && r->n_type == BOOL)
 			t = p->n_type = BOOL;
 		else if (!clogop(o))
@@ -1651,29 +1630,27 @@ tymatch(P1ND *p)
  * make p into type t by inserting a conversion
  */
 P1ND *
-makety(P1ND *p, TWORD t, TWORD q, union dimfun *d, struct ssdesc *ss)
+makety(P1ND *p, struct tdef *td)
 {
 
-	if (t == p->n_type && t != FLOAT && t != DOUBLE) {
-		p->n_df = d;
-		p->pss = ss;
-		p->n_qual = q;
+	if (td->type == p->n_type && td->type != FLOAT && td->type != DOUBLE) {
+		*p->n_td = *td;
 		return(p);
 	}
 
-	if (ISITY(t) || ISCTY(t) || ISITY(p->n_type) || ISCTY(p->n_type))
+	if (ISITY(td->type) || ISCTY(td->type) ||
+	    ISITY(p->n_type) || ISCTY(p->n_type))
 		cerror("makety");
 
-	if (concast(p, t))
+	if (concast(p, td->type))
 		return clocal(p);
 
-	p = block(t & TMASK ? PCONV : SCONV, p, NULL, t, d, ss);
-	p->n_qual = q;
+	p = blk(td->type & TMASK ? PCONV : SCONV, p, NULL, td);
 	return clocal(p);
 }
 
-P1ND *
-blck(int o, P1ND *l, P1ND *r, struct tdef *td)
+P1ND *  
+blk(int o, P1ND *l, P1ND *r, struct tdef *td)
 {
 	register P1ND *p;
 
@@ -1683,7 +1660,6 @@ blck(int o, P1ND *l, P1ND *r, struct tdef *td)
 	slval(p, 0);
 	p->n_left = l;
 	p->n_right = r;
-
 	*p->n_td = *td;
 	p->n_ap = NULL;
 	return(p);
@@ -1692,20 +1668,13 @@ blck(int o, P1ND *l, P1ND *r, struct tdef *td)
 P1ND *
 block(int o, P1ND *l, P1ND *r, TWORD t, union dimfun *d, struct ssdesc *ss)
 {
-	register P1ND *p;
+	struct tdef td[1];
 
-	p = p1alloc();
-	p->n_rval = 0;
-	p->n_op = o;
-	slval(p, 0);
-	p->n_left = l;
-	p->n_right = r;
-	p->n_type = t;
-	p->n_qual = 0;
-	p->n_df = d;
-	p->pss = ss;
-	p->n_ap = NULL;
-	return(p);
+	td->type = t;
+	td->qual = 0;
+	td->df = d;
+	td->ss = ss;
+	return blk(o, l, r, td);
 }
 
 /*
@@ -1943,7 +1912,7 @@ tmpnod(int nr, struct tdef *td)
 {
 	P1ND *r;
 
-	r = blck(TEMP, NULL, NULL, td);
+	r = blk(TEMP, NULL, NULL, td);
 	regno(r) = nr ? nr : getn(td->type);
 	return r;
 }
@@ -2477,24 +2446,24 @@ rdualfld(P1ND *p, TWORD t, TWORD ct, int off, int fsz)
 		ctsz = SZINT;
 	}
 #endif
-	p = makety(p, PTR|ct, 0, 0, 0);
+	p = makety(p, mkqtyp(PTR|ct));
 	if (off + fsz <= ctsz) {
 		/* only one operation needed */
 		q = buildtree(UMUL, buildtree(PLUS, p, bcon(t2f)), 0);
-		q = makety(q, t, 0, 0, 0);
+		q = makety(q, mkqtyp(t));
 		ctsz = tsize(t, 0, 0);
 		q = buildtree(LS, q, bcon(ctsz-fsz-off));
 		q = buildtree(RS, q, bcon(ctsz-fsz));
 	} else {
 		q = buildtree(UMUL, buildtree(PLUS, p1tcopy(p), bcon(t2f)), 0);
-		q = makety(TYPRS(q, bcon(off), ct), t, 0, 0, 0);
+		q = makety(TYPRS(q, bcon(off), ct), mkqtyp(t));
 		inbits = ctsz - off;
 		t2f++;
 
 		while (fsz > inbits) {
 			r = buildtree(UMUL,
 			    buildtree(PLUS, p1tcopy(p), bcon(t2f)), 0);
-			r = makety(r, t, 0, 0, 0);
+			r = makety(r, mkqtyp(t));
 			r = TYPLS(r, bcon(inbits), t);
 			q = TYPOR(q, r, t);
 			inbits += ctsz;
@@ -2504,7 +2473,7 @@ rdualfld(P1ND *p, TWORD t, TWORD ct, int off, int fsz)
 		tsz = (int)tsize(t, 0, 0);
 		if (!ISUNSIGNED(t)) {
 			t = DEUNSIGN(t);
-			q = makety(q, t, 0, 0, 0);
+			q = makety(q, mkqtyp(t));
 		}
 		q = TYPLS(q, bcon(tsz-fsz), t);
 		q = TYPRS(q, bcon(tsz-fsz), t);
@@ -2530,7 +2499,7 @@ wrualfld(P1ND *val, P1ND *d, TWORD t, TWORD ct, int off, int fsz)
 	ctsz = (int)tsize(ct, 0, 0);
   
 	ct = ENUNSIGN(ct);
-	d = makety(d, PTR|ct, 0, 0, 0);
+	d = makety(d, mkqtyp(PTR|ct));
 
 	for (t2f = 0; off >= ctsz; t2f++, off -= ctsz)
 		;
@@ -2543,17 +2512,17 @@ wrualfld(P1ND *val, P1ND *d, TWORD t, TWORD ct, int off, int fsz)
 		p = p1tcopy(d); 
 		p = TYPAND(p, xbcon(~(SZMASK(fsz) << off), 0, ct), ct);
 
-		val = makety(val, ct, 0, 0, 0);
+		val = makety(val, mkqtyp(ct));
 		q = TYPAND(val, xbcon(SZMASK(fsz), 0, ct), ct);
 		q = buildtree(ASSIGN, p1tcopy(r), q);
 
 		q = TYPLS(q, bcon(off), ct);   
 		p = TYPOR(p, q, ct);
-		p = makety(p, t, 0, 0, 0);     
+		p = makety(p, mkqtyp(t));
 		rn = buildtree(ASSIGN, d, p);
-		rn = buildtree(COMOP, rn, makety(r, t, 0, 0, 0));
+		rn = buildtree(COMOP, rn, makety(r, mkqtyp(t)));
 	} else {
-		s = makety(p1tcopy(val), t, 0, 0, 0);
+		s = makety(p1tcopy(val), mkqtyp(t));
 		s = TYPAND(s, xbcon(SZMASK(fsz), 0, t), t);
 
 		r = buildtree(UMUL, buildtree(PLUS, p1tcopy(d), bcon(t2f)), 0);
@@ -2561,7 +2530,7 @@ wrualfld(P1ND *val, P1ND *d, TWORD t, TWORD ct, int off, int fsz)
 		p = TYPAND(p, xbcon(SZMASK(off), 0, ct), ct);
 		q = p1tcopy(val); 
 		q = TYPLS(q, bcon(off), t);  
-		q = makety(q, ct, 0, 0, 0);
+		q = makety(q, mkqtyp(ct));
 		p = TYPOR(p, q, ct);
 		rn = buildtree(ASSIGN, r, p);
 		inbits = ctsz - off;
@@ -2572,7 +2541,7 @@ wrualfld(P1ND *val, P1ND *d, TWORD t, TWORD ct, int off, int fsz)
 			    buildtree(PLUS, p1tcopy(d), bcon(t2f)), 0);
 			q = p1tcopy(val);
 			q = TYPRS(q, bcon(inbits), t);
-			q = makety(q, ct, 0, 0, 0);
+			q = makety(q, mkqtyp(ct));
 			rn = buildtree(COMOP, rn, buildtree(ASSIGN, r, q));
 			t2f++;
 			inbits += ctsz;
@@ -2581,10 +2550,10 @@ wrualfld(P1ND *val, P1ND *d, TWORD t, TWORD ct, int off, int fsz)
 		r = buildtree(UMUL, buildtree(PLUS, d, bcon(t2f)), 0);
 		p = p1tcopy(r);
 		p = TYPAND(p, makety(xbcon(~SZMASK(fsz-inbits), 0, ct),
-		    ct, 0, 0, 0), ct);
+		    mkqtyp(ct)), ct);
 		q = TYPRS(val, bcon(inbits), t);
 		q = TYPAND(q, xbcon(SZMASK(fsz-inbits), 0, t), t);
-		q = makety(q, ct, 0, 0, 0);
+		q = makety(q, mkqtyp(ct));
 		p = TYPOR(p, q, ct);
 		rn = buildtree(COMOP, rn, buildtree(ASSIGN, r, p));
 		rn = buildtree(COMOP, rn, s);
@@ -2632,9 +2601,9 @@ rmfldops(P1ND *p)
 #endif
 		q = rdualfld(q, t, ct, foff, fsz);
 		if (fsz < SZINT)
-			q = makety(q, INT, 0, 0, 0);
+			q = makety(q, tdint);
 		if (p->n_type != INT)
-			q = makety(q, p->n_type, 0, 0, 0);
+			q = makety(q, mkqtyp(p->n_type));
 		p->n_left = bt;
 		p->n_right = q;
 		p->n_op = COMOP;
@@ -2675,7 +2644,7 @@ rmfldops(P1ND *p)
 			t1 = tempnode(0, q->n_left->n_type, 0, 0);
 			r = buildtree(ASSIGN, p1tcopy(t1), q->n_left);
 			
-			bt = bt ? block(COMOP, bt, r, INT, 0, 0) : r;
+			bt = bt ? blk(COMOP, bt, r, tdint) : r;
 			q->n_left = t1;
 		}
 		t1 = buildtree(ADDROF, p->n_left->n_left, 0);
@@ -2685,7 +2654,7 @@ rmfldops(P1ND *p)
 		if (p->n_op == ASSIGN) {
 			q = wrualfld(t2, t1, t, ct, foff, fsz);
 			if (bt)
-				q = block(COMOP, bt, q, t, 0, 0);
+				q = blk(COMOP, bt, q, mkqtyp(t));
 			p1nfree(p->n_left);
 			p->n_left = bcon(0);
 			p->n_right = q;
@@ -3041,7 +3010,7 @@ deldcall(P1ND *p, int split)
 		if (split) {
 			q = cstknode(p->n_type, p->n_df, p->pss);
 			r = p1tcopy(q);
-			q = block(ASSIGN, q, p, p->n_type, p->n_df, p->pss);
+			q = blk(ASSIGN, q, p, p->n_td);
 			ecode(q);
 			return r;
 		}
@@ -3604,7 +3573,7 @@ p1listf(P1ND *p, void (*f)(P1ND *))
 P1ND *
 nlabel(int label)
 {
-	return block(LABEL, bcon(label), NULL, 0, 0, 0);
+	return blk(LABEL, bcon(label), NULL, tdint);
 }
 
 /*
@@ -3624,13 +3593,13 @@ P1ND *
 intprom(P1ND *n)
 {
 	if (n->n_op == FLD && UPKFSZ(n->n_rval) < SZINT)
-		return makety(n, INT, 0, 0, 0);
+		return makety(n, tdint);
 
 	if ((n->n_type >= CHAR && n->n_type < INT) || n->n_type == BOOL) {
 		if ((n->n_type == UCHAR && MAX_UCHAR > MAX_INT) ||
 		    (n->n_type == USHORT && MAX_USHORT > MAX_INT))
-			return makety(n, UNSIGNED, 0, 0, 0);
-		return makety(n, INT, 0, 0, 0);
+			return makety(n, mkqtyp(UNSIGNED));
+		return makety(n, tdint);
 	}
 	return n;
 }

@@ -693,11 +693,20 @@ clocal(P1ND *p)
 		if (o == MOD && p->n_type != CHAR && p->n_type != SHORT)
 			break;
 		/* make it an int division by inserting conversions */
+#ifdef LANG_CXX
 		p->n_left = makety(p->n_left, INT, 0, 0, 0);
 		p->n_right = makety(p->n_right, INT, 0, 0, 0);
+#else
+		p->n_left = makety(p->n_left, tdint);
+		p->n_right = makety(p->n_right, tdint);
+#endif
 		o = p->n_type;
 		p->n_type = INT;
+#ifdef LANG_CXX
 		p = makety(p, o, 0, 0, 0);
+#else
+		p = makety(p, mkqtyp(o));
+#endif
 		break;
 
 #if 0

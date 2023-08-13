@@ -1506,7 +1506,7 @@ addcase(P1ND *p)
 
 	if (DEUNSIGN(swpole->type) != DEUNSIGN(p->n_type)) {
 		val = glval(p);
-		p = makety(p, swpole->type, 0, 0, 0);
+		p = makety(p, mkqtyp(swpole->type));
 		if (p->n_op != ICON)
 			cerror("could not cast case value to type of switch "
 			       "expression");
