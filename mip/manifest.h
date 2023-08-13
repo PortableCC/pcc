@@ -264,6 +264,7 @@ struct interpass_prolog {
 #define	ipp_vis		ipp_flags
 #define	IF_VISIBLE	001
 #define	IF_NEEDFP	002
+#define	IF_NOTLEAF	004
 	TWORD ipp_type;		/* Function type */
 	int ipp_autos;		/* Size on stack needed */
 	int ip_tmpnum;		/* # allocated temp nodes so far */

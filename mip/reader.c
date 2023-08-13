@@ -335,6 +335,8 @@ latechecks(NODE *p, void *arg)
 	if (p->n_op == CALL && p->n_left->n_op == ICON && 
 	    strcmp(p->n_left->n_name, "alloca") == 0)
 		*flags |= IF_NEEDFP; /* alloca may modify FP */
+	if (callop(p->n_op))
+		*flags |= IF_NOTLEAF;
 }
 
 #ifdef PASS2
