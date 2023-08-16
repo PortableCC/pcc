@@ -1061,7 +1061,11 @@ argput(NODE *p)
 		}
 
 		p = nfree(p);	/* remove STARG */
+#ifdef LANG_CXX
 		p = makety(p, PTR|ty, 0, 0, 0);
+#else
+		p = makety(p, mkqtyp(PTR|ty));
+#endif
 		ql = tempnode(0, PTR|ty, 0, 0);
 		rn = regno(ql);
 		p = buildtree(ASSIGN, ql, p);
@@ -1186,8 +1190,6 @@ NODE *
 funcode(NODE *p)
 {
 	NODE *l, *r;
-	TWORD t;
-	int i;
 
 	nsse = ngpr = nrsp = 0;
 	/* Check if hidden arg needed */

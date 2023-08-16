@@ -475,9 +475,15 @@ clocal(NODE *p)
 		if (o == MOD && p->n_type != CHAR && p->n_type != SHORT)
 			break;
 		/* make it an int division by inserting conversions */
+#ifdef LANG_CXX
 		p->n_left = makety(p->n_left, INT, 0, 0, 0);
 		p->n_right = makety(p->n_right, INT, 0, 0, 0);
 		p = makety(p, p->n_type, 0, 0, 0);
+#else
+		p->n_left = makety(p->n_left, tdint);
+		p->n_right = makety(p->n_right, tdint);
+		p = makety(p, mkqtyp(p->n_type));
+#endif
 		p->n_left->n_type = INT;
 		break;
 
@@ -498,7 +504,11 @@ clocal(NODE *p)
 		/* shift count must be in a char */
 		if (p->n_right->n_type == CHAR || p->n_right->n_type == UCHAR)
 			break;
+#ifdef LANG_CXX
 		p->n_right = makety(p->n_right, CHAR, 0, 0, 0);
+#else
+		p->n_right = makety(p->n_right, mkqtyp(CHAR));
+#endif
 		break;
 	}
 #ifdef PCC_DEBUG
