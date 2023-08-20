@@ -94,7 +94,6 @@
 #define	AUTOINIT	16	/* first var one word above offset */
 #define	ARGINIT		16	/* start args one word below fp */
 #define FINDMOPS		/* can in/decrement memory directly. */
-#define NEWNEED			/* new-style needs definitions */
 
 /*
  * Use large-enough types.

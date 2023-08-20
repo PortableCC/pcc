@@ -241,8 +241,6 @@ typedef long long OFFSZ;
 #define GCLASS(x)	(x < 16 ? CLASSA : CLASSB)
 int COLORMAP(int c, int *r);
 
-#define	NEWNEED
-
 /* floating point definitions */
 /* XXX needs fixing for pdp10 */
 #define FDFLOAT

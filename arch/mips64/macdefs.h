@@ -347,8 +347,6 @@ P1ND *mips64_builtin_va_end(const struct bitable *, P1ND *a);
 P1ND *mips64_builtin_va_copy(const struct bitable *, P1ND *a);
 #undef P1ND
 
-#define	NEWNEED
-
 /* floating point definitions */
 #define USE_IEEEFP_32
 #define FLT_PREFIX      IEEEFP_32

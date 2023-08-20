@@ -460,8 +460,6 @@ P1ND *powerpc_builtin_frame_address(const struct bitable *f, P1ND *a);
 P1ND *powerpc_builtin_return_address(const struct bitable *f, P1ND *a);
 #undef P1ND
 
-#define	NEWNEED
-
 #ifdef ELFABI
 #define COM     "       # "
 #else

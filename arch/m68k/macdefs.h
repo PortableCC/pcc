@@ -241,7 +241,6 @@ int COLORMAP(int c, int *r);
 
 #define HAVE_WEAKREF
 #define TARGET_FLT_EVAL_METHOD	2	/* all as long double */
-#define	NEWNEED
 
 int features(int f);
 

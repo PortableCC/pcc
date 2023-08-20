@@ -294,8 +294,6 @@ P1ND *amd64_builtin_va_copy(const struct bitable *, P1ND *a);
 /* target specific attributes */
 #define ATTR_MI_TARGET  ATTR_AMD64_CMPLRET, ATTR_AMD64_XORLBL
 
-#define NEWNEED
-
 /* m flags */
 #define	MCSMALL		00200
 #define	MCMEDIUM	00400

@@ -177,8 +177,6 @@ extern int msettings;
 #define	USECHAR9	0200
 #define	USECHAR18	0400
 
-#define	NEWNEED
-
 /* floating point definitions XXX incorrect here */
 #define FDFLOAT
 #define DEFAULT_FPI_DEFS { &fpi_ffloat, &fpi_dfloat, &fpi_dfloat }

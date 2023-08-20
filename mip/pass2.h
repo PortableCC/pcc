@@ -147,7 +147,6 @@ typedef unsigned int bittype; /* XXX - for basicblock */
 #define RESCC		04000
 #define RNOP		010000	/* DANGER: can cause loops.. */
 
-#ifdef	NEWNEED
 enum { cNREG = 1, cNTL, cNTR, cNSL, cNSR, cNL, cNR, cNOL, cNOR,
 	cNEVER, cNRES, cNTEMP, cNREW };
 #define	NEEDS(...)	(char []){ __VA_ARGS__, 0 }
@@ -165,51 +164,6 @@ enum { cNREG = 1, cNTL, cNTR, cNSL, cNSR, cNL, cNR, cNOL, cNOR,
 #define	NRES(reg)	cNRES, reg
 #define	NTEMP(num)	cNTEMP, num
 #define	NREWRITE	cNREW, 0
-#else
-/* needs */
-#define NASL		0x0001	/* may share left register */
-#define NASR		0x0002	/* may share right register */
-#define NAREG		0x0004
-#define NACOUNT		0x000c
-#define NBSL		0x0010
-#define NBSR		0x0020
-#define NBREG		0x0040
-#define NBCOUNT		0x00c0
-#define	NCSL		0x0100
-#define	NCSR		0x0200
-#define	NCREG		0x0400
-#define	NCCOUNT		0x0c00
-#define NTEMP		0x1000
-#define NTMASK		0x3000
-#define NSPECIAL	0x4000	/* need special register treatment */
-#define REWRITE		0x8000
-#define	NDSL		0x00010000	/* Above 16 bit */
-#define	NDSR		0x00020000	/* Above 16 bit */
-#define	NDREG		0x00040000	/* Above 16 bit */
-#define	NDCOUNT		0x000c0000
-#define	NESL		0x00100000	/* Above 16 bit */
-#define	NESR		0x00200000	/* Above 16 bit */
-#define	NEREG		0x00400000	/* Above 16 bit */
-#define	NECOUNT		0x00c00000
-#define	NFSL		0x01000000	/* Above 16 bit */
-#define	NFSR		0x02000000	/* Above 16 bit */
-#define	NFREG		0x04000000	/* Above 16 bit */
-#define	NFCOUNT		0x0c000000
-#define	NGSL		0x10000000	/* Above 16 bit */
-#define	NGSR		0x20000000	/* Above 16 bit */
-#undef	NGREG	/* XXX - linux exposes NGREG to public */
-#define	NGREG		0x40000000	/* Above 16 bit */
-#define	NGCOUNT		0xc0000000
-
-/* special treatment */
-#define	NLEFT		(0001)	/* left leg register (moveadd) */
-#define	NOLEFT		(0002)	/* avoid regs for left (addedge) */
-#define	NRIGHT		(0004)	/* right leg register */
-#define	NORIGHT		(0010)	/* avoid reg for right */
-#define	NEVER		(0020)	/* registers trashed (addalledges) */
-#define	NRES		(0040)	/* result register (moveadd) */
-#define	NMOVTO		(0100)	/* move between classes */
-#endif
 
 #define MUSTDO		010000	/* force register requirements */
 #define NOPREF		020000	/* no preference for register assignment */
@@ -226,30 +180,10 @@ extern	struct optab {
 	int	ltype;
 	int	rshape;
 	int	rtype;
-#ifdef NEWNEED
 	char 	*needs;
-#else
-	int	needs;
-#endif
 	int	rewrite;
 	char	*cstring;
 } table[];
-
-#ifndef NEWNEED
-/* Special needs for register allocations */
-struct rspecial {
-	int op, num;
-#if 0
-	int left;	/* left leg register */
-	int noleft;	/* avoid regs for left */
-	int right;	/* right leg register */
-	int noright;	/* avoid right leg register */
-	int *rmask;	/* array of destroyed registers */
-	int res;	/* Result ends up here */
-//	void (*rew)(struct optab *, NODE *);	/* special rewrite */
-#endif
-};
-#endif
 
 struct p2env;
 #define	NRESC 4
@@ -334,14 +268,9 @@ int setbin(NODE *);
 int notoff(TWORD, int, CONSZ, char *);
 int fldexpand(NODE *, int, char **);
 int flshape(NODE *p);
-#ifdef NEWNEED
 int ncnt(char *);
 char *hasneed(char *, int);
 char *hasneed2(char *, int, int);
-#else
-struct rspecial *nspecial(struct optab *q);
-int ncnt(int needs);
-#endif
 void mainp2(void);
 
 extern	char *rnames[];

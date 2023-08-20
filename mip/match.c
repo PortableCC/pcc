@@ -518,7 +518,6 @@ shswitch(int sh, NODE *p, int shape, int cookie, int rew, int go)
 	return sh;
 }
 
-#ifdef NEWNEED
 char *
 hasneed(char *w, int need)
 {
@@ -540,7 +539,6 @@ hasneed2(char *w, int need, int need2)
 	}
 	return 0;
 }
-#endif
 
 /*
  * Find the best instruction to evaluate the given tree.
@@ -600,13 +598,8 @@ findops(NODE *p, int cookie)
 		    (q->lshape & (INREGS)) && shl == SRDIR)
 			shl = SRREG;
 
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;  /* Done here */
-#endif
 
 		if (lvl <= (shl + shr))
 			continue;
@@ -701,13 +694,8 @@ relops(NODE *p)
 			continue;
 		F2DEBUG(("relops rshape %d\n", shr));
 		F2WALK(p);
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;	/* Done here */
-#endif
 
 		if (lvl <= (shl + shr))
 			continue;
@@ -815,13 +803,8 @@ findasg(NODE *p, int cookie)
 
 		F2DEBUG(("findasg rshape %d\n", shr));
 		F2WALK(r);
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;	/* Done here */
-#endif
 
 		if (lvl <= (shl + shr))
 			continue;
@@ -923,13 +906,8 @@ findumul(NODE *p, int cookie)
 		
 		shr = 0;
 
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;	/* Done here */
-#endif
 
 		F2DEBUG(("findumul got shape %s\n", srtyp[shl]));
 
@@ -987,13 +965,8 @@ findleaf(NODE *p, int cookie)
 		if (chcheck(p, q->rshape, 0) != SRDIR)
 			continue;
 
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;	/* Done here */
-#endif
 
 		break;
 	}
@@ -1066,13 +1039,8 @@ finduni(NODE *p, int cookie)
 			shl = SRREG;
 
 		F2DEBUG(("finduni got cookie\n"));
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;	/* Done here */
-#endif
 
 		if (shl >= num)
 			continue;
@@ -1207,13 +1175,8 @@ findmops(NODE *p, int cookie)
 		F2DEBUG(("rewrite OK\n"));
 
 		F2WALK(r);
-#ifdef NEWNEED
 		if (hasneed(q->needs, cNREW) != 0)
 			break;
-#else
-		if (q->needs & REWRITE)
-			break;	/* Done here */
-#endif
 
 		if (lvl <= (shl + shr))
 			continue;

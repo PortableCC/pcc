@@ -113,7 +113,6 @@ compl(struct optab *q, char *str)
 /*
  * Find reg class for top of node.
  */
-#ifdef NEWNEED
 char *
 hasneed(char *w, int need)
 {
@@ -142,31 +141,6 @@ getrcl(struct optab *q)
 	}
 	return 0;
 }
-
-#else
-/*
- * Return the return value class (as bitmask).
- */
-static int
-getrcl(struct optab *q)
-{
-	int v = q->needs &
-	    (NACOUNT|NBCOUNT|NCCOUNT|NDCOUNT|NECOUNT|NFCOUNT|NGCOUNT);
-	int r = q->rewrite & RESC1 ? 1 : q->rewrite & RESC2 ? 2 : 3;
-	int i = 0;
-
-#define INCK(c) while (v & c##COUNT) { \
-	v -= c##REG, i++; if (i == r) return I##c##REG; }
-	INCK(NA)
-	INCK(NB)
-	INCK(NC)
-	INCK(ND)
-	INCK(NE)
-	INCK(NF)
-	INCK(NG)
-	return 0;
-}
-#endif
 
 int
 main(int argc, char *argv[])
@@ -290,7 +264,6 @@ printf("reg %d rstatus 0x%x %s\n", i, rstatus[i],
 			}
 			break;
 		}
-#ifdef NEWNEED
 		/* check that reclaim is not the wrong class */
 		if ((q->rewrite & (RESC1|RESC2|RESC3)) && 
 		    hasneed(q->needs, cNREW) == 0) {
@@ -299,16 +272,6 @@ printf("reg %d rstatus 0x%x %s\n", i, rstatus[i],
 				rval++;
 			}
 		}
-#else
-		/* check that reclaim is not the wrong class */
-		if ((q->rewrite & (RESC1|RESC2|RESC3)) && 
-		    !(q->needs & REWRITE)) {
-			if ((q->visit & getrcl(q)) == 0) {
-				compl(q, "wrong RESCx class");
-				rval++;
-			}
-		}
-#endif
 		if (q->rewrite & (RESC1|RESC2|RESC3) && q->visit & FOREFF)
 			compl(q, "FOREFF may cause reclaim of wrong class");
 	}

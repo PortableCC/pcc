@@ -102,7 +102,6 @@ typedef long long OFFSZ;
 
 #undef	FIELDOPS
 #define TARGET_ENDIAN TARGET_BE
-#define NEWNEED
 
 #define BYTEOFF(x) 	((x)&03)
 
