@@ -35,11 +35,22 @@
 #ifdef LANG_CXX
 #define p1listf listf
 #define p1tfree tfree
-#define p1nfree nfree
-#define p1tcopy tcopy
+#define	sss sap
+#define	p1tcopy tcopy
+#define	p1nfree nfree
 #else
 #define NODE P1ND
 #define talloc p1alloc
+#define tcopy p1tcopy
+#define nfree p1nfree
+#undef n_type
+#define n_type ptype
+#undef n_qual
+#define n_qual pqual
+#undef n_df
+#define n_df pdf
+#define	sap sss
+#define	n_ap pss
 #endif
 
 static void genswitch_bintree(int num, TWORD ty, struct swents **p, int n);
@@ -66,7 +77,7 @@ setseg(int seg, char *name)
 	case PICLDATA:
 	case PICDATA: name = ".section .data.rel.rw,\"aw\""; break;
 	case PICRDATA: name = ".section .data.rel.ro,\"aw\""; break;
-	case STRNG: name = ".cstring"; break;
+	case STRNG: name = ".cstring\n\t.align 2"; break;
 	case RDATA: name = ".const_data"; break;
 #else
 	case PICLDATA: name = ".section .data.rel.local,\"aw\",@progbits";break;
@@ -154,7 +165,11 @@ param_64bit(struct symtab *sym, int *argofsp, int dotemps)
 		q = block(REG, NIL, NIL, INT, 0, 0);
 		regno(q) = R3 + argofs;
 		p = block(REG, NIL, NIL, INT, 0, 0);
+#ifdef FPREG
 		regno(p) = FPREG;
+#else
+		regno(p) = SPREG;
+#endif
 		p = block(PLUS, p, bcon(sym->soffset/SZCHAR), PTR+INT, 0, 0);
 		p = block(UMUL, p, NIL, INT, 0, 0);
         } else {
@@ -196,11 +211,18 @@ param_32bit(struct symtab *sym, int *argofsp, int dotemps)
 /* setup a double param on the stack
  * used by bfcode() */
 static void
-param_double(struct symtab *sym, int *argofsp, int dotemps)
-{
-        NODE *p, *q, *t;
-        int tmpnr;
 
+#ifdef ELFABI
+param_double(struct symtab *sym, int *argofsp, int dotemps)
+#else
+param_double(struct symtab *sym, int *arg_fprp, int dotemps)
+#endif
+{
+NODE *p, *q, *t;
+int tmpnr;
+
+
+#ifdef ELFABI
         /*
          * we have to dump the double from the general register
          * into a temp, since the register allocator doesn't like
@@ -208,7 +230,7 @@ param_double(struct symtab *sym, int *argofsp, int dotemps)
          */
 
 	if (xtemps) {
-	        q = block(REG, NIL, NIL, ULONGLONG, 0, 0);
+		q = block(REG, NIL, NIL, ULONGLONG, 0, 0);
 		regno(q) = R3R4 + *argofsp;
 		p = block(REG, NIL, NIL, PTR+ULONGLONG, 0, 0);
 		regno(p) = SPREG;
@@ -216,11 +238,11 @@ param_double(struct symtab *sym, int *argofsp, int dotemps)
 		p = block(UMUL, p, NIL, ULONGLONG, 0, 0);
 		p = buildtree(ASSIGN, p, q);
 		ecomp(p);
-	
-	        t = tempnode(0, sym->stype, sym->sdf, sym->sap);
+		
+		t = tempnode(0, sym->stype, sym->sdf, sym->sap);
 		tmpnr = regno(t);
 		p = block(REG, NIL, NIL,
-		    INCREF(sym->stype), sym->sdf, sym->sap);
+		INCREF(sym->stype), sym->sdf, sym->sap);
 		regno(p) = SPREG;
 		p = block(PLUS, p, bcon(-8), INT, 0, 0);
 		p = block(UMUL, p, NIL, sym->stype, sym->sdf, sym->sap);
@@ -240,6 +262,39 @@ param_double(struct symtab *sym, int *argofsp, int dotemps)
 	
 	sym->soffset = tmpnr;
 	sym->sflags |= STNODE;
+	
+#elif defined(MACHOABI)
+	int fpr = *arg_fprp;
+	
+	if (fpr < NFPARGREGS) {
+
+		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sss);
+		regno(q) = F1 + fpr;
+		if (dotemps) {
+			p = tempnode(0, sym->stype, sym->sdf, sym->sss);
+			sym->soffset = regno(p);
+			sym->sflags |= STNODE;
+		} else {
+			//cerror("param64bit called without dotemps");
+			p = nametree(sym);
+		}
+		p = buildtree(ASSIGN, p, q);
+		ecomp(p);
+
+	}
+	else {
+		cerror("too many arguments, do something intelligent");
+	}
+
+	(*arg_fprp) += 1;
+	if (0) {
+		sym->soffset = tmpnr;
+		sym->sflags |= STNODE;
+	}
+#else
+#error no ABI in arch/powerpc/code.c:param_double()
+#endif
+	
 }
 
 /* setup a float param on the stack
@@ -350,30 +405,26 @@ void
 bfcode(struct symtab **sp, int cnt)
 {
 #ifdef USE_GOTNR
+#if defined(USE_GOTNR) && defined(MACHOABI)
+#error MACHOABI conflicts with USE_GOTNR
+#endif
 	extern int gotnr;
 #endif
 
 	struct symtab *sp2;
-	union arglist *usym;
 	int saveallargs = 0;
-	int i, argofs = 0;
+	int i, arg_gpr = 0, arg_fpr = 0;
 
         /*
          * Detect if this function has ellipses and save all
          * argument registers onto stack.
          */
-        usym = cftnsp->sdf->dfun;
-        while (usym && usym->type != TNULL) {
-                if (usym->type == TELLIPSIS) {
-                        saveallargs = 1;
-                        break;
-                }
-                ++usym;
-        }
-
+	if (cftnsp->sdf->dlst)
+		saveallargs = pr_hasell(cftnsp->sdf->dlst);
+printf("; saveallargs: %d, cnt: %d\n", saveallargs, cnt);		
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
 		param_retstruct();
-		++argofs;
+		++arg_gpr;
 	}
 
 #ifdef USE_GOTNR
@@ -388,49 +439,70 @@ bfcode(struct symtab **sp, int cnt)
 	}
 #endif
 
-        /* recalculate the arg offset and create TEMP moves */
-        for (i = 0; i < cnt; i++) {
+	/* recalculate the arg offset and create TEMP moves */
+	for (i = 0; i < cnt; i++) {
 
 		if (sp[i] == NULL)
 			continue;
 
-                if ((argofs >= NARGREGS) && !xtemps)
-                        break;
+		int sptype = sp[i]->stype;
+#ifndef ELFABI
+		int spclass = sp[i]->sclass;
+#endif
+	
+		if ((arg_gpr >= NARGREGS) && !xtemps)
+				break;
 
-                if (argofs >= NARGREGS) {
-                        putintemp(sp[i]);
-                } else if (sp[i]->stype == STRTY || sp[i]->stype == UNIONTY) {
-                        param_struct(sp[i], &argofs);
-                } else if (DEUNSIGN(sp[i]->stype) == LONGLONG) {
-                        param_64bit(sp[i], &argofs, xtemps && !saveallargs);
-                } else if (sp[i]->stype == DOUBLE || sp[i]->stype == LDOUBLE) {
+		if (arg_gpr >= NARGREGS) {
+				putintemp(sp[i]);
+		} else if (sptype == STRTY || sptype == UNIONTY) {
+				param_struct(sp[i], &sptype);
+		} else if (DEUNSIGN(sptype) == LONGLONG) {
+				param_64bit(sp[i], &arg_gpr, xtemps && !saveallargs);
+		} else if (sptype == DOUBLE || sptype == LDOUBLE) {
 			if (features(FEATURE_HARDFLOAT))
-	                        param_double(sp[i], &argofs,
-				    xtemps && !saveallargs);
+#if defined(ELFABI)
+				param_double(sp[i], &arg_gpr, xtemps && !saveallargs);
+
+#else			
+			{
+				param_double(sp[i], &arg_fpr, xtemps && !saveallargs);
+				/* ABI calls for space in GPRs */
+				if (spclass != EXTDEF)
+					arg_gpr+=2;	
+			}
+#endif
+			
 			else
-	                        param_64bit(sp[i], &argofs,
-				    xtemps && !saveallargs);
-                } else if (sp[i]->stype == FLOAT) {
+				param_64bit(sp[i], &arg_gpr, xtemps && !saveallargs);
+		} else if (sptype == FLOAT) {
 			if (features(FEATURE_HARDFLOAT))
-	                        param_float(sp[i], &argofs,
-				    xtemps && !saveallargs);
+				param_float(sp[i], &arg_gpr, xtemps && !saveallargs);
 			else
-                        	param_32bit(sp[i], &argofs,
-				    xtemps && !saveallargs);
-                } else {
-                        param_32bit(sp[i], &argofs, xtemps && !saveallargs);
+				param_32bit(sp[i], &arg_gpr, xtemps && !saveallargs);
+		} else {
+			param_32bit(sp[i], &arg_gpr, xtemps && !saveallargs);
 		}
-        }
+	}
 
-        /* if saveallargs, save the rest of the args onto the stack */
-        while (saveallargs && argofs < NARGREGS) {
-      		NODE *p, *q;
-		/* int off = (ARGINIT+FIXEDSTACKSIZE*SZCHAR)/SZINT + argofs; */
-		int off = ARGINIT/SZINT + argofs;
+	/* if saveallargs, save the rest of the args onto the stack */
+	while (saveallargs && arg_gpr < NARGREGS) {
+		NODE *p, *q;
+		/* int off = (ARGINIT+FIXEDSTACKSIZE*SZCHAR)/SZINT + arg_gpr; */
+		int off = ARGINIT/SZINT + arg_gpr;
 		q = block(REG, NIL, NIL, INT, 0, 0);
-		regno(q) = R3 + argofs++;
+		regno(q) = R3 + arg_gpr++;
 		p = block(REG, NIL, NIL, INT, 0, 0);
+#ifdef FPREG
 		regno(p) = FPREG;
+#else
+		regno(p) = SPREG;
+#endif
+#ifdef STACK_DOWN
+		int sign = 1;
+#else
+		int sign = 1;
+#endif
 		p = block(PLUS, p, bcon(4*off), INT, 0, 0);
 		p = block(UMUL, p, NIL, INT, 0, 0);
 		p = buildtree(ASSIGN, p, q);
@@ -458,8 +530,8 @@ bfcode(struct symtab **sp, int cnt)
 		NODE *q;
 		int tmpnr;
 
-                q = block(REG, NIL, NIL, INT, 0, 0);
-                regno(q) = R0;
+		q = block(REG, NIL, NIL, INT, 0, 0);
+		regno(q) = R0;
 		p = tempnode(0, INT, 0, 0);
 		tmpnr = regno(p);
 		p = buildtree(ASSIGN, p, q);
@@ -537,49 +609,47 @@ ejobcode(int flag)
 	/*
 	 * iterate over the stublist and output the PIC stubs
 `	 */
-	if (kflag) {
-		struct stub *p;
+	struct stub *p;
 
-		DLIST_FOREACH(p, &stublist, link) {
-			printf("\t.section __TEXT, __picsymbolstub1,symbol_stubs,pure_instructions,32\n");
-			printf("\t.align 5\n");
-			printf("L%s$stub:\n", p->name);
-			if (strcmp(p->name, "mcount") == 0)
-				printf("\t.indirect_symbol %s\n", p->name);
-			else
-				printf("\t.indirect_symbol %s\n", p->name);
-			printf("\tmflr r0\n");
-			printf("\tbcl 20,31,L%s$spb\n", p->name);
-			printf("L%s$spb:\n", p->name);
-			printf("\tmflr r11\n");
-			printf("\taddis r11,r11,ha16(L%s$lazy_ptr-L%s$spb)\n",
-			    p->name, p->name);
-			printf("\tmtlr r0\n");
-			printf("\tlwzu r12,lo16(L%s$lazy_ptr-L%s$spb)(r11)\n",
-			    p->name, p->name);
-			printf("\tmtctr r12\n");
-			printf("\tbctr\n");
-			printf("\t.lazy_symbol_pointer\n");
-			printf("L%s$lazy_ptr:\n", p->name);
-			if (strcmp(p->name, "mcount") == 0)
-				printf("\t.indirect_symbol %s\n", p->name);
-			else
-				printf("\t.indirect_symbol %s\n", p->name);
-			printf("\t.long	dyld_stub_binding_helper\n");
-			printf("\t.subsections_via_symbols\n");
-		}
-
-		printf("\t.non_lazy_symbol_pointer\n");
-		DLIST_FOREACH(p, &nlplist, link) {
-			printf("L%s$non_lazy_ptr:\n", p->name);
-			if (strcmp(p->name, "mcount") == 0)
-				printf("\t.indirect_symbol %s\n", p->name);
-			else
-				printf("\t.indirect_symbol %s\n", p->name);
-			printf("\t.long 0\n");
-	        }
-
+	DLIST_FOREACH(p, &stublist, link) { 
+		printf("\t.section __TEXT, __picsymbolstub1,symbol_stubs,pure_instructions,32\n");
+		printf("\t.align 5\n");
+		printf("\"L%s$stub\":\n", p->name);
+		if (strcmp(p->name, "mcount") == 0)
+			printf("\t.indirect_symbol %s\n", p->name);
+		else
+			printf("\t.indirect_symbol %s\n", p->name);
+		printf("\tmflr r0\n");
+		printf("\tbcl 20,31,\"L%s$spb\"\n", p->name);
+		printf("\"L%s$spb\":\n", p->name);
+		printf("\tmflr r11\n");
+		printf("\taddis r11,r11,ha16(\"L%s$lazy_ptr\"-\"L%s$spb\")\n",
+			p->name, p->name);
+		printf("\tlwzu r12,lo16(\"L%s$lazy_ptr\"-\"L%s$spb\")(r11)\n",
+			p->name, p->name);
+		printf("\tmtlr r0\n");
+		printf("\tmtctr r12\n");
+		printf("\tbctr\n");
+		printf("\t.lazy_symbol_pointer\n");
+		printf("\"L%s$lazy_ptr\":\n", p->name);
+		if (strcmp(p->name, "mcount") == 0)
+			printf("\t.indirect_symbol %s\n", p->name);
+		else
+			printf("\t.indirect_symbol %s\n", p->name);
+		printf("\t.long	dyld_stub_binding_helper\n");
+		printf("\t.subsections_via_symbols\n");
 	}
+
+	DLIST_FOREACH(p, &nlplist, link) {
+	printf("\t.non_lazy_symbol_pointer\n");
+		printf("\"L%s$non_lazy_ptr\":\n", p->name);
+		if (strcmp(p->name, "mcount") == 0)
+			printf("\t.indirect_symbol %s\n", p->name);
+		else
+			printf("\t.indirect_symbol %s\n", p->name);
+		printf("\t.long 0\n");
+	}
+
 #endif
 
 #ifndef os_darwin
@@ -591,8 +661,12 @@ ejobcode(int flag)
 void
 bjobcode(void)
 {
+	astypnames[INT] = astypnames[UNSIGNED] = "\t.long";
 	DLIST_INIT(&stublist, link);
 	DLIST_INIT(&nlplist, link);
+#if defined(os_darwin)
+	xinline = 0;
+#endif
 }
 
 #ifdef notdef
@@ -767,7 +841,6 @@ genswitch_table(int num, struct swents **p, int n)
 	for (i = minval, j=1; i <= maxval; i++) {
 		char *entry = tmpalloc(20);
 		int lab = deflabel;
-		//printf("; minval=%d, maxval=%d, i=%d, j=%d p[j]=%lld\n", minval, maxval, i, j, p[j]->sval);
 		if (p[j]->sval == i) {
 			lab = p[j]->slab;
 			j++;
@@ -781,7 +854,6 @@ genswitch_table(int num, struct swents **p, int n)
 }
 
 #define DPRINTF(x)	if (xdebug) printf x
-//#define DPRINTF(x)	do { } while(0)
 
 #define MIN_TABLE_SIZE	8
 
@@ -1193,7 +1265,7 @@ pusharg(NODE *p, int *regp)
 	q = block(REG, NIL, NIL, INCREF(p->n_type), p->n_df, p->n_ap);
 	regno(q) = SPREG;
 
-	off = ARGINIT/SZCHAR + 4 * (*regp - R11);
+	off = ARGINIT/SZCHAR + 4 * (*regp - R10);
 	q = block(PLUS, q, bcon(off), INT, 0, 0);
         q = block(UMUL, q, NIL, p->n_type, p->n_df, p->n_ap);
 	(*regp) += szty(p->n_type);
@@ -1322,7 +1394,12 @@ movearg_float(NODE *p, int *fregp, int *regp)
 /* setup call stack with float/double argument */
 /* called from moveargs() */
 static NODE *
+#ifndef MACHOABI
 movearg_double(NODE *p, int *fregp, int *regp)
+#else
+movearg_double(NODE *p, int *fregp, int *regp, int sclass)
+#endif
+
 {
 #if defined(MACHOABI)
 	NODE *q, *r;
@@ -1339,7 +1416,11 @@ movearg_double(NODE *p, int *fregp, int *regp)
 	 * compiled to handle soft-float.
 	 */
 
-#if defined(MACHOABI)
+#if defined(MACHOABI)// && defined(SOFTFLOAT)
+	/* don't move floats for local functions */
+
+	if (sclass == EXTDEF)
+		return p;
 
 	if (xtemps) {
 		/* bounce on TOS */
@@ -1446,13 +1527,21 @@ movearg_struct(NODE *p, int *regp)
 
 
 static NODE *
+#ifndef MACHOABI
 moveargs(NODE *p, int *regp, int *fregp)
+#else
+moveargs(NODE *p, int *regp, int *fregp, int sclass)
+#endif
 {
 	NODE *r, **rp;
 	int reg, freg;
 
 	if (p->n_op == CM) {
+#ifndef MACHOABI
 			p->n_left = moveargs(p->n_left, regp, fregp);
+#else
+			p->n_left = moveargs(p->n_left, regp, fregp, sclass);
+#endif
 			r = p->n_right;
 			rp = &p->n_right;
 	} else {
@@ -1460,25 +1549,29 @@ moveargs(NODE *p, int *regp, int *fregp)
 			rp = &p;
 	}
 
-    reg = *regp;
+	reg = *regp;
 	freg = *fregp;
 
 #define	ISFLOAT(p)	(p->n_type == FLOAT || \
 			p->n_type == DOUBLE || \
 			p->n_type == LDOUBLE)
 
-    if (reg > R10 && r->n_op != STARG) {
-        *rp = pusharg(r, regp);
+	if (reg > R10 && r->n_op != STARG) {
+	  *rp = pusharg(r, regp);
                 
 	} else if (r->n_op == STARG) {
 		*rp = movearg_struct(r, regp);
 		
-    } else if (DEUNSIGN(r->n_type) == LONGLONG) {
-        *rp = movearg_64bit(r, regp);
+	} else if (DEUNSIGN(r->n_type) == LONGLONG) {
+	  *rp = movearg_64bit(r, regp);
                 
 	} else if (r->n_type == DOUBLE || r->n_type == LDOUBLE) {
 		if (features(FEATURE_HARDFLOAT))
+#ifndef MACHOABI
 			*rp = movearg_double(r, fregp, regp);
+#else
+			*rp = movearg_double(r, fregp, regp, sclass);
+#endif
 		else
             *rp = movearg_64bit(r, regp);
             
@@ -1517,7 +1610,11 @@ retstruct(NODE *p)
 	s.sap = l->n_ap;
 	oalloc(&s, &autooff);
 	q = block(REG, NIL, NIL, INCREF(ty), l->n_df, l->n_ap);
+#ifdef FPREG
 	regno(q) = FPREG;
+#else
+	regno(p) = SPREG;
+#endif
 	q = block(MINUS, q, bcon(autooff/SZCHAR), INCREF(ty),
 	    l->n_df, l->n_ap);
 
@@ -1546,9 +1643,14 @@ funcode(NODE *p)
 
         if (DECREF(p->n_left->n_type) == STRTY+FTN ||
             DECREF(p->n_left->n_type) == UNIONTY+FTN)
-		p = retstruct(p);
+			p = retstruct(p);
 
+#ifndef MACHOABI
 	p->n_right = moveargs(p->n_right, &regnum, &fregnum);
+#else
+	p->n_left = optim(p->n_left);
+	p->n_right = moveargs(p->n_right, &regnum, &fregnum, p->n_left->n_sp->sclass);
+#endif
 
 	if (p->n_right == NULL)
 		p->n_op += (UCALL - CALL);

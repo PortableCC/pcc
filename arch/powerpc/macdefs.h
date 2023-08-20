@@ -111,7 +111,7 @@ typedef long long OFFSZ;
 #define LABFMT	".L%d"		/* format for printing labels */
 #define REGPREFIX	"%"	/* format for printing registers */
 #elif defined(MACHOABI)
-#define LABFMT	"L%d"		/* format for printing labels */
+#define LABFMT	"\"L%d\""		/* format for printing labels */
 #define REGPREFIX
 #elif defined(AOUTABI)
 #define LABFMT  ".L%d"           /* format for printing labels */
@@ -127,7 +127,9 @@ typedef long long OFFSZ;
 
 #undef	FIELDOPS		/* no bit-field instructions */
 #define TARGET_ENDIAN TARGET_BE
+#ifndef MACHOABI
 #define MYINSTRING
+#endif
 #define MYALIGN
 
 /* Definitions mostly used in pass2 */
@@ -230,12 +232,24 @@ typedef long long OFFSZ;
 #define F31	79
 
 #define NUMCLASS 3
-#define	MAXREGS	64		/* XXX cannot have more than 64 */
+#define	MAXREGS	80		/* XXX cannot have more than 64 */
+
+#if defined(MACHOABI) || defined(AOUTABI)
+#define	R0USAGE		0
+#define	R2USAGE		SAREG|TEMPREG
+#define R30USAGE	0
+#define R31USAGE	0
+#else
+#define R0USAGE		SAREG|PREMREG
+#define	R2USAGE		0
+#define R30USAGE	SAREG|PERMREG
+#define R31USAGE	SAREG|PERMREG
+#endif
 
 #define RSTATUS 				\
-	SAREG|TEMPREG,		/* R0 */	\
-	0,					/* R1 */	\
-	0,					/* R2 */	\
+	R0USAGE,			/* R0 */	\
+	0,				/* R1 */	\
+	R2USAGE,			/* R2 */	\
 	SAREG|TEMPREG,		/* R3 */	\
 	SAREG|TEMPREG,		/* R4 */	\
 	SAREG|TEMPREG,		/* R5 */	\
@@ -246,33 +260,33 @@ typedef long long OFFSZ;
 	SAREG|TEMPREG,		/* R10 */	\
 	SAREG|TEMPREG,		/* R11 */	\
 	SAREG|TEMPREG,		/* R12 */	\
-	SAREG,			/* R13 */	\
-	SAREG,			/* R14 */	\
-	SAREG,			/* R15 */	\
-	SAREG,			/* R16 */	\
-	SAREG,			/* R17 */	\
-	SAREG,			/* R18 */	\
-	SAREG,			/* R19 */	\
-	SAREG,			/* R20 */	\
-	SAREG,			/* R21 */	\
-	SAREG,			/* R22 */	\
-	SAREG,			/* R23 */	\
-	SAREG,			/* R24 */	\
-	SAREG,			/* R25 */	\
-	SAREG,			/* R26 */	\
-	SAREG,			/* R27 */	\
-	SAREG,			/* R28 */	\
-	SAREG,			/* R29 */	\
-	SAREG,			/* R30 */	\
-	SAREG,			/* R31 */	\
+	SAREG|PERMREG,		/* R13 */	\
+	SAREG|PERMREG,		/* R14 */	\
+	SAREG|PERMREG,		/* R15 */	\
+	SAREG|PERMREG,		/* R16 */	\
+	SAREG|PERMREG,		/* R17 */	\
+	SAREG|PERMREG,		/* R18 */	\
+	SAREG|PERMREG,		/* R19 */	\
+	SAREG|PERMREG,		/* R20 */	\
+	SAREG|PERMREG,		/* R21 */	\
+	SAREG|PERMREG,		/* R22 */	\
+	SAREG|PERMREG,		/* R23 */	\
+	SAREG|PERMREG,		/* R24 */	\
+	SAREG|PERMREG,		/* R25 */	\
+	SAREG|PERMREG,		/* R26 */	\
+	SAREG|PERMREG,		/* R27 */	\
+	SAREG|PERMREG,		/* R28 */	\
+	SAREG|PERMREG,		/* R29 */	\
+	R30USAGE,		/* R30 */	\
+	R31USAGE,		/* R31 */	\
 	\
-        SBREG|TEMPREG,		/* R3R4 */	\
-	SBREG|TEMPREG,		/* R4R5 */	\
-	SBREG|TEMPREG,		/* R5R6 */	\
-	SBREG|TEMPREG,		/* R6R7 */	\
-        SBREG|TEMPREG,		/* R7R8 */	\
-	SBREG|TEMPREG,		/* R8R9 */	\
-	SBREG|TEMPREG,		/* R9R10 */	\
+	SBREG,		/* R3R4 */	\
+	SBREG,		/* R4R5 */	\
+	SBREG,		/* R5R6 */	\
+	SBREG,		/* R6R7 */	\
+	SBREG,		/* R7R8 */	\
+	SBREG,		/* R8R9 */	\
+	SBREG,		/* R9R10 */	\
 	\
 	SBREG,			/* R14R15 */	\
 	SBREG,			/* R16R17 */	\
@@ -298,8 +312,26 @@ typedef long long OFFSZ;
 	SCREG|TEMPREG,		/* F11 */	\
 	SCREG|TEMPREG,		/* F12 */	\
 	SCREG|TEMPREG,		/* F13 */	\
-	SCREG,			/* F14 */	\
-	SCREG,			/* F15 */	\
+	SCREG|PERMREG,		/* F14 */	\
+	SCREG|PERMREG,		/* F15 */	\
+	SCREG|PERMREG,		/* F16 */	\
+	SCREG|PERMREG,		/* F17 */	\
+	SCREG|PERMREG,		/* F18 */	\
+	SCREG|PERMREG,		/* F19 */	\
+	SCREG|PERMREG,		/* F20 */	\
+	SCREG|PERMREG,		/* F21 */	\
+	SCREG|PERMREG,		/* F22 */	\
+	SCREG|PERMREG,		/* F23 */	\
+	SCREG|PERMREG,		/* F24 */	\
+	SCREG|PERMREG,		/* F25 */	\
+	SCREG|PERMREG,		/* F26 */	\
+	SCREG|PERMREG,		/* F27 */	\
+	SCREG|PERMREG,		/* F28 */	\
+	SCREG|PERMREG,		/* F29 */	\
+	SCREG|PERMREG,		/* F30 */	\
+	0,		/* F30 */	\
+	
+/* mkext can only handle 31 registers per class */
 
 #define ROVERLAP \
 	{ -1 }, { -1 }, { -1 },			\
@@ -332,6 +364,10 @@ typedef long long OFFSZ;
 	{ -1 }, { -1 }, { -1 }, { -1 },		\
 	{ -1 }, { -1 }, { -1 }, { -1 },		\
 	{ -1 }, { -1 }, { -1 }, { -1 },		\
+	{ -1 }, { -1 }, { -1 }, { -1 },		\
+	{ -1 }, { -1 }, { -1 }, { -1 },		\
+	{ -1 }, { -1 }, { -1 }, { -1 },		\
+	{ -1 }, { -1 }, { -1 }, { -1 },		\
 
 /*
  * According to the ABI documents, there isn't really a frame pointer;
@@ -339,17 +375,34 @@ typedef long long OFFSZ;
  * indexed relative to the stack pointer.  However, pcc isn't really
  * capable of running in this manner, and expects a frame pointer.
  */
-#define SPREG   R1	/* stack pointer */
-#define FPREG   R30	/* frame pointer */
-#define GOTREG	R31	/* global offset table (PIC) */
+
+#define NARGREGS		  8
+#define NFPARGREGS	 12
+#define SPREG   		 R1	/* stack pointer */
+
+#ifndef MACHOABI
+#define ARGINIT		(24*8)	/* # bits above fp where arguments start */
+#define AUTOINIT		(8*8)		/* # bits above fp where automatics start */
+#define FPREG   		R30		/* frame pointer */
+#define GOTREG		R31	/* global offset table (PIC) */
+#else
+
+	/* Mach-O allows callee to save argument registers in caller's stack */
+	/* linkage area stores LR and CTR */
+	/* parameter area stores all arg GPR and FPR registers */
+#define ARGINIT		((2+NARGREGS)*(SZINT/SZCHAR)+(NFPARGREGS*(SZDOUBLE/SZCHAR))*8)
+	/* have to leave space for linkage area */
+#define AUTOINIT		(12*8)+ARGINIT	/* # bits above sp where automatics start */		
+#define FPREG   		SPREG		/* no frame pointer */
+#define PICREG		R31	/* PIC indirect addressing for Mach-O ABI */
+
+#endif
 
 #ifdef FPREG
-#define ARGINIT		(8*8)	/* # bits above sp where arguments start */
-#define AUTOINIT	(8*8)	/* # bits above fp where automatics start */
 #define BACKAUTO 		/* stack grows negatively for automatics */
 #define BACKTEMP 		/* stack grows negatively for temporaries */
+//#define STACK_DOWN
 #else
-#define ARGINIT		(8*8)	/* # bits above fp where arguments start */
 #define AUTOINIT	(56*8)	/* # bits above fp where automatics start */
 #endif
 
@@ -368,6 +421,7 @@ int retreg(int ty);
 #define	SHSTR		(MAXSPECIAL+1)	/* short struct */
 #define	SFUNCALL	(MAXSPECIAL+2)	/* struct assign after function call */
 #define SPCON		(MAXSPECIAL+3)  /* positive constant */
+#define SINDCALL	(MAXSPECIAL+4)  /* call into stub function */
 
 int features(int f);
 #define FEATURE_BIGENDIAN	0x00010000
@@ -406,7 +460,7 @@ P1ND *powerpc_builtin_frame_address(const struct bitable *f, P1ND *a);
 P1ND *powerpc_builtin_return_address(const struct bitable *f, P1ND *a);
 #undef P1ND
 
-#define NARGREGS	8
+#define	NEWNEED
 
 #ifdef ELFABI
 #define COM     "       # "
