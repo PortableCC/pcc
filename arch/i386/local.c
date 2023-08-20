@@ -526,9 +526,7 @@ clocal(P1ND *p)
 
 	case USTCALL:
 #if defined(os_openbsd)
-		ap = strattr(p->n_left->n_ap);
-		if (ap->amsize == SZCHAR || ap->amsize == SZSHORT ||
-		    ap->amsize == SZINT || ap->amsize == SZLONGLONG)
+		if (strattr(p->n_left->n_td)->sz > SZLONGLONG)
 #else
 		if (attr_find(p->n_left->n_ap, ATTR_COMPLEX) &&
 #ifdef LANG_CXX
