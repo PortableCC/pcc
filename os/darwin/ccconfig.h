@@ -30,8 +30,8 @@
  */
 
 /* common cpp predefines */
-#define	CPPADD		{ "-D__Darwin__", "-D__APPLE__", "-D__MACH__", "-D__APPLE_CPP__", NULL }
-#define	CRT0		"crt1.o"
+#define CPPADD		{ "-D__Darwin__", "-D__APPLE__", "-D__MACH__", "-D__APPLE_CPP__", NULL }
+#define CRT0		"crt1.o"
 #define GCRT0		"gcrt1.o"
 #define CRTBEGIN_T	0
 #define CRTEND_T	0
@@ -46,9 +46,7 @@
 
 #if defined(mach_amd64)
 #define AS_ARCH_FLAG		strlist_append(&args, "x86_64");
-#define TARGET_GLOBALS  int amd64_i386;
-#define	TARGET_ASFLAGS	{ &amd64_i386, 1, "i386" }, \
-			{ &amd64_i386, 0, "x86_64" },
+#define TARGET_GLOBALS	int amd64_i386;
 #define XCODE_PLATFORM		
 #define XCODE_SELECT_LINK
 #define XCODE_PLATFORM_SDK	
@@ -65,18 +63,18 @@
 #define XCODE_PLATFORM_SDK	
 #endif
 
-#define DEFLIBS         { "-lSystem", NULL } //"-lpcc", 
-#define DEFPROFLIBS     { "-lSystem_profile",  NULL } //"-lpcc",
-#define DEFLIBDIRS      { XCODE_PLATFORM_SDK "/usr/lib", NULL }
+#define DEFLIBS		{ "-lSystem", NULL } //"-lpcc", 
+#define DEFPROFLIBS	{ "-lSystem_profile",  NULL } //"-lpcc",
+#define DEFLIBDIRS	{ XCODE_PLATFORM_SDK "/usr/lib", NULL }
 #ifndef STDINC
-#define STDINC          XCODE_PLATFORM_SDK "/usr/include"
+#define STDINC		XCODE_PLATFORM_SDK "/usr/include"
 
 #endif
 
-#define PCC_EARLY_AS_ARGS 						\
-				strlist_append(&args, "-xassembler"); 	\
-				strlist_append(&args, "-c"); 		\
-				strlist_append(&args, "-arch"); 	\
+#define PCC_EARLY_AS_ARGS						\
+				strlist_append(&args, "-xassembler");	\
+				strlist_append(&args, "-c");		\
+				strlist_append(&args, "-arch");		\
 				AS_ARCH_FLAG
 
 #elif defined(mach_powerpc)
@@ -84,13 +82,13 @@
 ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/usr/lib/gcc/powerpc-apple-darwin8/4.0.1 hello_ppc.o -lgcc -lSystemStubs -lSystem
 */
 
-#define DEFLIBS         { "-lcrt1.o", "-lSystem", "-lSystemStubs", "-lgcc", NULL }
-#define DEFPROFLIBS     { "-lcrt1.o", "-lSystem_profile", "-lSystemStubs", "-lgcc", NULL }
-#define DEFLIBDIRS      { "/usr/lib", "/usr/lib/gcc/powerpc-apple-darwin8/4.0.0", NULL }
+#define DEFLIBS		{ "-lcrt1.o", "-lcrt2.o", "-lSystem", NULL } //"-lgcc", "-lmx",
+#define DEFPROFLIBS	{ "-lcrt1.o", "-lcrt2.o", "-lSystem_profile", NULL } // "-lgcc", "-lmx", 
+#define DEFLIBDIRS	{ "/usr/lib", "/usr/lib/gcc/powerpc-apple-darwin8/4.0.0", NULL }
 #undef PCCLIBDIR
 
 #ifndef STDINC
-#define STDINC        "/usr/include"
+#define STDINC	      "/usr/include"
 #endif
 
 #else
@@ -104,19 +102,19 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 #endif
 
 #if defined(mach_i386)
-#define	CPPMDADD { "-D__i386__", "-D__LITTLE_ENDIAN__", NULL }
+#define CPPMDADD { "-D__i386__", "-D__LITTLE_ENDIAN__", NULL }
 #elif defined(mach_powerpc)
-#define	CPPMDADD { "-D__ppc__", "-D__BIG_ENDIAN__", NULL }
+#define CPPMDADD { "-D__ppc__", "-D__BIG_ENDIAN__", "-D__DARWIN_UNIX03", NULL }
 #elif defined(mach_aarch64)
 #define CPPMDADD { "-D__aarch64__=1","-D__arm64__=1",\
 					"-D__arm64=1", "-D__AARCH64EL__=1",\
 					"-D__LITTLE_ENDIAN__", NULL }
 #elif defined(mach_amd64)
 #define CPPMDADD \
-        { "-D__x86_64__", "-D__x86_64", "-D__amd64__", "-D__amd64", \
-          "-D__LP64__", "-D_LP64", "-D__LITTLE_ENDIAN__", NULL }
+	{ "-D__x86_64__", "-D__x86_64", "-D__amd64__", "-D__amd64", \
+	  "-D__LP64__", "-D_LP64", "-D__LITTLE_ENDIAN__", NULL }
 #elif defined(mach_m68k)
-#define	CPPMDADD { "-D__m68k__", "-D__BIG_ENDIAN__", NULL }
+#define CPPMDADD { "-D__m68k__", "-D__BIG_ENDIAN__", NULL }
 #else
 #error defines for arch missing
 #endif
@@ -126,34 +124,37 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
  * Deal with some darwin-specific args.
  */
 #define MACOS_VERSION_MIN \
-                strlist_append(&middle_linker_flags, "-macosx_version_min");    \
-                strlist_append(&middle_linker_flags, "10.9.0");
+		strlist_append(&early_linker_flags, "-macosx_version_min");    \
+		strlist_append(&early_linker_flags, "10.9.0");
 
 #if defined(mach_amd64)
-#define PCC_EARLY_LD_ARGS               \
-                MACOS_VERSION_MIN \
-                strlist_append(&middle_linker_flags, "-arch");          \
-                strlist_append(&middle_linker_flags, "x86_64");
+#define PCC_EARLY_LD_ARGS						\
+		MACOS_VERSION_MIN					\
+		strlist_append(&early_linker_flags, "-arch");		\
+		strlist_append(&early_linker_flags, "x86_64");
 #elif defined(mach_i386)
-#define  PCC_EARLY_LD_ARGS      \
-                MACOS_VERSION_MIN \
-                strlist_append(&middle_linker_flags, "-arch");          \
-                strlist_append(&middle_linker_flags, "i386");
+#define	 PCC_EARLY_LD_ARGS	\
+		MACOS_VERSION_MIN \
+		strlist_append(&early_linker_flags, "-arch");		\
+		strlist_append(&early_linker_flags, "i386");
 #elif defined(mach_aarch64)
-#define  PCC_EARLY_LD_ARGS              \
-                MACOS_VERSION_MIN \
-                strlist_append(&middle_linker_flags, "-arch");          \
-                strlist_append(&middle_linker_flags, "arm64");
+#define	 PCC_EARLY_LD_ARGS		\
+		MACOS_VERSION_MIN \
+		strlist_append(&early_linker_flags, "-arch");		\
+		strlist_append(&early_linker_flags, "arm64");
 #elif defined(mach_powerpc)
-#define  PCC_EARLY_LD_ARGS      \
-                strlist_append(&middle_linker_flags, "-arch");          \
-                strlist_append(&middle_linker_flags, "ppc");
+#define	 PCC_EARLY_LD_ARGS	\
+		strlist_append(&early_linker_flags, "-dynamic")		\
+		strlist_append(&early_linker_flags, "-weak_reference_mismatches");	\
+		strlist_append(&early_linker_flags, "non-weak");	\
+		strlist_append(&early_linker_flags, "-arch");		\
+		strlist_append(&early_linker_flags, "ppc");
 #else
 #error arch missing for PCC_EARLY_LD_ARGS
 #endif
 
 
-#define	PCC_EARLY_ARG_CHECK	{						\
+#define PCC_EARLY_ARG_CHECK	{						\
 	if (match(argp, "-install_name")) {				\
 		strlist_append(&middle_linker_flags, argp);		\
 		strlist_append(&middle_linker_flags, nxtopt(0));	\
