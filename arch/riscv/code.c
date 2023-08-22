@@ -64,6 +64,12 @@
 #else
 #define NODE P1ND
 #define talloc p1alloc
+#define	n_type	ptype
+#define	n_qual	pqual
+#undef	n_df
+#define	n_df	pdf
+#define	n_ap	pss
+#define	sap	sss
 #endif
 
 static void genswitch_bintree(int num, TWORD ty, struct swents **p, int n);
@@ -349,9 +355,7 @@ bfcode(struct symtab **sp, int cnt)
 {
 
 	struct symtab *sp2;
-	union arglist *usym;
 	NODE *q, *p;
-	TWORD t;
 	int saveallargs = 0, off = 0;
 	int i, argofs = 0, fargofs = 0, dotemps = (xtemps && !saveallargs);
 
@@ -359,24 +363,9 @@ bfcode(struct symtab **sp, int cnt)
 	 * Detect if this function has ellipses and save those
 	 * argument registers onto stack.
 	 */
-	if (cftnsp->sdf && cftnsp->sdf->dfun) {
-		usym = cftnsp->sdf->dfun;
-		for (; usym->type != TELLIPSIS; usym++) {
-			t = usym->type;
-			if (t == TNULL)
-				break;
-			if (ISSOU(BTYPE(t)))
-				usym++;
-			for (i = 0; t > BTMASK; t = DECREF(t)) 
-				if (ISARY(t) || ISFTN(t))
-					i++;
-			if (i)
-				usym++;
-		}
-		if (usym->type == TELLIPSIS)
-			saveallargs = 1;
-	}
-	
+	if (cftnsp->sdf->dlst && pr_hasell(cftnsp->sdf->dlst))
+		saveallargs = 1;
+
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
 		param_retstruct();
 		++argofs;
@@ -388,7 +377,7 @@ bfcode(struct symtab **sp, int cnt)
 		if (sp[i] == NULL)
 			continue;
 
-		int stype = sp[i]->stype;
+		int sstype = sp[i]->stype;
 
 		if ((argofs >= NARGREGS) && !xtemps)
 			break;
@@ -396,13 +385,13 @@ bfcode(struct symtab **sp, int cnt)
 		if (argofs >= NARGREGS) {
 			//cerror("too many arguments, do something intelligent");
 				putintemp(sp[i]);
-		} else if (stype == STRTY || stype == UNIONTY) {
+		} else if (sstype == STRTY || sstype == UNIONTY) {
 				param_struct(sp[i], &argofs);
-		} else if (DEUNSIGN(stype) == LONGLONG) {
+		} else if (DEUNSIGN(sstype) == LONGLONG) {
 				param_64bit(sp[i], &argofs, dotemps);
-		} else if (stype == DOUBLE || stype == LDOUBLE ||  stype == FLOAT) {
+		} else if (sstype == DOUBLE || sstype == LDOUBLE ||  sstype == FLOAT) {
 				param_double(sp[i], &fargofs, dotemps);
-//		} else if (stype == FLOAT) {
+//		} else if (sstype == FLOAT) {
 //				param_float(sp[i], &argofs, dotemps);
 		} else {
 				param_32bit(sp[i], &argofs, dotemps);
@@ -697,10 +686,10 @@ reverse(NODE *p)
 
 /* push arg onto the stack */
 /* called by moveargs() */
-static NODE *
-pusharg(NODE *p, int *regp)
+static P1ND *
+pusharg(P1ND *p, int *regp)
 {
-  NODE *q;
+  P1ND *q;
   int sz, off = 0;
 
 	/* convert to register size, if smaller */
@@ -708,7 +697,7 @@ pusharg(NODE *p, int *regp)
 	if (sz < SZINT)
 		p = block(SCONV, p, NIL, INT, 0, 0);
 
-	q = block(REG, NIL, NIL, INCREF(p->n_type), p->n_df, p->n_ap);
+	q = block(REG, NIL, NIL, INCREF(p->ptype), p->pdf, p->pss);
 	regno(q) = SP;
 
 	off = SZINT/SZCHAR * (*regp - (A7 + 1));
@@ -716,7 +705,7 @@ pusharg(NODE *p, int *regp)
 
 	if (off > 0)
 		q = block(PLUS, q, bcon(off), INT, 0, 0);
-	q = block(UMUL, q, NIL, p->n_type, p->n_df, p->n_ap);
+	q = block(UMUL, q, NIL, p->ptype, p->pdf, p->pss);
 	(*regp) += szty(p->n_type);
 
 	return buildtree(ASSIGN, q, p);
@@ -724,13 +713,13 @@ pusharg(NODE *p, int *regp)
 
 /* setup call stack with 32-bit argument */
 /* called from moveargs() */
-static NODE *
-movearg_32bit(NODE *p, int *regp)
+static P1ND *
+movearg_32bit(P1ND *p, int *regp)
 {
   int reg = *regp;
-  NODE *q;
+  P1ND *q;
 
-	q = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+	q = block(REG, NIL, NIL, p->ptype, p->pdf, p->pss);
 	regno(q) = reg++;
 	q = buildtree(ASSIGN, q, p);
 

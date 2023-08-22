@@ -64,6 +64,12 @@
 #else
 #define NODE P1ND
 #define nfree p1nfree
+#define	n_type	ptype
+#define	n_qual	pqual
+#undef	n_df
+#define	n_df	pdf
+#define	n_ap	pss
+#define	sap	sss
 #endif
 
 #define IALLOC(sz) (isinlining ? permalloc(sz) : tmpalloc(sz))
@@ -555,9 +561,11 @@ fixnames(NODE *p, void *arg)
 		c = NULL;
 #if defined(ELFABI) || defined(AOUTABI)
 
+#undef sap
 		if ((ap2 = attr_find(sp->sap, ATTR_SONAME)) == NULL ||
 		    (c = strstr(ap2->sarg(0), "@got(31)")) == NULL)
                         cerror("fixnames2");
+#define	sap sss
                 if (isu) {
 			memcpy(c, "@plt", sizeof("@plt"));
                 } else
