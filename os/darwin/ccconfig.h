@@ -144,7 +144,7 @@ ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/u
 		strlist_append(&early_linker_flags, "arm64");
 #elif defined(mach_powerpc)
 #define	 PCC_EARLY_LD_ARGS	\
-		strlist_append(&early_linker_flags, "-dynamic")		\
+		strlist_append(&early_linker_flags, "-dynamic");	\
 		strlist_append(&early_linker_flags, "-weak_reference_mismatches");	\
 		strlist_append(&early_linker_flags, "non-weak");	\
 		strlist_append(&early_linker_flags, "-arch");		\
