@@ -2036,10 +2036,6 @@ NODE *
 doacall(struct symtab *sp, NODE *f, NODE *a)
 {
 	NODE *w;
-	struct ap {
-		struct ap *next;
-		NODE *node;
-	} *apary = NULL;
 
 #ifdef PCC_DEBUG
 	if (ddebug) {
@@ -2075,9 +2071,7 @@ doacall(struct symtab *sp, NODE *f, NODE *a)
 	/* Do prototype checking for function call */
 	pr_callchk(sp, f, a);
 
-build:	if (apary)
-		FUNFREE(apary);
-	if (sp != NULL && (sp->sflags & SINLINE) && (w = inlinetree(sp, f, a)))
+build:	if (sp != NULL && (sp->sflags & SINLINE) && (w = inlinetree(sp, f, a)))
 		return w;
 	return buildtree(a == NIL ? UCALL : CALL, f, a);
 }
