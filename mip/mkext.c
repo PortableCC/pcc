@@ -496,16 +496,16 @@ printf("TEMPREG 0x%x PERMREG 0x%x PREMREG 0x%x\n", TEMPREG, PERMREG, PREMREG);
 	nelem = (MAXREGS+bitsz-1)/bitsz;
 	fprintf(fc, "static bittype ovlarr[MAXREGS][%d] = {\n", nelem);
 	for (i = 0; i < MAXREGS; i++) {
-		int el[10];
+		unsigned long el[10];
 		memset(el, 0, sizeof(el));
-		el[i/bitsz] = 1 << (i % bitsz);
+		el[i/bitsz] = (unsigned long)1 << (i % bitsz);
 		for (j = 0; roverlay[i][j] >= 0; j++) {
 			int k = roverlay[i][j];
-			el[k/bitsz] |= (1 << (k % bitsz));
+			el[k/bitsz] |= ((unsigned long)1 << (k % bitsz));
 		}
 		fprintf(fc, "{ ");
 		for (j = 0; j < MAXREGS; j += bitsz)
-			fprintf(fc, "0x%x, ", el[j/bitsz]);
+			fprintf(fc, "0x%lx, ", el[j/bitsz]);
 		fprintf(fc, " },\n");
 	}
 	fprintf(fc, "};\n");
