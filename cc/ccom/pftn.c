@@ -2421,7 +2421,7 @@ void
 incref(struct tdef *d, struct tdef *s)
 {
 	d->type = INCREF(s->type);
-	d->qual = INCREF(s->qual);
+	d->qual = INCQAL(s->qual);
 	d->df = s->df;
 	d->ss = s->ss;
 }
