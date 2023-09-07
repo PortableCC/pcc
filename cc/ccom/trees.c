@@ -2885,7 +2885,19 @@ p2tree(P1ND *p)
 	/* Copy common data */
 	np->n_op = p->n_op;
 	np->n_type = p->ptype;
-	np->n_qual = p->pqual;
+	np->n_qual = p->pqual; /* XXX */
+
+	/* if a struct is involved, add its size and alignment */
+	if (ISSOU(BTYPE(p->ptype)) ||
+	    p->n_op == STASG || p->n_op == STARG ||
+	    p->n_op == STCALL || p->n_op == USTCALL) {
+		if (p->pss && p->pss->al) {
+			np->n_ap = ap = attr_new(ATTR_P2STRUCT, 2);
+			ap->iarg(0) = (int)((tsize(STRTY, p->n_df,
+			    p->pss)+SZCHAR-1)/SZCHAR);
+			ap->iarg(1) = talign(STRTY,p->pss)/SZCHAR;
+		}
+	}
 	if (ty != BITYPE)
 		np->n_rval = p->n_rval;
 	if (ty == LTYPE) {
@@ -2914,34 +2926,6 @@ p2tree(P1ND *p)
 				np->n_name = getexname(q);
 		} else
 			np->n_name = "";
-		break;
-
-	case STASG:
-	case STARG:
-	case STCALL:
-	case USTCALL:
-		ap = attr_new(ATTR_P2STRUCT, 2);
-		np->n_ap = attr_add(np->n_ap, ap);
-		/* STASG used for stack array init */
-		if (p->n_op == STASG && ISARY(p->ptype)) {
-			int size1 = (int)tsize(p->ptype, p->n_left->n_df,
-			    p->n_left->pss)/SZCHAR;
-			ap->iarg(0) = (int)tsize(p->ptype, p->n_right->n_df,
-			    p->n_right->pss)/SZCHAR;
-			if (size1 < ap->iarg(0))
-				ap->iarg(0) = size1;
-			ap->iarg(1) = talign(p->ptype, p->n_left->pss)/SZCHAR;
-			break;
-		}
-		/* set up size parameters */
-//		ap->iarg(0) = (int)((tsize(STRTY, p->n_left->n_df,
-//		    p->n_left->pss)+SZCHAR-1)/SZCHAR);
-//		ap->iarg(1) = talign(STRTY,p->n_left->pss)/SZCHAR;
-		ap->iarg(0) = (int)((tsize(STRTY, p->n_df,
-		    p->pss)+SZCHAR-1)/SZCHAR);
-		ap->iarg(1) = talign(STRTY,p->pss)/SZCHAR;
-		if (ap->iarg(1) == 0)
-			ap->iarg(1) = 1; /* At least char for packed structs */
 		break;
 
 	case XARG:
