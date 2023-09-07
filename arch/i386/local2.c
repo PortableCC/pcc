@@ -450,7 +450,7 @@ zzzcode(NODE *p, int c)
 {
 	struct attr *ap;
 	NODE *l;
-	int pr, lr;
+	int pr, lr, i;
 	char *ch;
 
 	switch (c) {
@@ -566,7 +566,7 @@ zzzcode(NODE *p, int c)
 #endif
                 break;
 
-	case 'Q': /* emit struct assign */
+	case 'Q': /* emit struct assign (large structs) */
 		/*
 		 * Put out some combination of movs{b,w,l}
 		 * esi/edi/ecx are available.
@@ -574,7 +574,7 @@ zzzcode(NODE *p, int c)
 		expand(p, INAREG, "	leal AL,%edi\n");
 		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
 		if (ap->iarg(0) < 32) {
-			int i = ap->iarg(0) >> 2;
+			i = ap->iarg(0) >> 2;
 			while (i) {
 				expand(p, INAREG, "	movsl\n");
 				i--;
@@ -587,6 +587,31 @@ zzzcode(NODE *p, int c)
 			printf("	movsw\n");
 		if (ap->iarg(0) & 1)
 			printf("	movsb\n");
+		break;
+
+	case 'R': /* emit struct assign to NAME (small structs) */
+		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		l = p->n_left;
+		for (i = 0; i < ap->iarg(0); i += 4) {
+			char buf[200];
+			sprintf(buf, "\tmovl %d(%s),A1\n\tmovl A1,AL+%d\n", 
+			    i, rnames[regno(p->n_right)],
+			    (int)getlval(l)+i);
+			expand(p, INAREG, buf);
+		}
+		break;
+
+	case 'V': /* emit struct assign to OREG (small structs) */
+		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		l = p->n_left;
+		expand(p, INAREG, "	leal AL,A2\n");
+		for (i = 0; i < ap->iarg(0); i += 4) {
+			char buf[200];
+			sprintf(buf, "\tmovl %d(%s),A1\n\tmovl A1,%d(%s)\n", 
+			    i, rnames[regno(p->n_right)],
+			    i, rnames[regno(&resc[2])]);
+			expand(p, INAREG, buf);
+		}
 		break;
 
 	case 'S': /* emit eventual move after cast from longlong */
@@ -1330,9 +1355,15 @@ lastcall(NODE *p)
 int
 special(NODE *p, int shape)
 {
+	struct attr *ap;
 	int o = p->n_op;
 
 	switch (shape) {
+	case SHSTR:
+		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		if (ap->iarg(0) <= 16 && (ap->iarg(0) & 3) == 0)
+			return o != REG ? SRREG : SRDIR;
+		break;
 	case SFUNCALL:
 		if (o == STCALL || o == USTCALL)
 			return SRREG;

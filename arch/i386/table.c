@@ -1453,14 +1453,17 @@ struct optab table[] = {
 		0,	RDEST,
 		"	flds AR\n", },
 
-/* Do not generate memcpy if return from funcall */
-#if 0
-{ STASG,	INAREG|FOREFF,
-	SOREG|SNAME|SAREG,	TPTRTO|TSTRUCT,
-	SFUNCALL,	TPTRTO|TSTRUCT,
-		0,	RRIGHT,
-		"", },
-#endif
+{ STASG,	FOREFF,
+	SNAME,	TANY,
+	SHSTR,	TPTRTO|TANY,
+		NEEDS(NREG(A,1)),	RDEST,
+		"ZR", },
+
+{ STASG,	FOREFF,
+	SOREG,	TANY,
+	SHSTR,	TPTRTO|TANY,
+		NEEDS(NREG(A,2)),	RDEST,
+		"ZV", },
 
 { STASG,	INAREG|FOREFF,
 	SOREG|SNAME,	TANY,
