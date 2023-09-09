@@ -263,6 +263,9 @@ printf("reg %d rstatus 0x%x %s\n", i, rstatus[i],
 				rval++;
 			}
 			break;
+		case STCLR:
+			fprintf(fh, "#define HAS_STCLR\n");
+			break;
 		}
 		/* check that reclaim is not the wrong class */
 		if ((q->rewrite & (RESC1|RESC2|RESC3)) && 

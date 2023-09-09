@@ -219,6 +219,7 @@ typedef struct node {
 #define XASM	53
 #define	GOTO	54
 #define	RETURN	55
+#define	STCLR	56
 #define	FUNARG	57
 #define	ADDROF	58
 
