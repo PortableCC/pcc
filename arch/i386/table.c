@@ -1453,6 +1453,7 @@ struct optab table[] = {
 		0,	RDEST,
 		"	flds AR\n", },
 
+#if 0
 { STASG,	FOREFF,
 	SNAME,	TANY,
 	SHSTR,	TPTRTO|TANY,
@@ -1464,6 +1465,7 @@ struct optab table[] = {
 	SHSTR,	TPTRTO|TANY,
 		NEEDS(NREG(A,2)),	RDEST,
 		"ZV", },
+#endif
 
 { STASG,	INAREG|FOREFF,
 	SOREG|SNAME,	TANY,
