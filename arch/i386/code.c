@@ -39,8 +39,6 @@
 #define	talloc p1alloc
 #undef n_type
 #define n_type ptype
-#undef n_qual
-#define n_qual pqual
 #undef n_df
 #define n_df pdf
 #endif
@@ -259,6 +257,7 @@ mycallspec(struct callspec *cs)
 		argpopsize = parmoff - parmoff2;
 #endif
 	}
+	cs->stkadj = (parmoff-ARGINIT)/SZCHAR;
 }
 #endif
 

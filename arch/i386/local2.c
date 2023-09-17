@@ -470,7 +470,9 @@ zzzcode(NODE *p, int c)
 		if (attr_find(p->n_left->n_ap, GCC_ATYP_STDCALL))
 			break;
 #endif
-		pr = p->n_qual;
+		pr = 0;
+		if ((ap = attr_find(p->n_ap, ATTR_STKADJ)))
+			pr = ap->iarg(0);
 		if (attr_find(p->n_ap, ATTR_I386_FPPOP))
 			printf("	fstp	%%st(0)\n");
 		if (p->n_op == UCALL)
@@ -1312,47 +1314,10 @@ gclass(TWORD t)
 }
 
 /*
- * Calculate argument sizes.
  */
 void
 lastcall(NODE *p)
 {
-#if 0
-	NODE *op = p;
-	int nr = 0, size = 0;
-
-	p->n_qual = 0;
-	if (p->n_op != CALL && p->n_op != FORTCALL && p->n_op != STCALL)
-		return;
-	for (p = p->n_right; p->n_op == CM; p = p->n_left) { 
-		if (p->n_right->n_op != ASSIGN)
-			size += argsiz(p->n_right);
-		else
-			nr = 1;
-	}
-	if (p->n_op != ASSIGN)
-		size += argsiz(p);
-	else
-		nr++;
-	if (op->n_op == STCALL) {
-		if (kflag)
-			nr--;
-		if (nr == 0)
-			size -= 4; /* XXX OpenBSD? */
-	}
-
-#if defined(MACHOABI)
-	int newsize = (size + 15) & ~15;	/* stack alignment */
-	int align = newsize-size;
-
-	if (align != 0)
-		printf("	subl $%d,%%esp\n", align);
-
-	size=newsize;
-#endif
-	
-	op->n_qual = size; /* XXX */
-#endif
 }
 
 /*

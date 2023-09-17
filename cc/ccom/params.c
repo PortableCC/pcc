@@ -215,6 +215,7 @@ prepend(P1ND *p, P1ND *q)
 P1ND *
 fun_call(P1ND *p)
 {
+	struct attr *ap;
 	struct callspec *cs;
 	struct rdef *rp;
 	int nargs = 0;
@@ -306,6 +307,9 @@ fun_call(P1ND *p)
 			a = prepend(a, q);
 		}
 	}
+	ap = attr_new(ATTR_STKADJ, 1);
+	ap->iarg(0) = cs->stkadj;
+	p->n_ap = attr_add(p->n_ap, ap);
 	if ((p->n_right = a))
 		p->n_op = CALL;
 	return p;

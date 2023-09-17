@@ -314,6 +314,7 @@ void send_passt(int type, ...);
 enum {
 	ATTR_NONE,
 	ATTR_FP_SWAPPED,
+	ATTR_STKADJ,
 #ifdef GCC_COMPAT
 	GCC_ATYP_STDCALL,
 	GCC_ATYP_CDECL,
