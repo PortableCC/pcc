@@ -37,6 +37,7 @@
 #define	p1tcopy tcopy
 #define	sss sap
 #define	pss n_ap
+int gotreg;
 #else
 #undef n_type
 #define n_type ptype
@@ -154,7 +155,6 @@ import(P1ND *p)
 }
 #endif
 
-int gotnr; /* tempnum for GOT register */
 int argstacksize;
 
 /*
@@ -172,7 +172,7 @@ char *name;
 	P1ND *q, *r;
 	struct symtab *sp;
 
-	q = tempnode(gotnr, PTR|VOID, 0, 0);
+	q = tempnode(gotreg, PTR|VOID, 0, 0);
 
 #ifdef GCC_COMPAT
 	struct attr *ap;
@@ -226,7 +226,7 @@ char *name;
 
 	sp->stype = p->n_sp->stype;
 
-	q = tempnode(gotnr, PTR+VOID, 0, 0);
+	q = tempnode(gotreg, PTR+VOID, 0, 0);
 	r = xbcon(0, sp, INT);
 	q = buildtree(PLUS, q, r);
 
@@ -257,7 +257,7 @@ picstatic(P1ND *p)
 	P1ND *q, *r;
 	struct symtab *sp;
 
-	q = tempnode(gotnr, PTR|VOID, 0, 0);
+	q = tempnode(gotreg, PTR|VOID, 0, 0);
 	if (p->n_sp->slevel > 0) {
 		char buf[32];
 		if ((p->n_sp->sflags & SMASK) == SSTRING)
@@ -296,7 +296,7 @@ picstatic(P1ND *p)
 	}
 	sp->sclass = STATIC;
 	sp->stype = p->n_sp->stype;
-	q = tempnode(gotnr, PTR+VOID, 0, 0);
+	q = tempnode(gotreg, PTR+VOID, 0, 0);
 	r = xbcon(0, sp, INT);
 	q = buildtree(PLUS, q, r);
 	q = block(UMUL, q, 0, p->n_type, p->n_df, p->pss);
@@ -330,7 +330,7 @@ tlspic(P1ND *p)
 	 */
 
 	/* calc address of var@TLSGD */
-	q = tempnode(gotnr, PTR|VOID, 0, 0);
+	q = tempnode(gotreg, PTR|VOID, 0, 0);
 	name = getsoname(p->n_sp);
 	sp = picsymtab("", name, "@TLSGD");
 	r = xbcon(0, sp, INT);
@@ -515,12 +515,13 @@ clocal(P1ND *p)
 		p1nfree(l);
 		break;
 
+#if 0
 	case UCALL:
 		if (kflag == 0)
 			break;
 		l = block(REG, NIL, NIL, INT, 0, 0);
 		l->n_rval = EBX;
-		p->n_right = buildtree(ASSIGN, l, tempnode(gotnr, INT, 0, 0));
+		p->n_right = buildtree(ASSIGN, l, tempnode(gotreg, INT, 0, 0));
 		p->n_op -= (UCALL-CALL);
 		break;
 
@@ -562,7 +563,7 @@ clocal(P1ND *p)
 			break;
 		l = block(REG, NIL, NIL, INT, 0, 0);
 		regno(l) = EBX;
-		r = buildtree(ASSIGN, l, tempnode(gotnr, INT, 0, 0));
+		r = buildtree(ASSIGN, l, tempnode(gotreg, INT, 0, 0));
 		p->n_right = block(CM, r, p->n_right, INT, 0, 0);
 		break;
 	
@@ -579,6 +580,7 @@ clocal(P1ND *p)
 #endif
 			
 		break;
+#endif
 
 #ifdef notyet
 	/* XXX breaks sometimes */

@@ -38,6 +38,8 @@
 
 #ifdef NEWPARAMS
 
+int gotreg;
+
 static struct callspec *cftns;
 
 static P1ND *
@@ -189,17 +191,125 @@ fun_leave(void)
 			ecomp(buildtree(ASSIGN, p, q));
 		}
 	}
+	gotreg = 0;
 }
 
-#if 0
+static P1ND *
+prepend(P1ND *p, P1ND *q)
+{
+	P1ND *r;
+
+	if (p == NULL)
+		return q;
+	if (p->n_op != CM)
+		return blk(CM, q, p, tdint);
+	for (r = p; r->n_left->n_op == CM; r = r->n_left)
+		;
+	r->n_left = blk(CM, q, r->n_left, tdint);
+	return p;
+}
+
 /*
  * Put arguments at the right place for a function call.
  */
-fun_call()
+P1ND *
+fun_call(P1ND *p)
 {
+	struct callspec *cs;
+	struct rdef *rp;
+	int nargs = 0;
+	P1ND *q, *r, **np, *a;
+	int i, sz;
 
+	if ((a = p->n_op == UCALL ? NULL : p->n_right)) {
+		nargs = 1;
+		for (q = a; q->n_op == CM; q = q->n_left)
+			nargs++;
+	}
+
+	sz = sizeof(struct callspec) + nargs * sizeof(struct rdef);
+	memset(cs = stmtalloc(sz), 0, sz);
+	np = stmtalloc(nargs * sizeof (P1ND *));
+
+	cs->rv.type = p->ptype;
+	cs->rv.df = p->pdf;
+	cs->rv.ss = p->pss;
+	cs->rv.ap = p->n_ap;
+	cs->nargs = nargs;
+	/* cs->rv.flags = RV_CALLER; */
+
+	/* prepare parameter values */
+	/* Put in an array instead of an CM-separated tree */
+	if (nargs) {
+		i = nargs-1;
+		while (a->n_op == CM) {
+			np[i--] = a->n_right;
+			a = p1nfree(a);
+		}
+		np[i] = a;
+	}
+	for (i = 0; i < nargs; i++) {
+		q = np[i];
+		cs->av[i].type = q->ptype;
+		cs->av[i].df = q->pdf;
+		cs->av[i].ss = q->pss;
+		cs->av[i].ap = q->n_ap;
+	}
+
+	mycallspec(cs);
+
+	/* setup formal parameter values */
+	for (i = 0; i < nargs; i++) {
+		q = np[i];
+
+		/*
+		 * The ABI may declare that a parameter shall end up in 
+		 * multiple locations.
+		 * XXX use COMOP.
+		 */
+		rp = &cs->av[i];
+		if (rp->flags & AV_STK) {
+			if (rp->flags & AV_STK_PUSH) {
+				if (!ISSOU(q->ptype))
+					q = blk(FUNARG, q, 0, q->n_td);
+			} else
+				cerror("FIXME fun_call");
+		}
+		if (rp->flags & AV_REG) { /* in register */
+			r = block(REG, 0, 0, rp->rtp, 0, 0);
+			regno(r) = rp->reg[0];
+			q = buildtree(ASSIGN, r, q);
+		}
+		if (rp->flags & AV_REG2)
+			cerror("FIXME fun_call2");
+		a = i ? blk(CM, a, q, tdint) : q;
+	}
+
+	/* prepend struct return hidden arg, if available */
+	if (cs->rv.flags & RV_STRET) {
+		/* allocate space on stack for struct*/
+		struct symtab *spp;
+
+		spp = getsymtab("RV_STRET", SSTMT);
+		spp->td[0] = p->n_td[0];
+		spp->stype = DECREF(spp->stype);
+		spp->soffset = NOOFFSET;
+		spp->sclass = AUTO;
+		oalloc(spp, &autooff);
+
+		q = buildtree(ADDROF, nametree(spp), 0);
+		if (cs->rv.flags & RV_ARG0_REG) {
+			cerror("FIXME RV_ARG0_REG");
+		} else {
+			/* PUSH */
+			q = blk(FUNARG, q, 0, q->n_td);
+			a = prepend(a, q);
+		}
+	}
+	if ((p->n_right = a))
+		p->n_op = CALL;
+	return p;
 }
-#endif
 #endif
 
 static FILE *pr_file;
@@ -353,7 +463,7 @@ argeval(P1ND *p)
 int
 pr_hasell(int dsym)
 {
-	int i, t;
+	int t;
 
 if (pdebug) printf("pr_hasell: dsym %d\n", dsym);
 	SEEKRD(dsym, t);
@@ -362,7 +472,7 @@ if (pdebug) printf("pr_hasell: dsym %d\n", dsym);
 			return 1;
 		if (ISSOU(BTYPE(t)))
 			(void)pr_rptr();
-		for (i = 0; t > BTMASK; t = DECREF(t))
+		for (; t > BTMASK; t = DECREF(t))
 			if (ISFTN(t) || ISARY(t))
 				(void)pr_rptr();
 		t = pr_rd();
@@ -486,12 +596,9 @@ done:		ty = BTYPE(t1);
 		if (ISSOU(ty)) {
 			SEEKRDP(usym, u1);
 			SEEKRDP(udef, u2);
-//printf("ckproto: usym %d u1 %p\n", usym, u1);
-//printf("ckproto: udef %d u2 %p\n", udef, u2);
 			usym += sizeof(intptr_t), udef += sizeof(intptr_t);
 			if (suemeq((struct ssdesc *)u1,
 			    (struct ssdesc *)u2) == 0)
-//			if (suemeq((struct tdef *)u1, (struct tdef *)u2) == 0)
 				return 1;
 		}
 
@@ -576,7 +683,6 @@ protoarg(P1ND *p)
 	}
 
 	/* Get both types */
-//	tn = p->n_type;
 	tp = pr_rd();
 
 	/* handle varargs */

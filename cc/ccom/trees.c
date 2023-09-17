@@ -600,7 +600,9 @@ runtime:
 
 		case CALL:
 			p->n_right = r = strargs(p->n_right);
+#ifndef NEWPARAMS
 			p = funcode(p);
+#endif
 			/* FALLTHROUGH */
 		case UCALL:
 			if (!ISPTR(l->n_type))
@@ -611,6 +613,9 @@ runtime:
 			p->n_type = DECREF(p->n_type);
 			p->n_df = l->n_df+1; /* add one for prototypes */
 			p->pss = l->pss;
+#ifdef NEWPARAMS
+			p = fun_call(p);
+#endif
 			if (p->n_type == STRTY || p->n_type == UNIONTY) {
 				/* function returning structure */
 				/*  make function really return ptr to str., with * */

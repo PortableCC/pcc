@@ -403,7 +403,9 @@ int cdope(int);
 void myp2tree(P1ND *);
 void lcommprint(void), strprint(void);
 void lcommdel(struct symtab *);
+#ifndef NEWPARAMS
 P1ND *funcode(P1ND *);
+#endif
 struct symtab *enumhd(char *);
 P1ND *enumdcl(struct symtab *);
 P1ND *enumref(char *);
@@ -803,17 +805,22 @@ void dwarf_end(void);
  * AV_REG2 - param spans over reg and reg2.
  * AV_STREG - struct in reg/reg2, reg type in rtp
  * AV_STK - param on stack, offset from fp in off.
- *  AV_STK_PUSH - param should be pushed on stack instead of written.
+ *  AV_STK_PUSH - param should be pushed on stack instead of written to stack.
+ * AV_GOT_REG - set by target to tell GOT pointer is needed.
  *
- * (typ, df, ap) are the type specification for this parameter.
+ * (typ, df, ss) are the type specification for this parameter.
  * (off, reg, reg2) are set by the target code for this parameter.
+ * p may be set by caller as extra hidden args.
  */
 struct rdef {
 	int flags;		/* shared between common/target code */
 	int type;		/* set by common code */
 	union dimfun *df;	/* set by common code */
 	struct ssdesc *ss;	/* set by common code */
-	struct attr *ap;	/* set by common code */
+	union {
+		P1ND *p;	/* set by target code */
+		struct attr *ap; /* set by common code */
+	};
 	int off, rtp, reg[2];	/* set by target code */
 };
 #define	AV_REG		001
@@ -821,6 +828,7 @@ struct rdef {
 #define	AV_STK		004
 #define	AV_STK_PUSH	010
 #define	AV_STREG	020
+#define	AV_GOT_REG	040
 
 /*
  * function call parameter definitions.
@@ -847,13 +855,14 @@ void mycallspec(struct callspec *);
 
 void fun_enter(struct symtab *sp, struct symtab **spp, int nargs);
 void fun_leave(void);
-//void fun_call();
+P1ND *fun_call(P1ND *);
 void setreg(struct rdef *rd, int reg, int tsz, TWORD typ);
+extern int gotreg;
 
-
-#define	RV_STRET	001
-#define	RV_ARG0_REG	002
-#define	RV_RETADDR	004
-#define	RV_STREG	010
-#define	RV_RETREG	020
-#define	RV_CALLEE	040
+#define	RV_STRET	0001
+#define	RV_ARG0_REG	0002
+#define	RV_ARG0_PUSH	0004
+#define	RV_RETADDR	0010
+#define	RV_STREG	0020
+#define	RV_RETREG	0040
+#define	RV_CALLEE	0100

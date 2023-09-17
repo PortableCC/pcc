@@ -386,6 +386,7 @@ ulltofp(NODE *p)
 	printf(LABFMT ":\n", jmplab);
 }
 
+#if 0
 static int
 argsiz(NODE *p)
 {
@@ -402,6 +403,7 @@ argsiz(NODE *p)
 	comperr("argsiz");
 	return 0;
 }
+#endif
 
 static void
 fcast(NODE *p)
@@ -913,10 +915,11 @@ cbgen(int o, int lab)
 static void
 fixcalls(NODE *p, void *arg)
 {
-	struct attr *ap;
+//	struct attr *ap;
 
 	/* Prepare for struct return by allocating bounce space on stack */
 	switch (p->n_op) {
+#if 0
 	case STCALL:
 	case USTCALL:
 		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
@@ -925,6 +928,7 @@ fixcalls(NODE *p, void *arg)
 		if (8+p2autooff > stkpos)
 			stkpos = ap->iarg(0)+p2autooff;
 		break;
+#endif
 	case LS:
 	case RS:
 		if (p->n_type != LONGLONG && p->n_type != ULONGLONG)
@@ -1313,6 +1317,7 @@ gclass(TWORD t)
 void
 lastcall(NODE *p)
 {
+#if 0
 	NODE *op = p;
 	int nr = 0, size = 0;
 
@@ -1347,6 +1352,7 @@ lastcall(NODE *p)
 #endif
 	
 	op->n_qual = size; /* XXX */
+#endif
 }
 
 /*
