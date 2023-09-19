@@ -513,73 +513,6 @@ clocal(P1ND *p)
 		p1nfree(l);
 		break;
 
-#if 0
-	case UCALL:
-		if (kflag == 0)
-			break;
-		l = block(REG, NIL, NIL, INT, 0, 0);
-		l->n_rval = EBX;
-		p->n_right = buildtree(ASSIGN, l, tempnode(gotreg, INT, 0, 0));
-		p->n_op -= (UCALL-CALL);
-		break;
-
-	case USTCALL:
-#if defined(os_openbsd)
-		if (strattr(p->n_left->n_td)->sz > SZLONGLONG)
-#else
-		if (attr_find(p->n_left->n_ap, ATTR_COMPLEX) &&
-#ifdef LANG_CXX
-		    (ap = strattr(p->n_left->n_ap)) &&
-		    ap->amsize == SZLONGLONG)
-#else
-		    strattr(p->n_left->n_td)->sz== SZLONGLONG)
-#endif
-#endif
-		{
-			/* float complex */
-			/* fake one arg to make pass2 happy */
-			p->n_right = block(FUNARG, bcon(0), NIL, INT, 0, 0);
-			p->n_op -= (UCALL-CALL);
-			break;
-		}
-
-		/* Add hidden arg0 */
-		r = block(REG, NIL, NIL, INCREF(VOID), 0, 0);
-		regno(r) = EBP;
-#ifdef GCC_COMPAT
-		if ((ap = attr_find(p->n_ap, GCC_ATYP_REGPARM)) != NULL &&
-		    ap->iarg(0) > 0) {
-			l = block(REG, NIL, NIL, INCREF(VOID), 0, 0);
-			regno(l) = EAX;
-			p->n_right = buildtree(ASSIGN, l, r);
-		} else
-#endif
-			p->n_right = block(FUNARG, r, NIL, INCREF(VOID), 0, 0);
-		p->n_op -= (UCALL-CALL);
-
-		if (kflag == 0)
-			break;
-		l = block(REG, NIL, NIL, INT, 0, 0);
-		regno(l) = EBX;
-		r = buildtree(ASSIGN, l, tempnode(gotreg, INT, 0, 0));
-		p->n_right = block(CM, r, p->n_right, INT, 0, 0);
-		break;
-	
-	/* FALLTHROUGH */
-#if defined(MACHOABI)
-	case CALL:
-	case STCALL:
-		if (p->n_type == VOID)
-			break;
-
-		r = tempnode(0, p->n_type, p->n_df, p->pss);
-		l = p1tcopy(r);
-		p = buildtree(COMOP, buildtree(ASSIGN, r, p), l);
-#endif
-			
-		break;
-#endif
-
 #ifdef notyet
 	/* XXX breaks sometimes */
 	case CBRANCH:
@@ -706,17 +639,6 @@ clocal(P1ND *p)
 		p = makety(p, mkqtyp(o));
 #endif
 		break;
-
-#if 0
-	case FORCE:
-		/* put return value in return reg */
-		p->n_op = ASSIGN;
-		p->n_right = p->n_left;
-		p->n_left = block(REG, NIL, NIL, p->n_type, 0, 0);
-		p->n_left->n_rval = p->n_left->n_type == BOOL ? 
-		    RETREG(CHAR) : RETREG(p->n_type);
-		break;
-#endif
 
 #ifndef NOBREGS
 	case LS:

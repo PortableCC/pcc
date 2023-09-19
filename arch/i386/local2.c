@@ -386,25 +386,6 @@ ulltofp(NODE *p)
 	printf(LABFMT ":\n", jmplab);
 }
 
-#if 0
-static int
-argsiz(NODE *p)
-{
-	TWORD t = p->n_type;
-
-	if (t < LONGLONG || t == FLOAT || t > BTMASK)
-		return 4;
-	if (t == LONGLONG || t == ULONGLONG || t == DOUBLE)
-		return 8;
-	if (t == LDOUBLE)
-		return 12;
-	if (t == STRTY || t == UNIONTY)
-		return attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0) & ~3;
-	comperr("argsiz");
-	return 0;
-}
-#endif
-
 static void
 fcast(NODE *p)
 {
@@ -475,8 +456,6 @@ zzzcode(NODE *p, int c)
 			pr = ap->iarg(0);
 		if (attr_find(p->n_ap, ATTR_I386_FPPOP))
 			printf("	fstp	%%st(0)\n");
-//		if (p->n_op == UCALL)
-//			return; /* XXX remove ZC from UCALL */
 		if (pr)
 			printf("	addl $%d, %s\n", pr, rnames[ESP]);
 #if defined(os_openbsd)
@@ -917,20 +896,9 @@ cbgen(int o, int lab)
 static void
 fixcalls(NODE *p, void *arg)
 {
-//	struct attr *ap;
 
 	/* Prepare for struct return by allocating bounce space on stack */
 	switch (p->n_op) {
-#if 0
-	case STCALL:
-	case USTCALL:
-		ap = attr_find(p->n_ap, ATTR_P2STRUCT);
-		if (ap->iarg(0)+p2autooff > stkpos)
-			stkpos = ap->iarg(0)+p2autooff;
-		if (8+p2autooff > stkpos)
-			stkpos = ap->iarg(0)+p2autooff;
-		break;
-#endif
 	case LS:
 	case RS:
 		if (p->n_type != LONGLONG && p->n_type != ULONGLONG)
