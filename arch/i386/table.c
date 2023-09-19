@@ -731,7 +731,19 @@ struct optab table[] = {
 		XSL(A),	0,
 		"	call CL\nZC", },
 
+{ USTCALL,	FOREFF,
+	SCON,	TANY,
+	SANY,	TANY,
+		XSL(A),	0,
+		"	call CL\nZC", },
+
 { STCALL,	INAREG,
+	SCON,	TANY,
+	SANY,	TANY,
+		XSL(A),	RESC1,	/* should be 0 */
+		"	call CL\nZC", },
+
+{ USTCALL,	INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
 		XSL(A),	RESC1,	/* should be 0 */

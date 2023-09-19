@@ -475,8 +475,8 @@ zzzcode(NODE *p, int c)
 			pr = ap->iarg(0);
 		if (attr_find(p->n_ap, ATTR_I386_FPPOP))
 			printf("	fstp	%%st(0)\n");
-		if (p->n_op == UCALL)
-			return; /* XXX remove ZC from UCALL */
+//		if (p->n_op == UCALL)
+//			return; /* XXX remove ZC from UCALL */
 		if (pr)
 			printf("	addl $%d, %s\n", pr, rnames[ESP]);
 #if defined(os_openbsd)

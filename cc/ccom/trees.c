@@ -2986,6 +2986,7 @@ delvoid(P1ND *p, void *arg)
 		
 }
 
+#ifndef NEWPARAMS
 /*
  * Change calls inside calls to separate statement.
  */
@@ -3011,6 +3012,7 @@ deldcall(P1ND *p, int split)
 		p->n_left = deldcall(p->n_left, split);
 	return p;
 }
+#endif
 
 #ifndef WORD_ADDRESSED
 
@@ -3182,7 +3184,9 @@ ecode(P1ND *p)
 	p = rmpconv(p);
 #endif
 	p = optim(p);
+#ifndef NEWPARAMS
 	p = deldcall(p, 0);
+#endif
 	p1walkf(p, delvoid, 0);
 #ifdef PCC_DEBUG
 	if (xdebug) {

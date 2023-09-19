@@ -594,6 +594,69 @@ mainp2()
 
 #endif
 
+#ifdef NEWPARAMS
+
+static void
+poutargs(NODE *p, struct interpass *iplnk)
+{
+	struct interpass *ip;
+
+	for (; p->n_op == CM; p = nfree(p)) {
+		ip = ipnode(p->n_right);
+		DLIST_INSERT_BEFORE(iplnk, ip, qelem);
+	}
+	ip = ipnode(p);
+	DLIST_INSERT_BEFORE(iplnk, ip, qelem);
+}
+
+static NODE *
+callsrch(NODE *p, struct interpass *iplnk, int ncall)
+{
+	struct interpass *ip;
+	NODE *q;
+	int o = p->n_op;
+
+	if (callop(o)) {
+		p->n_left = callsrch(p->n_left, iplnk, ncall+1);
+		if (o == CALL || o == STCALL) {
+			p->n_right = callsrch(p->n_right, iplnk, ncall+1);
+			poutargs(p->n_right, iplnk);
+			p->n_op++; /* make UCALL */
+			if (ncall) {
+				int num = p2env.epp->ip_tmpnum++;
+				q = mklnode(TEMP, 0, num, p->n_type);
+				q = mkbinode(ASSIGN, q, p, p->n_type);
+				ip = ipnode(q);
+				DLIST_INSERT_BEFORE(iplnk, ip, qelem);
+				p = mklnode(TEMP, 0, num, p->n_type);
+			}
+		}
+	} else {
+		if (optype(o) == BITYPE)
+			p->n_right = callsrch(p->n_right, iplnk, ncall);
+		if (optype(o) != LTYPE)
+			p->n_left = callsrch(p->n_left, iplnk, ncall);
+	}
+	return p;
+}
+
+/*
+ * Search 
+ */
+static void
+nodesrch(struct p2env *p2e)
+{
+	struct interpass *ip;
+
+	DLIST_FOREACH(ip, &p2e->ipole, qelem) {
+		if (ip->type != IP_NODE)
+			continue;
+
+		ip->ip_node = callsrch(ip->ip_node, ip, 0);
+	}
+}
+#endif
+
 /*
  * Receives interpass structs from pass1.
  */
@@ -679,6 +742,10 @@ pass2_compile(struct interpass *ip)
 			DLIST_INSERT_BEFORE(ip, tipp, qelem);
 		}
 	}
+
+#ifdef NEWPARAMS
+	nodesrch(p2e);	/* fix call order */
+#endif
 
 	fixxasm(p2e); /* setup for extended asm */
 
