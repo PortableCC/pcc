@@ -73,6 +73,90 @@ int getclass(int tmp);
 static char *srtyp[] = { "SRNOPE", "SRDIR", "SROREG", "SRREG" };
 #endif
 
+#ifdef NEWSHAPES
+#define	DEFSH(a,A)	struct shape a = { REG, A, 0 }
+/* default shapes */
+DEFSH(shareg, CLASSA);
+DEFSH(shbreg, CLASSB);
+DEFSH(shcreg, CLASSC);
+DEFSH(shdreg, CLASSD);
+DEFSH(shereg, CLASSE);
+DEFSH(shfreg, CLASSF);
+DEFSH(shgreg, CLASSG);
+struct shape shoreg = { OREG, 0, 0 };
+struct shape shname = { NAME, 0, 0 };
+struct shape shicon = { ICON, MIN_LONGLONG, MAX_LONGLONG };
+struct shape shone = { ICON, 1, 1 };
+struct shape shzero = { ICON, 0, 0 };
+
+/*
+ * Convert old shape to new-style.  only static alloc.
+ */
+struct shape **
+o2nsh(int osh)
+{
+	static struct shape *shlist[20];
+	int i = 0;
+
+	if (osh & SPECIAL) {
+		comperr("o2nsh1");
+	}
+
+#define	SHADD(A,a)	if (osh & A) { shlist[i++] = &a; osh &= ~A; }
+	SHADD(SAREG, shareg);
+	SHADD(SBREG, shbreg);
+	SHADD(SCREG, shcreg);
+	SHADD(SDREG, shdreg);
+	SHADD(SEREG, shereg);
+	SHADD(SFREG, shfreg);
+	SHADD(SGREG, shgreg);
+	SHADD(SOREG, shoreg);
+	SHADD(SNAME, shname);
+	if (osh)
+		comperr("o2nsh2");
+	shlist[i++] = 0;
+	return shlist;
+}
+
+int
+n2osh(struct shape **shl)
+{
+	struct shape *sh;
+	int i, rv;
+
+	if (shl == NULL)
+		return SANY;
+	rv = 0;
+	for (i = 0; shl[i]; i++) {
+		sh = shl[i];
+		switch (sh->op) {
+		case REG: rv |= (1 << sh->left); break;
+		case OREG: rv |= SOREG; break;
+		case NAME: rv |= SNAME; break;
+		case ICON:
+			if (sh->left == (CONSZ)MIN_LONGLONG &&
+			    sh->right == (CONSZ)MAX_LONGLONG)
+				rv |= SCON;
+			else if (sh->left == 0 && sh->right == 0)
+				rv |= SZERO;
+			else if (sh->left == 1 && sh->right == 1)
+				rv |= SONE;
+			else
+				comperr("n2osh %d %lld %lld",
+				    sh->op, sh->left, sh->right);
+			break;
+		case SPECON:
+			rv = sh->left;
+			break;
+		default:
+			comperr("n2osh %d %lld %lld",
+			    sh->op, sh->left, sh->right);
+		}
+	}
+	return rv;
+}
+#endif
+
 /*
  * return true if shape is appropriate for the node p
  *
@@ -580,13 +664,15 @@ findops(NODE *p, int cookie)
 
 		F2DEBUG(("findop got types\n"));
 
-		if ((shl = chcheck(l, q->lshape, q->rewrite & RLEFT)) == SRNOPE)
+		if ((shl = chcheck(l, n2osh(q->lshape),
+		    q->rewrite & RLEFT)) == SRNOPE)
 			continue;
 
 		F2DEBUG(("findop lshape %s\n", srtyp[shl]));
 		F2WALK(l);
 
-		if ((shr = chcheck(r, q->rshape, q->rewrite & RRIGHT)) == SRNOPE)
+		if ((shr = chcheck(r, n2osh(q->rshape),
+		    q->rewrite & RRIGHT)) == SRNOPE)
 			continue;
 
 		F2DEBUG(("findop rshape %s\n", srtyp[shr]));
@@ -595,7 +681,7 @@ findops(NODE *p, int cookie)
 		/* Help register assignment after SSA by preferring */
 		/* 2-op insns instead of 3-ops */
 		if (xssa && (q->rewrite & RLEFT) == 0 &&
-		    (q->lshape & (INREGS)) && shl == SRDIR)
+		    (n2osh(q->lshape) & (INREGS)) && shl == SRDIR)
 			shl = SRREG;
 
 		if (hasneed(q->needs, cNREW) != 0)
@@ -623,9 +709,9 @@ findops(NODE *p, int cookie)
 	if (cookie == FORCC)
 		cookie = INREGS;
 
-	sh = shswitch(sh, p->n_left, qq->lshape, cookie,
+	sh = shswitch(sh, p->n_left, n2osh(qq->lshape), cookie,
 	    qq->rewrite & RLEFT, gol);
-	sh = shswitch(sh, p->n_right, qq->rshape, cookie,
+	sh = shswitch(sh, p->n_right, n2osh(qq->rshape), cookie,
 	    qq->rewrite & RRIGHT, gor);
 
 	if (sh == -1) {
@@ -686,11 +772,11 @@ relops(NODE *p)
 			continue; /* Types must be correct */
 
 		F2DEBUG(("relops got types\n"));
-		if ((shl = chcheck(l, q->lshape, 0)) == SRNOPE)
+		if ((shl = chcheck(l, n2osh(q->lshape), 0)) == SRNOPE)
 			continue;
 		F2DEBUG(("relops lshape %d\n", shl));
 		F2WALK(p);
-		if ((shr = chcheck(r, q->rshape, 0)) == SRNOPE)
+		if ((shr = chcheck(r, n2osh(q->rshape), 0)) == SRNOPE)
 			continue;
 		F2DEBUG(("relops rshape %d\n", shr));
 		F2WALK(p);
@@ -714,17 +800,17 @@ relops(NODE *p)
 
 	q = &table[idx];
 
-	(void)shswitch(-1, p->n_left, q->lshape, INREGS,
+	(void)shswitch(-1, p->n_left, n2osh(q->lshape), INREGS,
 	    q->rewrite & RLEFT, gol);
 
-	(void)shswitch(-1, p->n_right, q->rshape, INREGS,
+	(void)shswitch(-1, p->n_right, n2osh(q->rshape), INREGS,
 	    q->rewrite & RRIGHT, gor);
 
 	sh = 0;
 	if (q->rewrite & RLEFT)
-		sh = ffs(q->lshape & INREGS)-1;
+		sh = ffs(n2osh(q->lshape) & INREGS)-1;
 	else if (q->rewrite & RRIGHT)
-		sh = ffs(q->rshape & INREGS)-1;
+		sh = ffs(n2osh(q->rshape) & INREGS)-1;
 
 	F2DEBUG(("relops: node %p\n", p));
 	p->n_su = MKIDX(idx, 0);
@@ -789,7 +875,7 @@ findasg(NODE *p, int cookie)
 		} else
 #endif
 		{
-			if ((shl = tshape(l, q->lshape)) == SRNOPE)
+			if ((shl = tshape(l, n2osh(q->lshape))) == SRNOPE)
 				continue;
 			if (shl == SRREG)
 				continue;
@@ -798,7 +884,8 @@ findasg(NODE *p, int cookie)
 		F2DEBUG(("findasg lshape %d\n", shl));
 		F2WALK(l);
 
-		if ((shr = chcheck(r, q->rshape, q->rewrite & RRIGHT)) == SRNOPE)
+		if ((shr = chcheck(r, n2osh(q->rshape),
+		    q->rewrite & RRIGHT)) == SRNOPE)
 			continue;
 
 		F2DEBUG(("findasg rshape %d\n", shr));
@@ -825,10 +912,10 @@ findasg(NODE *p, int cookie)
 	F2DEBUG(("findasg entry %d(%s,%s)\n", idx, srtyp[gol], srtyp[gor]));
 
 	sh = -1;
-	sh = shswitch(sh, p->n_left, qq->lshape, cookie,
+	sh = shswitch(sh, p->n_left, n2osh(qq->lshape), cookie,
 	    qq->rewrite & RLEFT, gol);
 
-	sh = shswitch(sh, p->n_right, qq->rshape, cookie,
+	sh = shswitch(sh, p->n_right, n2osh(qq->rshape), cookie,
 	    qq->rewrite & RRIGHT, gor);
 
 #ifdef mach_pdp11 /* XXX all targets? */
@@ -895,13 +982,13 @@ findumul(NODE *p, int cookie)
 			continue; /* Types must be correct */
 		
 
-		F2DEBUG(("findumul got types, rshape %s\n", prcook(q->rshape)));
+		F2DEBUG(("findumul got types, rshape %s\n", prcook(n2osh(q->rshape))));
 		/*
 		 * Try to create an OREG of the node.
 		 * Fake left even though it's right node,
 		 * to be sure of conversion if going down left.
 		 */
-		if ((shl = chcheck(p, q->rshape, 0)) == SRNOPE)
+		if ((shl = chcheck(p, n2osh(q->rshape), 0)) == SRNOPE)
 			continue;
 		
 		shr = 0;
@@ -921,7 +1008,7 @@ findumul(NODE *p, int cookie)
 	}
 	F2DEBUG(("findumul entry %d(%s %s)\n", ixp[i], srtyp[shl], srtyp[shr]));
 
-	sh = shswitch(-1, p, q->rshape, cookie, q->rewrite & RLEFT, shl);
+	sh = shswitch(-1, p, n2osh(q->rshape), cookie, q->rewrite & RLEFT, shl);
 	if (sh == -1)
 		sh = ffs(cookie & q->visit & INREGS)-1;
 
@@ -960,9 +1047,9 @@ findleaf(NODE *p, int cookie)
 		    ttype(p->n_type, q->ltype) == 0)
 			continue; /* Types must be correct */
 
-		F2DEBUG(("findleaf got types, rshape %s\n", prcook(q->rshape)));
+		F2DEBUG(("findleaf got types, rshape %s\n", prcook(n2osh(q->rshape))));
 
-		if (chcheck(p, q->rshape, 0) != SRDIR)
+		if (chcheck(p, n2osh(q->rshape), 0) != SRDIR)
 			continue;
 
 		if (hasneed(q->needs, cNREW) != 0)
@@ -1025,7 +1112,7 @@ finduni(NODE *p, int cookie)
 			continue; /* Type must be correct */
 
 		F2DEBUG(("finduni got types\n"));
-		if ((shl = chcheck(l, q->lshape, q->rewrite & RLEFT)) == SRNOPE)
+		if ((shl = chcheck(l, n2osh(q->lshape), q->rewrite & RLEFT)) == SRNOPE)
 			continue;
 
 		F2DEBUG(("finduni got shapes %d\n", shl));
@@ -1063,7 +1150,7 @@ finduni(NODE *p, int cookie)
 	}
 	q = &table[idx];
 
-	sh = shswitch(-1, p->n_left, q->lshape, cookie,
+	sh = shswitch(-1, p->n_left, n2osh(q->lshape), cookie,
 	    q->rewrite & RLEFT, num);
 	if (sh == -1)
 		sh = ffs(cookie & q->visit & INREGS)-1;
@@ -1146,7 +1233,7 @@ findmops(NODE *p, int cookie)
 		default:
 			if ((cookie & q->visit) == 0)
 				continue; /* Won't match requested shape */
-			if (((cookie & INREGS & q->lshape) == 0) || !isreg(l))
+			if (((cookie & INREGS & n2osh(q->lshape)) == 0) || !isreg(l))
 				continue; /* Bad return register */
 			break;
 		}
@@ -1155,13 +1242,13 @@ findmops(NODE *p, int cookie)
 		/*
 		 * left shape must match left node.
 		 */
-		if ((shl = tshape(l, q->lshape)) != SRDIR && (shl != SROREG))
+		if ((shl = tshape(l, n2osh(q->lshape))) != SRDIR && (shl != SROREG))
 			continue;
 
 		F2DEBUG(("findmops lshape %s\n", srtyp[shl]));
 		F2WALK(l);
 
-		if ((shr = chcheck(r, q->rshape, 0)) == SRNOPE)
+		if ((shr = chcheck(r, n2osh(q->rshape), 0)) == SRNOPE)
 			continue;
 
 		F2DEBUG(("findmops rshape %s\n", srtyp[shr]));
@@ -1198,9 +1285,9 @@ findmops(NODE *p, int cookie)
 	 */
 
 	sh = -1;
-	sh = shswitch(sh, p->n_left, qq->lshape, cookie,
+	sh = shswitch(sh, p->n_left, n2osh(qq->lshape), cookie,
 	    qq->rewrite & RLEFT, gol);
-	sh = shswitch(sh, r, qq->rshape, cookie, 0, gor);
+	sh = shswitch(sh, r, n2osh(qq->rshape), cookie, 0, gor);
 
 	if (sh == -1) {
 		if (cookie & (FOREFF|FORCC))

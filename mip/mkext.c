@@ -24,6 +24,23 @@ int chkop[DSIZE];
 
 void mktables(void);
 
+#ifdef NEWSHAPES
+#define DEFSH(a,A)      struct shape a = { REG, A, 0 }
+/* default shapes */
+DEFSH(shareg, CLASSA);
+DEFSH(shbreg, CLASSB);
+DEFSH(shcreg, CLASSC);
+DEFSH(shdreg, CLASSD);
+DEFSH(shereg, CLASSE);
+DEFSH(shfreg, CLASSF);
+DEFSH(shgreg, CLASSG);
+struct shape shoreg = { OREG, 0, 0 };
+struct shape shname = { NAME, 0, 0 };
+struct shape shicon = { ICON, MIN_LONGLONG, MAX_LONGLONG };
+struct shape shone = { ICON, 1, 1 };
+struct shape shzero = { ICON, 0, 0 };
+#endif
+
 char *ftitle;
 char *cname = "external.c";
 char *hname = "external.h";
@@ -247,6 +264,7 @@ printf("reg %d rstatus 0x%x %s\n", i, rstatus[i],
 	rval = 0;
 	for (q = table; q->op != FREE; q++) {
 		switch (q->op) {
+#ifndef NEWSHAPES
 		case ASSIGN:
 #define	F(x) (q->visit & x && q->rewrite & (RLEFT|RRIGHT) && \
 		    q->lshape & ~x && q->rshape & ~x)
@@ -257,6 +275,7 @@ printf("reg %d rstatus 0x%x %s\n", i, rstatus[i],
 			}
 #undef F
 			/* FALLTHROUGH */
+#endif
 		case STASG:
 			if ((q->visit & INREGS) && !(q->rewrite & RDEST)) {
 				compl(q, "ASSIGN/STASG reclaim must be RDEST");
