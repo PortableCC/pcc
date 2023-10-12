@@ -458,6 +458,7 @@ extern int msettings;
 #define	ATTR_MI_TARGET	ATTR_I386_FCMPLRET, ATTR_I386_FPPOP
 
 #define	NEWPARAMS
+#define	NEWSHAPES
 
 /* floating point definitions */
 #define	USE_IEEEFP_32
