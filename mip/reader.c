@@ -595,53 +595,67 @@ mainp2()
 #endif
 
 #ifdef NEWPARAMS
-
 static void
-poutargs(NODE *p, struct interpass *iplnk)
+prepnode(NODE *p, struct interpass *iplnk)
 {
 	struct interpass *ip;
 
-	for (; p->n_op == CM; p = nfree(p)) {
-		ip = ipnode(p->n_right);
-		DLIST_INSERT_BEFORE(iplnk, ip, qelem);
-	}
 	ip = ipnode(p);
 	DLIST_INSERT_BEFORE(iplnk, ip, qelem);
 }
 
-static NODE *
-callsrch(NODE *p, struct interpass *iplnk, int ncall)
+/*
+ * If a CALL has its parameters in registers then prepend all CALLs and UCALLs
+ * below to its own IP links.
+ * But for any CALL which only has its parameters in memory we do
+ * 1) not care about UCALLs below and 2) leave the topmost call in the tree.
+ */
+static void
+callsrch(NODE *p, struct interpass *iplnk, int prepucall)
 {
-	struct interpass *ip;
-	NODE *q;
+	NODE *q, *r;
 	int o = p->n_op;
+	int prepcall = 0;
 
-	if (callop(o)) {
-		p->n_left = callsrch(p->n_left, iplnk, ncall+1);
-		if (o == CALL || o == STCALL) {
-			p->n_right = callsrch(p->n_right, iplnk, ncall+1);
-			poutargs(p->n_right, iplnk);
-			p->n_op++; /* make UCALL */
-			if (ncall) {
-				int num = p2env.epp->ip_tmpnum++;
-				q = mklnode(TEMP, 0, num, p->n_type);
-				q = mkbinode(ASSIGN, q, p, p->n_type);
-				ip = ipnode(q);
-				DLIST_INSERT_BEFORE(iplnk, ip, qelem);
-				p = mklnode(TEMP, 0, num, p->n_type);
-			}
-		}
-	} else {
-		if (optype(o) == BITYPE)
-			p->n_right = callsrch(p->n_right, iplnk, ncall);
-		if (optype(o) != LTYPE)
-			p->n_left = callsrch(p->n_left, iplnk, ncall);
+	if (o == CALL || o == STCALL) {
+		for (q = p->n_right; q->n_op == CM; q = q->n_left)
+			if (q->n_right->n_op == ASSIGN && 
+			    q->n_right->n_left->n_op == REG)
+				prepucall = 1;
+		prepcall = 1;
 	}
-	return p;
+
+	if (optype(o) == BITYPE)
+		callsrch(p->n_right, iplnk, prepucall);
+	if (optype(o) != LTYPE)
+		callsrch(p->n_left, iplnk, prepucall);
+
+	if (callop(o) == 0)
+		return;
+
+	if (o == CALL || o == STCALL) {
+		/* prepend function args before this call */
+		for (q = p->n_right; q->n_op == CM; q = nfree(q))
+			prepnode(q->n_right, iplnk);
+		prepnode(q, iplnk);
+		p->n_op++; /* make UCALL */
+	}
+	if (prepcall || prepucall) {
+		if (iplnk->ip_node != p) {
+			int num = p2env.epp->ip_tmpnum++;
+			q = mklnode(TEMP, 0, num, p->n_type);
+			r = talloc(); *r = *p;
+			q = mkbinode(ASSIGN, q, r, p->n_type);
+			prepnode(q, iplnk);
+			p->n_op = TEMP;
+			regno(p) = num;
+		}
+	}
+	return;
 }
 
 /*
- * Search 
+ * For each tree, search for calls.
  */
 static void
 nodesrch(struct p2env *p2e)
@@ -651,8 +665,7 @@ nodesrch(struct p2env *p2e)
 	DLIST_FOREACH(ip, &p2e->ipole, qelem) {
 		if (ip->type != IP_NODE)
 			continue;
-
-		ip->ip_node = callsrch(ip->ip_node, ip, 0);
+		callsrch(ip->ip_node, ip, 0);
 	}
 }
 #endif
