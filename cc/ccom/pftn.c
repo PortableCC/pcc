@@ -699,16 +699,6 @@ done:	autooff = AUTOINIT;
 	symclear(1);	/* In case of function pointer args */
 }
 
-#if 0
-/*
- * basic attributes for structs and enums
- */
-static struct attr *
-seattr(void)
-{
-	return attr_add(attr_new(ATTR_ALIGNED, 4), attr_new(ATTR_STRUCT, 2));
-}
-#endif
 #define	SEDESC()	memset(permalloc(sizeof(struct ssdesc)), \
 	0, sizeof(struct ssdesc));
 
@@ -736,11 +726,13 @@ deftag(char *name, int class)
 {
 	struct symtab *sp;
 
-	if ((sp = lookup(name, STAGNAME))->sap == NULL) {
+	if ((sp = lookup(name, STAGNAME))->sss == NULL) {
 		/* New tag */
 		defstr(sp, class);
 	} else if (sp->sclass != class)
 		uerror("tag %s redeclared", name);
+	if (sp->sss == NULL)
+		sp->sss = SEDESC();
 	return sp;
 }
 
@@ -753,8 +745,6 @@ rstruct(char *tag, int soru)
 	struct symtab *sp;
 
 	sp = deftag(tag, soru);
-	if (sp->sss == NULL)
-		sp->sss = SEDESC();
 	return mkty(sp->stype, 0, sp->sss);
 }
 
@@ -803,16 +793,7 @@ enumhd(char *name)
 		sp = hide(sp);
 		defstr(sp, ENAME);
 	}
-	if (sp->sss == NULL)
-		sp->sss = SEDESC();
 	sp->sss->sp = sp;
-#if 0
-	if (sp->sap == NULL)
-		ap = sp->sap = attr_new(ATTR_STRUCT, 4);
-	else
-		ap = attr_find(sp->sap, ATTR_STRUCT);
-	ap->amlist = sp;
-#endif
 	return sp;
 }
 
@@ -902,8 +883,6 @@ bstruct(char *name, int soru, NODE *gp)
 
 	if (name != NULL) {
 		sp = deftag(name, soru);
-		if (sp->sss == NULL)
-			sp->sss = SEDESC();
 		if (sp->sss->al != 0) {
 			if (sp->slevel < blevel) {
 				sp = hide(sp);
@@ -1208,10 +1187,11 @@ tsize(TWORD ty, union dimfun *d, struct ssdesc *ss)
 	if (ty <= LDOUBLE)
 		sz = sztable[ty];
 	else if (ISSOU(ty)) {
-		if (ss == NULL || (sz = ss->sz) == 0) {
+		if (ss == NULL || ss->al == 0) {
 			uerror("unknown structure/union/enum");
 			sz = SZINT;
-		}
+		} else
+			sz = ss->sz;
 	} else {
 		uerror("unknown type");
 		sz = SZINT;
