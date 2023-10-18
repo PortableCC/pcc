@@ -98,9 +98,9 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 			p = block(REG, 0, 0, INTPTR, 0, 0);
 			regno(p) = cs->rv.reg[0];
 		} else
-			p = nmtree(cs->rv.off, INTPTR, 0, 0);
+			p = nmtree(cs->rv.off[0], INTPTR, 0, 0);
 		ecomp(buildtree(ASSIGN, q, p));
-		cs->rv.off = i;		/* keep tempnr in off */
+		cs->rv.off[0] = i;		/* keep tempnr in off */
 	}
 
 	for (i = 0; i < cs->nargs; i++) {
@@ -122,7 +122,7 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 			ecomp(buildtree(ASSIGN, q, p));
 		} else if (rp->flags & AV_STK) {
 			/* argument on stack, move to temp if optimizing */
-			sp->soffset = rp->off;
+			sp->soffset = rp->off[0];
 			if (xtemps && !ISSOU(sp->stype) && cisreg(sp->stype) &&
 			    ((cqual(sp->stype, sp->squal) & VOL) == 0)) {
 				p = nametree(sp);
@@ -156,36 +156,37 @@ fun_leave(void)
 
 	if (cs->rv.flags & RV_RETREG) {
 		/* scalar/float return in registers */
-		p = block(REG, 0, 0, cs->rv.rtp, 0, 0);
+		p = block(REG, 0, 0, cs->rv.rtp[0], 0, 0);
 		regno(p) = cs->rv.reg[0];
-		ecomp(buildtree(ASSIGN, p, cast(p1tcopy(cn), cs->rv.rtp, 0)));
+		ecomp(buildtree(ASSIGN, p, cast(p1tcopy(cn), cs->rv.rtp[0], 0)));
 	} else if (cs->rv.flags & RV_STREG) {
 		/* struct return in regs,  struct ptr in cn */
 		sz = (int)tsize(cs->rv.type, cs->rv.df, cs->rv.ss);
-		cn->n_type = cs->rv.rtp+PTR;
-		if (sz > (int)tsize(cs->rv.rtp, 0, 0)) {
+		cn->n_type = cs->rv.rtp[0]+PTR;
+		if (sz > (int)tsize(cs->rv.rtp[0], 0, 0)) {
 			/* must move second word */
 			q = buildtree(PLUS, p1tcopy(cn), bcon(1));
 			q = buildtree(UMUL, q, 0);
-			p = block(REG, NULL, NULL, cs->rv.rtp, 0, 0);
+			p = block(REG, NULL, NULL, cs->rv.rtp[1], 0, 0);
 			regno(p) = cs->rv.reg[1];
 			q = (buildtree(ASSIGN, p, q));
 			ecomp(q);
 		}
 		q = buildtree(UMUL, p1tcopy(cn), 0);
-		p = block(REG, NULL, NULL, cs->rv.rtp, 0, 0);
+		p = block(REG, NULL, NULL, cs->rv.rtp[0], 0, 0);
 		regno(p) = cs->rv.reg[0];
 		ecomp(buildtree(ASSIGN, p, q));
 	} else if (cs->rv.flags & RV_STRET) {
 		/* Create struct assignment */
-		q = tempnode(cs->rv.off, PTR+cs->rv.type, cs->rv.df, cs->rv.ss);
+		q = tempnode(cs->rv.off[0], PTR+cs->rv.type,
+		    cs->rv.df, cs->rv.ss);
 		q = buildtree(UMUL, q, NULL);
 		p = buildtree(UMUL, p1tcopy(cn), NULL);
 		p = buildtree(ASSIGN, q, p);
 		ecomp(p);
 
 		if (cs->rv.flags & RV_RETADDR) {
-			q = tempnode(cs->rv.off, INTPTR, 0, 0);
+			q = tempnode(cs->rv.off[0], INTPTR, 0, 0);
 			p = block(REG, NULL, NULL, INTPTR, 0, 0);
 			regno(p) = cs->rv.reg[1];
 			ecomp(buildtree(ASSIGN, p, q));
@@ -277,7 +278,7 @@ fun_call(P1ND *p)
 				cerror("FIXME fun_call");
 		}
 		if (rp->flags & AV_REG) { /* in register */
-			r = block(REG, 0, 0, rp->rtp, 0, 0);
+			r = block(REG, 0, 0, rp->rtp[0], 0, 0);
 			regno(r) = rp->reg[0];
 			q = buildtree(ASSIGN, r, q);
 		}

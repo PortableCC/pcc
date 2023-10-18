@@ -133,6 +133,15 @@ defloc(struct symtab *sp)
 
 #ifndef LANG_CXX
 
+static void
+setrd(struct rdef *rd, int reg0, int reg1, int t0, int t1)
+{
+	rd->reg[0] = reg0;
+	rd->reg[1] = reg1;
+	rd->rtp[0] = t0;
+	rd->rtp[1] = t1;
+}
+
 static TWORD reparegs[] = { EAX, EDX, ECX };
 static TWORD fastregs[] = { ECX, EDX };
 static TWORD longregs[] = { EAXEDX, EDXECX };
@@ -146,7 +155,7 @@ mycallspec(struct callspec *cs)
 	extern int argstacksize;
 	int regparmarg, nrarg, parmoff, parmoff2;
 	int t = cs->rv.type;
-	int sz, i;
+	int sz, i, j;
 	TWORD *regpregs;
 #ifdef GCC_COMPAT
 	struct attr *ap;
@@ -177,29 +186,24 @@ mycallspec(struct callspec *cs)
 		if (sz <= SZLONGLONG) {
 			/* openbsd returns small structs in regs */
 			cs->rv.flags |= RV_STREG;
-			cs->rv.reg[0] = EAX;
-			cs->rv.reg[1] = EDX;
-			cs->rv.rtp = UNSIGNED;
+			setrd(&cs->rv, EAX, EDX, UNSIGNED, UNSIGNED);
 		} else
 #endif
 		if (sz == SZLONGLONG && attr_find(cs->rv.ap, ATTR_COMPLEX)) {
 			/* return in eax/edx */
 			cs->rv.flags |= RV_STREG;
-			cs->rv.reg[0] = EAX;
-			cs->rv.reg[1] = EDX;
-			cs->rv.rtp = UNSIGNED;
+			setrd(&cs->rv, EAX, EDX, UNSIGNED, UNSIGNED);
 		} else {
 			/* return struct in buffer given as hidden arg ptr */
 			cs->rv.flags |= (RV_STRET|RV_RETADDR);
-			cs->rv.reg[1] = EAX;
-			cs->rv.rtp = UNSIGNED;
 			if (regparmarg) {
-				cs->rv.reg[0] = regpregs[nrarg++];
+				i = regpregs[nrarg++];
 				cs->rv.flags |= RV_ARG0_REG;
 			} else {
-				cs->rv.off = parmoff;
+				i = parmoff;
 				parmoff += SZINT;
 			}
+			setrd(&cs->rv, i, EAX, UNSIGNED, UNSIGNED);
 		}
 		break;
 
@@ -207,20 +211,17 @@ mycallspec(struct callspec *cs)
 	case SHORT: case USHORT:
 	case INT: case UNSIGNED: case LONG: case ULONG:
 		cs->rv.flags |= RV_RETREG;
-		cs->rv.reg[0] = EAX;
-		cs->rv.rtp = INT;
+		setrd(&cs->rv, EAX, 0, UNSIGNED, 0);
 		break;
 
 	case LONGLONG: case ULONGLONG:
 		cs->rv.flags |= RV_RETREG;
-		cs->rv.reg[0] = EAXEDX;
-		cs->rv.rtp = cs->rv.type;
+		setrd(&cs->rv, EAXEDX, 0, cs->rv.type, 0);
 		break;
 
 	case FLOAT: case DOUBLE: case LDOUBLE:
 		cs->rv.flags |= RV_RETREG;
-		cs->rv.reg[0] = 31;
-		cs->rv.rtp = cs->rv.type;
+		setrd(&cs->rv, 31, 0, cs->rv.type, 0);
 		break;
 
 	case VOID:
@@ -237,19 +238,19 @@ mycallspec(struct callspec *cs)
 		sz = (int)tsize(rd->type, rd->df, rd->ss);
 		SETOFF(sz, SZINT);
 
-		rd->rtp = rd->type;
 		if (cisreg(rd->type) == 0 ||
 		    ((regparmarg - nrarg) * SZINT < sz)) {
-			rd->off = parmoff;
+			j = parmoff;
 			parmoff += sz;
 			nrarg = regparmarg;
 			rd->flags |= (AV_STK|AV_STK_PUSH);
 		} else {
-			rd->reg[0] = sz > SZINT ?
+			j = sz > SZINT ?
 			    longregs[nrarg] : regpregs[nrarg];
 			nrarg += sz/SZINT;
 			rd->flags |= AV_REG;
 		}
+		setrd(rd, j, 0, rd->type, 0);
 	}
 	if (cs->rv.flags & RV_CALLEE) {
 		argstacksize = (parmoff2 - ARGINIT)/SZCHAR;
