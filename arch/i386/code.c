@@ -142,6 +142,13 @@ setrd(struct rdef *rd, int reg0, int reg1, int t0, int t1)
 	rd->rtp[1] = t1;
 }
 
+static void
+setstk(struct rdef *rd, int off0, int t0)
+{
+	rd->rtp[0] = t0;
+	rd->off[0] = off0;
+}
+
 static TWORD reparegs[] = { EAX, EDX, ECX };
 static TWORD fastregs[] = { ECX, EDX };
 static TWORD longregs[] = { EAXEDX, EDXECX };
@@ -155,7 +162,7 @@ mycallspec(struct callspec *cs)
 	extern int argstacksize;
 	int regparmarg, nrarg, parmoff, parmoff2;
 	int t = cs->rv.type;
-	int sz, i, j;
+	int sz, i;
 	TWORD *regpregs;
 #ifdef GCC_COMPAT
 	struct attr *ap;
@@ -196,14 +203,14 @@ mycallspec(struct callspec *cs)
 		} else {
 			/* return struct in buffer given as hidden arg ptr */
 			cs->rv.flags |= (RV_STRET|RV_RETADDR);
+			setrd(&cs->rv, 0, EAX, UNSIGNED, UNSIGNED);
 			if (regparmarg) {
-				i = regpregs[nrarg++];
+				cs->rv.reg[0] = regpregs[nrarg++];
 				cs->rv.flags |= RV_ARG0_REG;
 			} else {
-				i = parmoff;
+				setstk(&cs->rv, parmoff, UNSIGNED);
 				parmoff += SZINT;
 			}
-			setrd(&cs->rv, i, EAX, UNSIGNED, UNSIGNED);
 		}
 		break;
 
@@ -238,19 +245,19 @@ mycallspec(struct callspec *cs)
 		sz = (int)tsize(rd->type, rd->df, rd->ss);
 		SETOFF(sz, SZINT);
 
+		rd->rtp[0] = rd->rtp[1] = rd->type;
 		if (cisreg(rd->type) == 0 ||
 		    ((regparmarg - nrarg) * SZINT < sz)) {
-			j = parmoff;
+			rd->off[0] = parmoff;
 			parmoff += sz;
 			nrarg = regparmarg;
 			rd->flags |= (AV_STK|AV_STK_PUSH);
 		} else {
-			j = sz > SZINT ?
+			rd->reg[0] = sz > SZINT ?
 			    longregs[nrarg] : regpregs[nrarg];
 			nrarg += sz/SZINT;
 			rd->flags |= AV_REG;
 		}
-		setrd(rd, j, 0, rd->type, 0);
 	}
 	if (cs->rv.flags & RV_CALLEE) {
 		argstacksize = (parmoff2 - ARGINIT)/SZCHAR;

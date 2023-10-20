@@ -822,7 +822,8 @@ struct rdef {
 		struct attr *ap; /* set by common code */
 	};
 	int rtp[2];		/* set by target code */
-	union { int reg[2]; int off[2]; };
+	int reg[2];		/* set by target code */
+	int off[2];		/* set by target code */
 };
 #define	AV_REG		001
 #define	AV_REG2		002
