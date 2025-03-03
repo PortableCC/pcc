@@ -374,10 +374,10 @@ pr_rptr(void)
 {
 	uintptr_t w, w2;
 
-	w = w2 = pr_rd();
+	w = w2 = (unsigned)pr_rd();
 	if (sizeof(uintptr_t) > sizeof(int)) {
 		w &= 0xffffffffL;
-		w2 = pr_rd() << 16;
+		w2 = (unsigned)pr_rd() << 16;
 		w2 = (w2 << 16) | w;
 	}
 	return w2;
