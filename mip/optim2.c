@@ -564,9 +564,8 @@ ivloop:
 static void
 iterate(struct p2env *p2e, struct dlnod *dl)
 {
+	NODE *q, *r;
 	struct dlnod *p, *rp, *p1;
-	extern int negrel[];
-	extern size_t negrelsize;
 	int i;
 
 	nchange = 0;
@@ -606,10 +605,24 @@ iterate(struct p2env *p2e, struct dlnod *dl)
 				p1->forw->back = p;
 				p->forw = p1->forw;
 
-				i = p->dlip->ip_node->n_left->n_op;
-				if (i < EQ || i - EQ >= (int)negrelsize)
+				q = p->dlip->ip_node->n_left;
+				i = q->n_op;
+#define	SWAP(p)	r = p->n_left, p->n_left = p->n_right, p->n_right = r
+				switch (i) {
+				case EQ: i = NE; break;
+				case NE: i = EQ; break;
+				case LE: SWAP(q); i = LT; break;
+				case LT: i = GE; break;
+				case GE: i = LT; break;
+				case GT: SWAP(q); i = GE; break;
+				case ULE: SWAP(q); i = ULT; break;
+				case ULT: i = UGE; break;
+				case UGE: i = ULT; break;
+				case UGT: SWAP(q); i = UGE; break;
+				default:
 					comperr("deljumps: unexpected op");
-				p->dlip->ip_node->n_left->n_op = negrel[i - EQ];
+				}
+				q->n_op = i;
 				nchange++;
 			}
 		}
