@@ -2319,6 +2319,8 @@ eve(P1ND *p)
 			r = buildtree(p->n_op, p1, p2);
 		break;
 #endif
+	case C_GT:
+	case C_LE:
 	case MOD:
 	case CM:
 	case GT:
@@ -2338,6 +2340,10 @@ eve(P1ND *p)
 	case QUEST:
 		p1 = eve(p1);
 		p2 = eve(p2);
+		if (p->n_op == C_GT || p->n_op == C_LE) {
+			r = p1, p1 = p2, p2 = r;
+			p->n_op = p->n_op == C_GT ? LT : GE;
+		}
 #ifdef TARGET_TIMODE
 		if ((r = gcc_eval_timode(p->n_op, p1, p2)) != NULL)
 			break;

@@ -85,7 +85,7 @@ fortarg(NODE *p)
 }
 
 	/* mapping relationals when the sides are reversed */
-short revrel[] ={ EQ, NE, GE, GT, LE, LT, UGE, UGT, ULE, ULT };
+// short revrel[] ={ EQ, NE, GE, GT, LE, LT, UGE, UGT, ULE, ULT };
 
 /*
  * local optimizations, most of which are probably
@@ -400,12 +400,12 @@ again:	o = p->n_op;
 	case EQ:
 	case NE:
 	case LT:
-	case LE:
-	case GT:
+//	case LE:
+//	case GT:
 	case GE:
 	case ULT:
-	case ULE:
-	case UGT:
+//	case ULE:
+//	case UGT:
 	case UGE:
 		if (LCON(p) && RCON(p) &&
 		    !ISPTR(p->n_left->n_type) && !ISPTR(p->n_right->n_type)) {
@@ -419,6 +419,7 @@ again:	o = p->n_op;
 			}
 		}
 
+#if 0
 		if( !LCON(p) ) break;
 
 		/* exchange operands */
@@ -427,6 +428,7 @@ again:	o = p->n_op;
 		p->n_left = p->n_right;
 		p->n_right = sp;
 		p->n_op = revrel[p->n_op - EQ ];
+#endif
 		break;
 
 	case CBRANCH:

@@ -156,7 +156,7 @@ extern void yyset_lineno (int);
 "->"			{ yylval.intval = STREF; return(C_STROP); }
 "&&"			{ yylval.intval = ANDAND; return(C_ANDAND); }
 "||"			{ yylval.intval = OROR; return(C_OROR); }
-"<="			{ yylval.intval = LE; return(C_RELOP); }
+"<="			{ yylval.intval = C_LE; return(C_RELOP); }
 ">="			{ yylval.intval = GE; return(C_RELOP); }
 "=="			{ yylval.intval = EQ; return(C_EQUOP); }
 "!="			{ yylval.intval = NE; return(C_EQUOP); }
@@ -186,7 +186,7 @@ extern void yyset_lineno (int);
 "/"			{ yylval.intval = DIV; return(C_DIVOP); }
 "%"			{ yylval.intval = MOD; return(C_DIVOP); }
 "<"			{ yylval.intval = LT; return(C_RELOP); }
-">"			{ yylval.intval = GT; return(C_RELOP); }
+">"			{ yylval.intval = C_GT; return(C_RELOP); }
 "^"			{ return('^'); }
 "|"			{ return('|'); }
 "?"			{ if (doing_init) nodinit++; return('?'); }
