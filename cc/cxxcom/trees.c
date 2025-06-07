@@ -144,7 +144,7 @@ static char *tnames[] = {
 
 	*/
 
-extern int negrel[];
+int p1negrel[] = { NE, EQ, GT, GE, LT, LE, UGT, UGE, ULT, ULE };
 
 /* Have some defaults for most common targets */
 #ifndef WORD_ADDRESSED
@@ -2045,7 +2045,7 @@ andorbr(NODE *p, int true, int false)
 				*p = *q;
 				nfree(q);
 				if (o == EQ)
-					p->n_op = negrel[p->n_op - EQ];
+					p->n_op = p1negrel[p->n_op - EQ];
 #if 0
 					p->n_op = NE; /* toggla */
 #endif
@@ -2054,7 +2054,7 @@ andorbr(NODE *p, int true, int false)
 				*p = *q;
 				nfree(q);
 				if (o == NE)
-					p->n_op = negrel[p->n_op - EQ];
+					p->n_op = p1negrel[p->n_op - EQ];
 #if 0
 					p->n_op = EQ; /* toggla */
 #endif
@@ -2068,7 +2068,7 @@ andorbr(NODE *p, int true, int false)
 	case GE:
 	case GT:
 calc:		if (true < 0) {
-			p->n_op = negrel[p->n_op - EQ];
+			p->n_op = p1negrel[p->n_op - EQ];
 			true = false;
 			false = -1;
 		}

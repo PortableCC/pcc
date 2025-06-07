@@ -754,6 +754,9 @@ void dwarf_end(void);
 #define ALIGN		(MAXOP+37)
 #define FUNSPEC		(MAXOP+38)
 #define STREF		(MAXOP+39)
+#define C_LE		(MAXOP+40)
+#define C_GT		(MAXOP+41)
+
 
 /*
  * The following types are only used in pass1.

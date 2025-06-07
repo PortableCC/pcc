@@ -154,7 +154,7 @@ static char *tnames[] = {
 	*/
 
 /* negatives of relationals */
-int p1negrel[] = { NE, EQ, GT, GE, LT, LE, UGT, UGE, ULT, ULE };
+//int p1negrel[] = { NE, EQ, GT, GE, LT, LE, UGT, UGE, ULT, ULE };
 
 /* Have some defaults for most common targets */
 #ifndef WORD_ADDRESSED
@@ -2149,19 +2149,13 @@ andorbr(P1ND *p, int true, int false)
 				*p = *q;
 				p1nfree(q);
 				if (o == EQ)
-					p->n_op = p1negrel[p->n_op - EQ];
-#if 0
 					p->n_op = NE; /* toggla */
-#endif
 			} else if (glval(p->n_right) == 1) {
 				p1nfree(p->n_right);
 				*p = *q;
 				p1nfree(q);
 				if (o == NE)
-					p->n_op = p1negrel[p->n_op - EQ];
-#if 0
 					p->n_op = EQ; /* toggla */
-#endif
 			} else
 				break; /* XXX - should always be false */
 			
@@ -2172,7 +2166,19 @@ andorbr(P1ND *p, int true, int false)
 	case GE:
 	case GT:
 calc:		if (true < 0) {
-			p->n_op = p1negrel[p->n_op - EQ];
+			switch (p->n_op) {
+			case NE: o = EQ; break;
+			case EQ: o = NE; break;
+			case LE: o = GT; break;
+			case LT: o = GE; break;
+			case GE: o = LT; break;
+			case GT: o = LE; break;
+			case ULE: o = UGT; break;
+			case ULT: o = UGE; break;
+			case UGE: o = ULT; break;
+			case UGT: o = ULE; break;
+			}
+			p->n_op = o;
 			p->n_ap = attr_add(p->n_ap,
 			    attr_new(ATTR_FP_SWAPPED, 3));
 			p->n_ap->aa[0].iarg = 1;
