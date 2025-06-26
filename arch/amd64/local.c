@@ -155,12 +155,15 @@ picext(NODE *p)
 #endif
 }
 
+#ifdef TLS
 static NODE *
 cmop(NODE *l, NODE *r)
 {
 	return block(CM, l, r, INT, 0, 0);
 }
+#endif
 
+#ifdef TLS
 static NODE *
 mkx(char *s, NODE *p)
 {
@@ -168,7 +171,9 @@ mkx(char *s, NODE *p)
 	p->n_name = s;
 	return p;
 }
+#endif
 
+#ifdef TLS
 static char *
 mk3str(char *s1, char *s2, char *s3)
 {
@@ -181,7 +186,9 @@ mk3str(char *s1, char *s2, char *s3)
 	strlcat(sd, s3, len);
 	return sd;
 }
+#endif
 
+#ifdef TLS
 /*
  * Create a reference for a TLS variable.
  * This is the "General dynamic" version.
@@ -231,8 +238,9 @@ tlspic(NODE *p)
 	tfree(p);
 	return r;
 }
+#endif
 
-#ifdef GCC_COMPAT
+#if defined(TLS) && defined(GCC_COMPAT)
 /*
  * The "initial exec" tls model.
  */
@@ -270,6 +278,7 @@ tlsinitialexec(NODE *p)
 }
 #endif
 
+#ifdef TLS
 static NODE *
 tlsref(NODE *p)
 {
@@ -290,6 +299,7 @@ tlsref(NODE *p)
 #endif
 	return tlspic(p);
 }
+#endif
 
 /* clocal() is called to do local transformations on
  * an expression tree preparitory to its being

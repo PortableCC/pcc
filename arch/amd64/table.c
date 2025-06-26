@@ -1612,7 +1612,7 @@ struct optab table[] = {
 
 { OPANY, DF(BITYPE), },
 
-{ FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	"help; I'm in trouble\n" },
+{ FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	0,	FREE,	"help; I'm in trouble\n" },
 };
 
 int tablesize = sizeof(table)/sizeof(table[0]);
