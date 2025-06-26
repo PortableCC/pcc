@@ -133,7 +133,7 @@ struct iobuf {
 	usch *buf;
 	int cptr;	/* current pointer */
 	int bsz;	/* bufsize */
-	int ro:1, inuse:1, type:4;
+	unsigned int ro:1, inuse:1, type:4;
 };
 struct iobuf *getobuf(int);
 void putob(struct iobuf *ob, int ch);
