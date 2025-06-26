@@ -676,6 +676,7 @@ ldpow10(int exp)
 	return result;
 }
 
+#ifndef HAVE_LROUNDL
 static long 
 lroundl(long double value)
 {
@@ -687,6 +688,7 @@ lroundl(long double value)
 
 	return intpart;
 }
+#endif
 
 static void 
 fmtfp(char *buffer, size_t *currlen, size_t maxlen, long double fvalue, 
@@ -727,7 +729,7 @@ fmtfp(char *buffer, size_t *currlen, size_t maxlen, long double fvalue,
 	/* We "cheat" by converting the fractional part to integer by
 	 * multiplying by a factor of 10
 	 */
-	fracpart = lroundl((ldpow10 (max)) * (ufvalue - intpart));
+	fracpart = _lroundl((ldpow10 (max)) * (ufvalue - intpart));
 
 	if (fracpart >= ldpow10 (max)) {
 		intpart++;
