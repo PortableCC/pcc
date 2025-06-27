@@ -729,7 +729,7 @@ fmtfp(char *buffer, size_t *currlen, size_t maxlen, long double fvalue,
 	/* We "cheat" by converting the fractional part to integer by
 	 * multiplying by a factor of 10
 	 */
-	fracpart = _lroundl((ldpow10 (max)) * (ufvalue - intpart));
+	fracpart = lroundl((ldpow10 (max)) * (ufvalue - intpart));
 
 	if (fracpart >= ldpow10 (max)) {
 		intpart++;
