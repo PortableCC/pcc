@@ -1551,14 +1551,10 @@ soft_toush(SFP sfp, TWORD t, int *nbits)
 	ldf = ldt;
 	ldd = ldt;
 	if (t == FLOAT && memcmp(&ldf, &sf.debugfp, sizeof(float))) {
-		union { long double ld; float f; } dldf;
-		dldf.f = (float)sfp->debugfp;
-		fpwarn("soft_toush2", dldf.ld, ldt);
+		fpwarn("soft_toush2", ldf, ldt);
 	}
 	if (t == DOUBLE && memcmp(&ldd, &sf.debugfp, sizeof(double))) {
-		union { long double ld; double d; } dldd;
-		dldd.d = (double)sfp->debugfp;
-		fpwarn("soft_toush3", dldd.ld, ldt);
+		fpwarn("soft_toush3", ldd, ldt);
 	}
 	if (t == LDOUBLE && memcmp(&ldt, &sf.debugfp, SZLD))
 		fpwarn("soft_toush4", (long double)sf.debugfp, ldt);
