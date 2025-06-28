@@ -1264,6 +1264,7 @@ simpleinit(struct symtab *sp, NODE *p)
 			/* continue below */
 		}
 #endif
+#ifdef GCC_COMPAT
 #ifdef TARGET_TIMODE
 		struct attr *ap;
 		if ((ap = attr_find(sp->sap, GCC_ATYP_MODE)) &&
@@ -1279,6 +1280,7 @@ simpleinit(struct symtab *sp, NODE *p)
 			tfree(q);
 			break;
 		}
+#endif
 #endif
 		if (p->n_op == NAME && p->n_sp &&
 		    (p->n_sp->sflags & SMASK) == SSTRING)
