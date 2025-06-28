@@ -1374,6 +1374,8 @@ str2num(char *str, int *exp, MINT *m, struct FPI *fpi)
 {
 	MINT d, mm, me;
 	int t, u, rv;
+	
+	*exp = 0;
 
 	MINTDECL(d);
 	MINTDECL(mm);
@@ -1530,8 +1532,9 @@ soft_toush(SFP sfp, TWORD t, int *nbits)
 #endif
 #ifdef DEBUGFP
 	if (sfdebug) {
-	double d = sfp->debugfp;
-	printf("soft_toush-D: d %08x %08x\n", *(((int *)&d)+1), *(int *)&d);
+	union { double d; int i[2]; } di;
+	di.d = sfp->debugfp;
+	printf("soft_toush-D: d %08x %08x\n", di.i[1], di.i[0]);
 	}
 #endif
 
@@ -1547,10 +1550,12 @@ soft_toush(SFP sfp, TWORD t, int *nbits)
 	    t == DOUBLE ? (double)sfp2ld(sfp) : (long double)sfp2ld(sfp));
 	ldf = ldt;
 	ldd = ldt;
-	if (t == FLOAT && memcmp(&ldf, &sf.debugfp, sizeof(float)))
-		fpwarn("soft_toush2", (long double)*(float*)&sf.debugfp, ldt);
-	if (t == DOUBLE && memcmp(&ldd, &sf.debugfp, sizeof(double)))
-		fpwarn("soft_toush3", (long double)*(double*)&sf.debugfp, ldt);
+	if (t == FLOAT && memcmp(&ldf, &sf.debugfp, sizeof(float))) {
+		fpwarn("soft_toush2", ldf, ldt);
+	}
+	if (t == DOUBLE && memcmp(&ldd, &sf.debugfp, sizeof(double))) {
+		fpwarn("soft_toush3", ldd, ldt);
+	}
 	if (t == LDOUBLE && memcmp(&ldt, &sf.debugfp, SZLD))
 		fpwarn("soft_toush4", (long double)sf.debugfp, ldt);
 	}

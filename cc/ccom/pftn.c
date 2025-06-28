@@ -1014,6 +1014,9 @@ soumemb(NODE *n, char *name, int class)
 		sp->soffset = rpole->curpos;
 		rpole->curpos += tsz;
 
+	} else {
+		/* assume no alignment for the rest */
+		al = 0;
 	}
 	if (rpole->rsou == UNAME) {
 		if (tsz > rpole->maxsz)

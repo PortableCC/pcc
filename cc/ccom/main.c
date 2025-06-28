@@ -417,7 +417,7 @@ prtstats(void)
 	fprintf(stderr, "Inline control block size:	%d B\n",
 	    inlstatcnt * istatsz);
 	fprintf(stderr, "Argument list size:		%d B\n",
-	    arglistcnt/sizeof(int));
+	    arglistcnt/(int)sizeof(int));
 	fprintf(stderr, "Dimension/function size:	%d B\n",
 	    dimfuncnt * (int)sizeof(union dimfun));
 	fprintf(stderr, "Permanent symtab size:		%d B\n",
