@@ -676,6 +676,7 @@ ldpow10(int exp)
 	return result;
 }
 
+#ifndef HAVE_LROUNDL
 static long 
 lroundl(long double value)
 {
@@ -687,6 +688,7 @@ lroundl(long double value)
 
 	return intpart;
 }
+#endif
 
 static void 
 fmtfp(char *buffer, size_t *currlen, size_t maxlen, long double fvalue, 

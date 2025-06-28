@@ -669,6 +669,7 @@ fi
 # Checks for header files.
 # AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
 AC_CHECK_HEADERS([string.h])
+AC_CHECK_HEADERS([math.h])
 AC_HEADER_SYS_WAIT
 
 # Checks for library functions.
@@ -677,7 +678,8 @@ AC_HEADER_SYS_WAIT
 # AC_CHECK_FUNCS([memset strchr strdup strrchr strtol])
 AC_CHECK_FUNCS([strtold vsnprintf snprintf mkstemp strlcat strlcpy getopt ffs vfork])
 AC_FUNC_ALLOCA
-
+AC_CHECK_LIB([m],[lroundl])
+AC_CHECK_FUNCS([lroundl])
 AC_EXEEXT
 
 AC_SUBST(targos)
