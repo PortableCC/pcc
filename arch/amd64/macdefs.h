@@ -112,7 +112,9 @@ typedef long long OFFSZ;
 #define	ARGREG	EBP
 #define ARGOFFSET 8
 #endif
+#ifdef GCC_COMPAT
 #define	TARGET_TIMODE		/* has TI/TF/TC types (128 bit) */
+#endif
 
 #define STACK_DOWN 		/* stack grows negatively for automatics */
 

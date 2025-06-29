@@ -125,7 +125,9 @@ typedef long long OFFSZ;
 #define	ARGREG	EBP
 #define ARGOFFSET 8
 #endif
+#ifdef GCC_COMPAT
 #define	TARGET_TIMODE		/* has TI/TF/TC types (128 bit) */
+#endif
 
 #ifdef MACHOABI
 #define STAB_LINE_ABSOLUTE	/* S_LINE fields use absolute addresses */
