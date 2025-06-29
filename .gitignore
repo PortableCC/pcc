@@ -20,3 +20,5 @@ cc/cxxcom/cgram.h
 cc/cxxcom/external.c
 cc/cxxcom/external.h
 cc/cxxcom/mkext
+cc/cxxcom/cxxcom
+cc/cxxcom/scan.c
