@@ -215,6 +215,7 @@ char	*sysroot = "", *isysroot;
 #ifdef MULTIARCH_PATH
 #define STDINC_MA	STDINC MULTIARCH_PATH "/"
 #endif
+#define	STDINCS		{ STDINC, 0 }
 
 
 char *cppadd[] = CPPADD;
@@ -253,6 +254,7 @@ char *cppmdadd[] = CPPMDADD;
 #define DYNLINKLIB	NULL
 #endif
 
+char *stdincs[] = STDINCS;
 char *dynlinkarg = DYNLINKARG;
 char *dynlinklib = DYNLINKLIB;
 char *pcclibdir = PCCLIBDIR;
@@ -1953,7 +1955,8 @@ setup_cpp_flags(void)
 		strlist_append(&sysincdirs, "=" PCCINCDIR "/c++");
 	strlist_append(&sysincdirs, "=" PCCINCDIR);
 #endif
-	strlist_append(&sysincdirs, "=" STDINC);
+	for (i = 0; stdincs[i]; i++)
+		strlist_append(&sysincdirs, stdincs[i]);
 }
 
 struct flgcheck ccomflgcheck[] = {
