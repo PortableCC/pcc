@@ -57,6 +57,8 @@
 #else
 #define	DEFLIBDIRS	{ "/usr/lib64/", "/usr/lib/" MULTIARCH_PATH "/", 0 }
 #endif
+/* The below extra search seems to be needed on recent linux (ubuntu) */
+#define	STDINC		"/usr/include", "/usr/include/x86_64-linux-gnu"
 #elif defined(mach_mips)
 #define CPPMDADD	{ "-D__mips__", NULL, }
 #define	DYNLINKLIB	"/lib/ld.so.1"
