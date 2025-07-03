@@ -212,9 +212,6 @@ char	*sysroot = "", *isysroot;
 #ifndef STDINC
 #define	STDINC	  	"/usr/include/"
 #endif
-#ifdef MULTIARCH_PATH
-#define STDINC_MA	STDINC MULTIARCH_PATH "/"
-#endif
 #define	STDINCS		{ STDINC, 0 }
 
 
@@ -1947,9 +1944,6 @@ setup_cpp_flags(void)
 
 	/* Include dirs */
 	strlist_append(&sysincdirs, "=" INCLUDEDIR "pcc/");
-#ifdef STDINC_MA
-	strlist_append(&sysincdirs, "=" STDINC_MA);
-#endif
 #ifdef PCCINCDIR
 	if (cxxflag)
 		strlist_append(&sysincdirs, "=" PCCINCDIR "/c++");
