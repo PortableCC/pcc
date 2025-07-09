@@ -107,6 +107,8 @@ struct vspace ibspc, macspc;
 struct vseg *macvseg;
 #endif
 
+struct symtab *symhsh[SYMHSZ];
+
 /*
  * macptr is an array of char pointers for stored macros.
  * macpos is the current encoded position.
@@ -450,9 +452,6 @@ putob(register struct iobuf *ob, register int ch)
 			/* ob->cptr = ob->buf + sz; */
 			ob->bsz = sz + CPPBUF;
 			break;
-		case BMAC:
-			macsav(ch);
-			return;
 		case BINBUF:
 		case BUTBUF:
 			error("putob %d", ob->type);
@@ -496,13 +495,6 @@ getobuf(register int type)
 	register struct iobuf *iob = 0;
 
 	switch (type) {
-	case BMAC:
-#if LIBVMF
-		iob = giob(BMAC, (usch *)macvseg->s_cinfo, BYTESPERSEG);
-#else
-		iob = giob(BMAC, NULL, CPPBUF);
-#endif
-		break;
 	case BNORMAL:
 		nbufused++;
 		iob = giob(BNORMAL, NULL, CPPBUF);
@@ -1308,7 +1300,6 @@ back:					if (c == '*') {
 		np->valoff = begpos;
 	np->type = type;
 	np->narg = narg;
-	np->wraps = VALBUF(begpos) != lckmacbuf;
 
 #ifdef PCC_DEBUG
 	if (dflag) {
@@ -2521,44 +2512,6 @@ usage(void)
 	error("Usage: cpp [-Cdt] [-Dvar=val] [-Uvar] [-Ipath] [-Spath]");
 }
 
-#ifdef notyet
-/*
- * Symbol table stuff.
- * The data structure used is a patricia tree implementation using only
- * bytes to store offsets.
- * The information stored is (lower address to higher):
- *
- *	unsigned char bitno[2]; bit number in the string
- *	unsigned char left[3];	offset from base to left element
- *	unsigned char right[3];	offset from base to right element
- */
-#endif
-
-/*
- * This patricia implementation is more-or-less the same as
- * used in ccom for string matching.
- */
-struct tree {
-	int bitno;
-	struct tree *lr[2];
-};
-
-#define BITNO(x)		((x) & ~(LEFT_IS_LEAF|RIGHT_IS_LEAF))
-#ifdef pdp11
-#define LEFT_IS_LEAF		0x8000
-#define RIGHT_IS_LEAF		0x4000
-#else
-#define LEFT_IS_LEAF		0x80000000
-#define RIGHT_IS_LEAF		0x40000000
-#endif
-#define IS_LEFT_LEAF(x)		(((x) & LEFT_IS_LEAF) != 0)
-#define IS_RIGHT_LEAF(x)	(((x) & RIGHT_IS_LEAF) != 0)
-#define P_BIT(key, bit)		(key[bit >> 3] >> (bit & 7)) & 1
-#define CHECKBITS		8
-
-static struct tree *sympole;
-static int numsyms;
-
 /*
  * Allocate a symtab struct and store the string.
  */
@@ -2581,104 +2534,34 @@ getsymtab(const usch *str)
  * Only do full string matching, no pointer optimisations.
  */
 struct symtab *
-lookup(register const usch *key, int enterf)
+lookup(const usch *key, int enterf)
 {
-	struct symtab *sp;
-	register struct tree *w, *new, *last;
-	int len, cix, bit, fbit, svbit, ix, bitno;
-	const usch *k, *m;
+	register struct symtab *sp;
+	register const usch *k;
+	register int len, hsh;
 
 	/* Count full string length */
-	for (k = key, len = 0; ISID(*k); k++, len++)
-		;
+	for (hsh = 0, k = key; ISID(*k); k++)
+		hsh += *k;
+	hsh %= SYMHSZ;
+	len = k - key;
 
-	switch (numsyms) {
-	case 0: /* no symbols yet */
-		if (enterf != ENTER)
-			return NULL;
-		sympole = (struct tree *)getsymtab(key);
-		numsyms++;
-		return (struct symtab *)sympole;
-
-	case 1:
-		w = sympole;
-		svbit = 0; /* XXX gcc */
-		break;
-
-	default:
-		w = sympole;
-		bitno = len * CHECKBITS;
-		for (;;) {
-			bit = BITNO(w->bitno);
-			fbit = bit >= bitno ? 0 : P_BIT(key, bit);
-			svbit = fbit ? IS_RIGHT_LEAF(w->bitno) :
-			    IS_LEFT_LEAF(w->bitno);
-			w = w->lr[fbit];
-			if (svbit)
-				break;
-		}
-	}
-
-	sp = (struct symtab *)w;
-
-	m = sp->namep;
-	k = key;
-
-	/* Check for correct string and return */
-	for (cix = 0; *m && ISID(*k) && *m == *k; m++, k++, cix += CHECKBITS)
-		;
-	if (*m == 0 && ISID(*k) == 0) {
-		if (enterf != ENTER && sp->valoff == 0)
-			return NULL;
-		return sp;
-	}
-
-	if (enterf != ENTER)
-		return NULL; /* no string found and do not enter */
-
-	ix = *m ^ *k;
-	while ((ix & 1) == 0)
-		ix >>= 1, cix++;
-
-	/* Create new node */
-	new = addblock(sizeof(*new));
-	bit = P_BIT(key, cix);
-	new->bitno = cix | (bit ? RIGHT_IS_LEAF : LEFT_IS_LEAF);
-	new->lr[bit] = (struct tree *)getsymtab(key);
-
-	if (numsyms++ == 1) {
-		new->lr[!bit] = sympole;
-		new->bitno |= (bit ? LEFT_IS_LEAF : RIGHT_IS_LEAF);
-		sympole = new;
-		return (struct symtab *)new->lr[bit];
-	}
-
-	w = sympole;
-	last = NULL;
-	for (;;) {
-		fbit = w->bitno;
-		bitno = BITNO(w->bitno);
-		if (bitno == cix)
-			error("bitno == cix");
-		if (bitno > cix)
+	for (sp = symhsh[hsh]; sp; sp = sp->next)
+		if (*sp->namep == *key && sp->namep[len] == 0 &&
+		    strncmp(sp->namep, key, len) == 0)
 			break;
-		svbit = P_BIT(key, bitno);
-		last = w;
-		w = w->lr[svbit];
-		if (fbit & (svbit ? RIGHT_IS_LEAF : LEFT_IS_LEAF))
-			break;
+
+	if (enterf == FIND) {
+		if (sp && sp->valoff)
+			return sp;
+		return NULL;
 	}
 
-	new->lr[!bit] = w;
-	if (last == NULL) {
-		sympole = new;
-	} else {
-		last->lr[svbit] = new;
-		last->bitno &= ~(svbit ? RIGHT_IS_LEAF : LEFT_IS_LEAF);
-	}
-	if (bitno < cix)
-		new->bitno |= (bit ? LEFT_IS_LEAF : RIGHT_IS_LEAF);
-	return (struct symtab *)new->lr[bit];
+	/* symbol not found, enter into symtab */
+	sp = getsymtab(key);
+	sp->next = symhsh[hsh];
+	symhsh[hsh] = sp;
+	return sp;
 }
 
 void *

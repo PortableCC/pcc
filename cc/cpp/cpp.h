@@ -126,7 +126,6 @@ extern short spechr[];
 
 /* buffer definition */
 #define	BNORMAL	0	/* standard buffer */
-#define	BMAC	1	/* store macro definitions */
 #define	BINBUF	2	/* read data from input files */
 #define	BUTBUF	3	/* write data to stdout */
 struct iobuf {
@@ -175,14 +174,17 @@ extern usch *pbeg, *pend, *outp, *inp;
 
 /* Symbol table entry  */
 struct symtab {
+	struct symtab *next;
 	const usch *namep;
 	mvtyp valoff;
 	const usch *file;
 	int line;
-	char type:4,	/* macro type */
-	      wraps:1;	/* macro wraps in buffer */
+	char type;	/* macro type */
 	unsigned char narg;	/* # of args (if feasible) */
 };
+
+#define	SYMHSZ	255
+extern struct symtab *symhsh[SYMHSZ];
 
 /*
  * Struct used in parse tree evaluation.
