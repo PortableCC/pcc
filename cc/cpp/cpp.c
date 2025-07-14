@@ -93,12 +93,10 @@ static void prrep(mvtyp);
 	(putob(ob, ch), 1) : (ob->buf[ob->cptr++] = ch))
 #define	cunput(x)	*--inp = x
 
-static int istty;
 int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
 char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows, readinc;
-usch pbbeg[MINBUF], *pbinp = pbbeg, *pbend = pbbeg + MINBUF;
 
 static void macstr(const usch *s);
 int lckmacbuf;
@@ -383,12 +381,9 @@ main(int argc, char **argv)
 	}
 
 	if (argc == 2) {
-		close(1);
-		if (open(argv[1], O_WRONLY|O_CREAT, 0600) < 0)
-			error("Can't creat %s", argv[1]);
+		if (freopen(argv[1], "w", stdout) == NULL)
+			error("Can't freopen %s", argv[1]);
 	}
-	istty = isatty(1);
-
 	if (argc && strcmp(argv[0], "-")) {
 		fn1 = fn2 = (usch *)argv[0];
 	} else {
@@ -398,7 +393,7 @@ main(int argc, char **argv)
 
 	/* initialization defines */
 	if (dMflag)
-		write(1, fb->buf, fb->cptr);
+		fwrite(fb->buf, fb->cptr, 1, stdout);
 	fb->buf[fb->cptr] = 0;
 	memset(&bic, 0, sizeof(bic));
 	bic.fname = bic.orgfn = (const usch *)"<command line>";
@@ -416,11 +411,9 @@ main(int argc, char **argv)
 
 	pushfile(fn1, fn2, 0, NULL);
 
-	if (Mflag == 0) {
-		if (skpows)
-			*pbinp++ = '\n';
-		write(1, pbbeg, pbinp - pbbeg);
-	}
+	if (Mflag == 0 && skpows)
+		fputc('\n', stdout);
+
 #ifdef TIMING
 	(void)gettimeofday(&t2, NULL);
 	t2.tv_sec -= t1.tv_sec;
@@ -453,7 +446,6 @@ putob(register struct iobuf *ob, register int ch)
 			ob->bsz = sz + CPPBUF;
 			break;
 		case BINBUF:
-		case BUTBUF:
 			error("putob %d", ob->type);
 			break;
 		}
@@ -1344,8 +1336,7 @@ error(const char *fmt, ...)
 {
 	va_list ap;
 
-	write(1, pbbeg, pbinp-pbbeg);
-	pbinp = pbbeg;
+	fflush(stdout);
 	if (ifiles != NULL)
 		fprintf(stderr, "%s:%d: error: ",
 		    ifiles->fname, ifiles->lineno);
@@ -2384,18 +2375,15 @@ prline(const usch *s)
 }
 #endif
 
+/*
+ * Print out (eventual) saved \n.
+ */
 void
 cntline(void)
 {
 	if (skpows < 10)
-		for (; skpows > 0; skpows--) {
-			if (pbinp == pbend) {
-				if (Mflag == 0)
-					(void)write(1, pbbeg, pbinp - pbbeg);
-				pbinp = pbbeg;
-			}
-			*pbinp++ = '\n';
-		}
+		for (; skpows > 0; skpows--)
+			putchar('\n');
 	else
 		prtline(1);
 	skpows = 0;
@@ -2414,14 +2402,8 @@ putch(register int ch)
 		skpows = 1;
 		return;
 	}
-	if (pbinp == pbend) {
-		if (Mflag == 0)
-			(void)write(1, pbbeg, pbinp - pbbeg);
-		pbinp = pbbeg;
-	}
-	*pbinp++ = ch;
-	if (ch == '\n' && istty && Mflag == 0)
-		(void)write(1, pbbeg, pbinp - pbbeg), pbinp = pbbeg;
+	if (Mflag == 0)
+		putchar(ch);
 }
 
 void
@@ -2429,14 +2411,7 @@ putstr(const usch *s)
 {
 	if (skpows)
 		cntline();
-	while (*s) {
-		if (pbinp == pbend) {
-			if (Mflag == 0)
-				(void)write(1, pbbeg, pbinp - pbbeg);
-			pbinp = pbbeg;
-		}
-		*pbinp++ = *s++;
-	}
+	fprintf(stdout, "%s", s);
 }
 
 /*

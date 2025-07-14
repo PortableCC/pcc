@@ -71,8 +71,6 @@ typedef	unsigned int mvtyp;
 #define	VALBUF(x)	((x) / MINBUF)
 #define	MKVAL(b, c)	(((b) * MINBUF) + (c))
 
-extern usch pbbeg[], *pbinp, *pbend;
-
 #define	MAXARGS	128	/* Max # of args to a macro. Should be enough */
 #define	MAXIDSZ	63	/* Max length of C99 identifier; 5.2.4.1 */
 
@@ -127,7 +125,6 @@ extern short spechr[];
 /* buffer definition */
 #define	BNORMAL	0	/* standard buffer */
 #define	BINBUF	2	/* read data from input files */
-#define	BUTBUF	3	/* write data to stdout */
 struct iobuf {
 	usch *buf;
 	int cptr;	/* current pointer */

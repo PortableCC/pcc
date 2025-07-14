@@ -1105,30 +1105,22 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 void
 prtline(int nl)
 {
-	register struct iobuf *ob;
-
 	if (Mflag) {
 		if (dMflag)
 			return; /* no output */
 		if (ifiles->lineno == 1 &&
 		    (MMDflag == 0 || ifiles->idx != SYSINC)) {
-			ob = bsheap(0, "%s: %s\n", Mfile, ifiles->fname);
+			printf("%s: %s\n", Mfile, ifiles->fname);
 			if (MPflag &&
 			    strcmp((const char *)ifiles->fname, (char *)MPfile))
-				bsheap(ob, "%s:\n", ifiles->fname);
-			write(1, ob->buf, ob->cptr);
-			bufree(ob);
+				printf("%s:\n", ifiles->fname);
 		}
 	} else if (!Pflag) {
 		skpows = 0;
-		ob = getobuf(BNORMAL);
-		bsheap(ob, "\n# %d \"%s\"", ifiles->lineno, ifiles->fname);
+		printf("\n# %d \"%s\"", ifiles->lineno, ifiles->fname);
 		if (ifiles->idx == SYSINC)
-			strtobuf((usch *)" 3", ob);
-		if (nl) putob(ob, '\n');
-		ob->buf[ob->cptr] = 0;
-		putstr(ob->buf);
-		bufree(ob);
+			printf(" 3");
+		if (nl) printf("\n");
 	} else
 		putch('\n');
 }
@@ -1416,7 +1408,7 @@ prwoe(void)
 static void
 cpperror(void)
 {
-	write(1, pbbeg, pbinp-pbbeg);
+	fflush(stdout);
 
 	fprintf(stderr, "#error");
 	prwoe();
