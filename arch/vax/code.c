@@ -444,7 +444,11 @@ builtin_return_address(const struct bitable *bt, NODE *a)
 	f = block(UMUL,
 		block(PLUS, f,
 		    bcon(16), INCREF(PTR+CHAR), 0, 0), NIL, PTR+CHAR, 0, 0);
+#ifdef LANG_CXX
 	f = makety(f, PTR+VOID, 0, 0, 0);
+#else
+	f = makety(f, mkqtyp(PTR+VOID));
+#endif
 
 	return f;
 bad:
@@ -473,7 +477,11 @@ builtin_frame_address(const struct bitable *bt, NODE *a)
 			block(PLUS, f,
 			    bcon(12), INCREF(PTR+CHAR), 0, 0),
 				NIL, PTR+CHAR, 0, 0);
+#ifdef LANG_CXX
 		f = makety(f, PTR+CHAR, 0, 0, 0);
+#else
+		f = makety(f, mkqtyp(PTR+CHAR));
+#endif
 	}
 
 	return f;
