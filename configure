@@ -2925,10 +2925,10 @@ case "$target_os" in
 	targos=bsd
 	abi=aout
 	case "$target_cpu" in
-	    pdp11) targmach=pdp11 ;;
-	    nova) targmach=nova ;;
+	    pdp11) targmach=pdp11 wchar_type=USHORT ;;
+	    nova) targmach=nova wchar_type=USHORT ;;
+	    vax) targmach=vax ;;
 	esac
-	wchar_type=USHORT
 	;;
 
     darwin*)

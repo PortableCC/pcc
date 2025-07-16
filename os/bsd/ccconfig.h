@@ -30,7 +30,11 @@
  */
 
 /* common cpp predefines */
+#if defined(mach_vax)
+#define CPPADD	{ "-D__BSD43__", "-DBSD=43", "-DBSD4_3=1", NULL }
+#else
 #define	CPPADD	{ "-D__BSD2_11__", "-DBSD2_11", NULL }
+#endif
 
 /* host-dependent */
 #define CRT0		"/lib/crt0.o"
@@ -48,6 +52,8 @@
 #define DEFLIBS { "-lc", 0 }
 #elif defined(mach_nova)
 #define	CPPMDADD { "-D__nova__", "-Dnova", NULL, }
+#elif defined(mach_vax)
+#define	CPPMDADD { "-D__vax__", "-Dvax", NULL, }
 #else
 #error defines for arch missing
 #endif
@@ -60,8 +66,10 @@
 #define	NO_AS_V
 #define NO_LD_D
 
+#if !defined(mach_vax)
 #define PCC_SETUP_LD_ARGS				\
 	strlist_append(&early_linker_flags, "-X");
+#endif
 #define STARTLABEL      "start"
 #endif /* mach_pdp11 */
 
