@@ -157,7 +157,7 @@ struct includ {
 	usch *opbeg;
 	int idx;
 	void *incs;
-	const usch *fn;
+	FILE *fp;
 	usch pbb[10];
 #if LIBVMF
 	struct vseg *vseg;
@@ -219,7 +219,7 @@ void include(void);
 void include_next(void);
 void line(void);
 
-void pushfile(const usch *fname, const usch *fn, int idx, void *incs);
+void pushfile(FILE *, const char *fn, int idx, void *incs);
 void prtline(int nl);
 int yylex(void);
 void cunput(int);

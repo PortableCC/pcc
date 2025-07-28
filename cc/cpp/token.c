@@ -183,6 +183,29 @@ short spechr[256] = {
 #endif
 };
 
+enum { M_EOF = 1, M_ERR, M_STR, M_CHCON, M_CMNT, M_DIG, M_LUU, M_ID0, M_DOT };
+char matchch[128] = {
+	M_EOF,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	M_ERR,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
+
+	0,	M_STR,	0,	0,	0,	0,	0,	M_CHCON,
+	0,	0,	0,	0,	0,	0,	M_DOT,	M_CMNT,
+	M_DIG,	M_DIG,	M_DIG,	M_DIG,	M_DIG,	M_DIG,	M_DIG,	M_DIG,
+	M_DIG,	M_DIG,	0,	0,	0,	0,	0,	0,
+
+	0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,
+	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_LUU,	M_ID0,	M_ID0,	M_ID0,
+	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_LUU,	M_ID0,	M_ID0,
+	M_ID0,	M_ID0,	M_ID0,	0,	0,	0,	0,	0,
+
+	0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,
+	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,
+	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_ID0,	M_LUU,	M_ID0,	M_ID0,
+	M_ID0,	M_ID0,	M_ID0,	0,	0,	0,	0,	0,
+};
+
 #define	ENDFREE	4	/* space left at end of buffer */
 
 #if LIBVMF
@@ -190,6 +213,69 @@ short spechr[256] = {
 #else
 #define	INFLIRD	(CPPBUF-PBMAX-ENDFREE)
 #endif
+
+char *lnbeg, *lncur, *lnend;
+int lnmax;
+/*
+ * Read in one line from input file.
+ * Concatenate \\n-ending lines here.  If line is zero in length get
+ * another.  Position beginning pointer over the first char in line.
+ *
+ * Returns 1 if EOF, 0 if succeeded reading a new line.
+ */
+static int
+newline(int pp)
+{
+	register int ch, lnread = 0;
+
+//printf("enter newline\n");
+newline:
+	for (;;) {
+		for (;;) {
+			if ((ch = getc(ifiles->fp)) == '\n' || ch < 0)
+				break;
+//printf("got char %d (%c)\n", ch, ch);
+			if (ch == '\r' || ch == '\f')
+				continue; /* ignore */
+			if (lnmax == lnread)
+				lnbeg = xrealloc(lnbeg, lnmax += 256);
+			lnbeg[lnread++] = ch;
+		}
+//printf("got char %d lnread %d\n", ch, lnread);
+		if (ch < 0) {
+//printf("newline EOF\n");
+			return 1;
+		}
+		ifiles->lineno++;
+		if (lnread == 0)
+			continue;
+		if (lnbeg[lnread-1] == '\\') {
+			lnread--;
+			continue;
+		}
+		break;
+	}
+	lnbeg[lnread] = 0;
+	lncur = lnbeg;
+	lnend = lnbeg + lnread;
+
+	/* skip initial whitespace */
+	while (*lncur == '\t' || *lncur == ' ')
+		lncur++;
+
+	/* resolve digraphs */
+	if (*lncur == '%' && lncur[1] == ':')
+		*++lncur = '#';
+
+	if (pp && *lncur == '#') {
+		lncur++;
+		ppdir();
+		goto newline;
+	}
+//printf("newline '%s'\n", lncur);
+	return 0;
+}
+
 
 static int numnl;
 
@@ -383,45 +469,6 @@ inpbuf(void)
 #endif
 	return pend-inp;
 }
-
-#ifdef notyet
-/*
- * moves data from inp to p to beginning of buffer.
- * fill up the input buffer from p to INFLIRD-numnl
- * update pointers (pend, inp, outp, p)
- */
-static usch *
-refill(usch *p)
-{
-	register usch *ninp, *oinp;
-	register int len;
-
-	/* dump(); */
-	ninp = pbeg+PBMAX;
-	oinp = inp;
-	while (oinp < pend)
-		*ninp++ = *oinp++;
-	p -= (oinp - ninp);
-	pend -= (oinp - ninp);
-	outp = inp = pbeg+PBMAX;
-
-	if (ifiles->infil == -1)
-		return 0;
-
-	ninp = pbeg + PBMAX + INFLIRD - numnl;
-	do {
-		if ((len = (int)read(ifiles->infil, pend, ninp-pend)) < 0)
-			error("read error on file %s", ifiles->orgfn);
-		if (len == 0)
-			break;
-		pend += len;
-	} while (pend < ninp);
-
-	*pend = 0;
-	packbuf();
-	return p;
-}
-#endif
 
 /*
  * Return a quick-cooked character.
@@ -674,13 +721,9 @@ readid(int ch)
 
 /*
  * Scan quickly the input file searching for:
- *	- '#' directives
- *	- keywords (if not flslvl)
+ *	- keywords
  *	- comments
- *
- *	Handle strings, numbers and trigraphs with care.
- *	Only data from pp files are scanned here, never any rescans.
- *	This loop is always at trulvl.
+ *	- strings/char constants
  */
 void
 fastscan(void)
@@ -688,173 +731,131 @@ fastscan(void)
 	struct iobuf *ob;
 	struct symtab *nl;
 	register int ch, c2;
-	register usch *p;
+	register usch *lastw;
 
-	goto run;
+	/*
+	 * "continue" in switch will read next character from line.
+	 * "break" in switch prints unprinted chars and fetch a new line.
+	 *
+	 * "break" printing is between lastw and lncur.
+	 */
+for (;;) {
+//printf("fastscan0\n");
+	if (newline(1))	/* new line of data */
+		return;
+//printf("fastscan1: '%s'\n", lncur);
+	lastw = lncur;
 
 	for (;;) {
+
 		/* tight loop to find special chars */
-		/* should use getchar/putchar here */
 		for (;;) {
-			if (inp < pend)
-				ch = *inp++;
-			else
-				ch = qcchar();
-
-			if ((ISSPEC(ch)) != 0)
+			c2 = M_ID0;
+			if (((ch = *lncur++) & 0200) == 0)
+				c2 = matchch[(int)ch];
+			if (c2)
 				break;
-			putch(ch);
 		}
+//printf("fastscan2: ch %d c2 %d\n", ch, c2);
 
-		switch (ch) {
-		case 0:
-			return;
+		switch (c2) {
+		case M_EOF:
+			break;
 
-		case WARN:
-		case CONC:
+		case M_ERR:
 			error("bad char passed");
 			break;
 
-		case '/': /* Comments */
-			incmnt++;
-			ch = qcchar();
-			incmnt--;
-			if (ch  == '/' || ch == '*') {
-				if (Cflag == 0) {
-					int n = ifiles->lineno;
-					fastcmnt2(ch);
-					if (n == ifiles->lineno)
-						putch(' '); /* 5.1.1.2 p3 */
-				} else {
-					ob = getobuf(BNORMAL);
-					Ccmnt2(ob, ch);
-					ob->buf[ob->cptr] = 0;
-					putstr(ob->buf);
-					bufree(ob);
-				}
-			} else {
-				putch('/');
-				unch(ch);
-			}
-			break;
-
-		case '\n': /* newlines, for pp directives */
-			/* take care of leftover \n */
-			while (escln > 0) {
-				putch('\n');
-				escln--;
-				ifiles->lineno++;
-			}
-			putch('\n');
-			ifiles->lineno++;
-
-			/* search for a # */
-run:			while ((ch = qcchar()) == '\t' || ch == ' ')
-				putch(ch);
-			if (ch == '%') {
-				if ((c2 = qcchar()) != ':')
-					unch(c2);
-				else
-					ch = '#';
-			}
-			if (ch  == '#')
-				ppdir();
-			else
-				unch(ch);
-			break;
-
-		case '\'': /* character constant */
-			if (tflag) {
-				putch(ch);
-				break;	/* character constants ignored */
-			}
+		case M_DOT:
+			if (*lncur < '0' || *lncur > '9')
+				continue;
 			/* FALLTHROUGH */
-		case '\"': /* strings */
-			if (skpows)
-				cntline();
-			p = inp;
-			*--inp = ch;
-			for (;;) {
-				while (ISESTR(*p++) == 0)
-					;
-				if ((c2 = *--p) == 0) {
-					putstr(inp);
-					inp = p;
-					inpbuf();
-					p = inp-1;
-				} else if (c2 == '\\') {
-					p++;
-				} else if (c2 == '\n') {
-					warning("unterminated literal");
-					p--;
-					break;
-				} else if (c2 == ch) 
-					break;
-				p++;
-			}
-			while (inp <= p)
-				putch(*inp++);
-			break;
-
-		case '0': case '1': case '2': case '3': case '4':
-		case '5': case '6': case '7': case '8': case '9':
-			if (skpows)
-				cntline();
-			for (;;) {
-				putch(ch);
-				if (*inp == 0 || *inp == '\\')
-					ch = qcchar();
-				else
-					ch = *inp++;
-				if (ch == 0)
-					break;
-				if ((ISID(ch)) == 0 && ch != '.')
-					break;
-				if ((ch|040) == 'e' || (ch|040) == 'p') {
-					if ((c2 = qcchar()) == '-' || c2 == '+') {
-						putch(ch);
-						ch = c2;
-					} else
-						unch(c2);
+		case M_CMNT:	/* got '/' */
+			fwrite(lastw, lncur - lastw - 1, 1, stdout);
+			lastw = lncur-1;
+			if ((ch = *lncur++) == '/') { /* new-style comment */
+				lncur -= 2;
+				if (Cflag)
+					lncur = lnend;
+				break;
+			} else if (ch == '*') {
+				/* got comment.  Loop until end */
+				int olineno = ifiles->lineno;
+				for (;;) {
+					if (lncur == lnend) {
+						printf("%s\n", 
+						    Cflag ? lastw : "");
+						if (newline(0))
+							goto err;
+						lastw = lncur;
+					}
+					if (lncur[0] == '*' && lncur[1] == '/')
+						break;
+					lncur++;
 				}
-			}
-			*--inp = ch;
-			break;
+				lncur += 2;
+				if (Cflag == 0) {
+					lastw = lncur;
+					if (olineno == ifiles->lineno)
+						fputc(' ', stdout);
+				}
+			} else
+				lncur--;
+			continue;
 
-		case 'L':
-		case 'U':
-		case 'u':
-			if (*inp == 0)
-				inpbuf();
-			if ((c2 = *inp) == '\"' || c2 == '\'') {
-				putch(ch);
+		case M_CHCON: /* character constant */
+			if (tflag)
+				continue;   /* character constants ignored */
+			/* FALLTHROUGH */
+		case M_STR: /* strings */
+			for (;;) {
+				while ((c2 = *lncur++) &&
+				    c2 != ch && c2 != '\\')
+					;
+				if (c2 == 0) {
+					warning("unterminated literal");
+					break;
+				}
+				if (c2 == '\\')
+					lncur++;
+				if (c2 == ch)
+					break;
+			}
+			continue;
+
+		case M_DIG:	/* 0-9 */
+			for (;;) {
+				if ((ch = *lncur++) & 0200)
+					continue;
+				if ((((ch|040) == 'e' || (ch|040) == 'p')) &&
+				    (*lncur == '-' || *lncur == '+'))
+					continue;
+
+				c2 = matchch[ch];
+				if (c2 == M_ID0 || c2 == M_DIG ||
+				    c2 == M_LUU || c2 == M_DOT)
+					continue;
 				break;
 			}
-			if (c2 == '8' && ch == 'u') {
-				if (inp[1] == 0)
-					inpbuf();
-				if (inp[1] == '\"') {
-					inp++;
-					putstr((usch *)"u8");
-					break;
-				}
+			if (ch == 0)
+				break;
+			continue;
+
+		case M_LUU: /* [LUu] */
+			if ((c2 = *lncur) == '\"' || c2 == '\'')
+				continue;
+			if (c2 == '8' && ch == 'u' && lncur[1] == '\"') {
+				lncur++;
+				continue;
 			}
 			/* FALLTHROUGH */
-		default:
-#ifdef PCC_DEBUG
-			if ((ISID(ch)) == 0)
-				error("fastscan");
-#endif
-			if (flslvl)
-				error("fastscan flslvl");
-
-			p = readid(ch);
-			if ((nl = lookup(p, FIND)) != NULL) {
+		case M_ID0:
+			if ((nl = lookup(lncur-1, FIND)) != NULL) {
+				fwrite(lastw, lncur-1 - lastw, 1, stdout);
+				lastw = lncur-1;
 				if ((ob = kfind(nl)) != NULL) {
 					if (*ob->buf == '-' || *ob->buf == '+')
 						putch(' ');
-					if (skpows)
-						cntline();
 					ob->buf[ob->cptr] = 0;
 					putstr(ob->buf);
 					if (ob->cptr > 0 &&
@@ -863,12 +864,20 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 						putch(' ');
 					bufree(ob);
 				}
-			} else {
-				putstr(p);
 			}
-			break;
+			continue;
+		default:
+			error("unhandled token");
 		}
+		if (lncur - lastw)
+			fwrite(lastw, lncur - lastw, 1, stdout);
+		putchar('\n');
+		break;
 	}
+}
+	return;
+err:
+	error("unterminated comment");
 }
 
 /*
@@ -1020,6 +1029,56 @@ pb:	*--inp = c2;
 
 /*
  * A new file included.
+ * fp is the file to read from.
+ * fname is the name of the file.
+ */
+void
+pushfile(FILE *fp, const char *fname, int idx, void *incs)
+{
+	struct includ ibuf;
+	register struct includ *ic;
+	register int otrulvl;
+
+
+	if (++inclevel > MAX_INCLEVEL)
+		error("limit for nested includes exceeded");
+
+	ic = &ibuf;
+	ic->next = ifiles;
+	ifiles = ic;
+
+	ic->fname = fname;
+	ic->pbb[9] = 0;
+	ic->opend = pend - pbeg;
+	ic->oinp = inp - pbeg;
+	ic->opbeg = pbeg;
+	/* dump(); */
+	pend = inp = pbeg = xmalloc(CPPBUF);
+	*inp = 0;
+	ic->lineno = 1;
+	escln = 0;
+	ic->idx = idx;
+	ic->incs = incs;
+	ic->fp = fp;
+	prtline(1);
+	otrulvl = trulvl;
+
+	fastscan();
+
+	if (otrulvl != trulvl || flslvl)
+		error("unterminated conditional");
+
+	ifiles = ic->next;
+	inclevel--;
+	free(pbeg);
+	pbeg = ic->opbeg;
+	pend = pbeg + ic->opend;
+	inp = pbeg + ic->oinp;
+}
+
+#if 0
+/*
+ * A new file included.
  * If ifiles == NULL, this is the first file and already opened (stdin).
  */
 void
@@ -1098,6 +1157,7 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 #endif /* LIBVMF */
 	close(ic->infil);
 }
+#endif
 
 /*
  * Print current position to output file.

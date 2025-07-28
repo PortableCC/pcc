@@ -106,6 +106,7 @@ struct vseg *macvseg;
 #endif
 
 struct symtab *symhsh[SYMHSZ];
+FILE *tmpfd;
 
 /*
  * macptr is an array of char pointers for stored macros.
@@ -181,24 +182,25 @@ static int skipws(struct iobuf *ib);
 static int getyp(usch *s);
 static void macsav(int ch);
 static void fstrstr(struct iobuf *ib, struct iobuf *ob);
-static usch *chkfile(const usch *n1, const usch *n2);
+static FILE *chkfile(const usch *n1, const usch *n2);
 static usch *addname(const usch *str);
 static void *addblock(int sz);
 
 int
 main(int argc, char **argv)
 {
-	struct includ bic;
-	struct iobuf *fb = getobuf(BNORMAL);
 	register int ch;
-	register const usch *fn1, *fn2;
-	char *a;
+	register const usch *fn2;
+	char *a, buf[50];
 
 #ifdef TIMING
 	struct timeval t1, t2;
 
 	(void)gettimeofday(&t1, NULL);
 #endif
+
+	if ((tmpfd = tmpfile()) == NULL)
+		error("tmpfile creation failed");
 
 #if LIBVMF
 	if (vminit(NVMPGS))
@@ -226,15 +228,16 @@ main(int argc, char **argv)
 		case 'D': /* define something */
 			if ((a = strchr(optarg, '=')) != NULL)
 				*a = ' ';
-			bsheap(fb, "#define %s%s", optarg, a ? "\n" : " 1\n");
+			fprintf(tmpfd, "#define %s%s",
+			    optarg, a ? "\n" : " 1\n");
 			break;
 
 		case 'i': /* include */
-			bsheap(fb, "#include \"%s\"\n", optarg);
+			fprintf(tmpfd, "#include \"%s\"\n", optarg);
 			break;
 
 		case 'U': /* undef */
-			bsheap(fb, "#undef %s\n", optarg);
+			fprintf(tmpfd, "#undef %s\n", optarg);
 			break;
 
 		case 'd':
@@ -338,14 +341,14 @@ main(int argc, char **argv)
 
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
-	bsheap(fb, "#define __BSD2_11__ 1\n");
-	bsheap(fb, "#define BSD2_11 1\n");
-	bsheap(fb, "#define __pdp11__ 1\n");
-	bsheap(fb, "#define pdp11 1\n");
-	bsheap(fb, "#define unix 1\n"); /* XXX go away */
+	fprintf(tmpfd, "#define __BSD2_11__ 1\n");
+	fprintf(tmpfd, "#define BSD2_11 1\n");
+	fprintf(tmpfd, "#define __pdp11__ 1\n");
+	fprintf(tmpfd, "#define pdp11 1\n");
+	fprintf(tmpfd, "#define unix 1\n"); /* XXX go away */
 	addidir("/usr/include", &incdir[SYSINC]);
 	if (tflag == 0)
-		bsheap(fb, "#define __STDC__ 1\n");
+		fprintf(tmpfd, "#define __STDC__ 1\n");
 #endif
 
 	macsav(0);
@@ -384,32 +387,23 @@ main(int argc, char **argv)
 		if (freopen(argv[1], "w", stdout) == NULL)
 			error("Can't freopen %s", argv[1]);
 	}
+	fn2 = (const usch *)"<stdin>";
 	if (argc && strcmp(argv[0], "-")) {
-		fn1 = fn2 = (usch *)argv[0];
-	} else {
-		fn1 = NULL;
-		fn2 = (const usch *)"";
+		fn2 = (usch *)argv[0];
+		if ((freopen(argv[0], "r", stdin)) == NULL)
+			error("freopen failed");
 	}
 
 	/* initialization defines */
-	if (dMflag)
-		fwrite(fb->buf, fb->cptr, 1, stdout);
-	fb->buf[fb->cptr] = 0;
-	memset(&bic, 0, sizeof(bic));
-	bic.fname = bic.orgfn = (const usch *)"<command line>";
-	bic.lineno = 1;
-	bic.infil = -1;
-	fb->bsz = fb->cptr;
-	fb->cptr = 0;
-	pbeg = outp = inp = fb->buf;
-	pend = pbeg + fb->bsz;
-	ifiles = &bic;
-	fastscan();
-	bufree(fb);
-	ifiles = NULL;
-	/* end initial defines */
+	if (dMflag) {
+		rewind(tmpfd);
+		while ((ch = fread(buf, 1, sizeof buf, tmpfd)) > 0)
+			fwrite(buf, ch, 1, stdout);
+	}
+	rewind(tmpfd);
+	pushfile(tmpfd, "<command line>", 0, 0);
 
-	pushfile(fn1, fn2, 0, NULL);
+	pushfile(stdin, fn2, 0, NULL);
 
 	if (Mflag == 0 && skpows)
 		fputc('\n', stdout);
@@ -800,15 +794,15 @@ fsrch_macos_framework(const usch *fn, const usch *dir)
 static int
 fsrch(const usch *fn, int idx, register struct incs *w)
 {
-	register usch *res;
+	register FILE *fd;
 	register int i;
 
 	for (i = idx; i < 2; i++) {
 		if (i > idx)
 			w = incdir[i];
 		for (; w; w = w->next) {
-			if ((res = chkfile(fn, w->dir)) != NULL) {
-				pushfile(res, fn, i, w->next);
+			if ((fd = chkfile(fn, w->dir)) != NULL) {
+				pushfile(fd, fn, i, w->next);
 				return 1;
 			}
 		}
@@ -851,22 +845,23 @@ prem(void)
 
 /*
  * concatenate n1 with n2 and see if the result is an accessible file.
- * return a permanent version of the resulting name or NULL if nonexisting.
+ * if so, open it and return the fd.
  */
-static usch *
+static FILE *
 chkfile(register const usch *n1, register const usch *n2)
 {
-	register struct iobuf *ob;
-	register usch *res = NULL;
+	char buf[FILENAME_MAX];
+	register FILE *fd;
 
 	if (n2 != NULL) {
-		ob = bsheap(NULL, "%s/%s", n2, n1);
+		snprintf(buf, sizeof buf, "%s/%s", n2, n1);
 	} else
-		ob = strtobuf(n1, NULL);
-	if (access((char *)ob->buf, R_OK) == 0)
-		res = addname(ob->buf);
-	bufree(ob);
-	return res;
+		snprintf(buf, sizeof buf, "%s", n1);
+//	if (access(buf, R_OK) == 0)
+//		res = addname(buf);
+	if ((fd = fopen(buf, "r")) == NULL)
+		error("chkfile");
+	return fd;
 }
 
 /*
@@ -879,6 +874,7 @@ include(void)
 {
 	register struct iobuf *ob;
 	register usch *fn, *nm = NULL;
+	FILE *fd;
 
 	if (flslvl)
 		return;
@@ -890,30 +886,32 @@ include(void)
 	ob = yynode.nd_ob;
 	ob->buf[ob->cptr-1] = 0; /* last \" */
 
-	if (ob->buf[1] == '/') {
-		 if ((fn = chkfile(&ob->buf[1], 0)) != NULL)
+	fn = &ob->buf[1];
+	if (fn[0] == '/') {
+		 if ((fd = chkfile(fn, 0)) != NULL)
 			goto okret;
 	}
 	if (ob->buf[0] == '\"') {
 		if ((nm = (usch *)strrchr((char *)ifiles->orgfn, '/'))) {
 			*nm = 0;
-		 	fn = chkfile(&ob->buf[1], ifiles->orgfn);
+		 	fd = chkfile(fn, ifiles->orgfn);
 			*nm = '/';
 		} else 
-			fn = chkfile(&ob->buf[1], 0);
-		if (fn != NULL)
+			fd = chkfile(fn, 0);
+		if (fd != NULL)
 			goto okret;
 	}
-	fn = addname(&ob->buf[1]);
+	fn = addname(fn);
 	bufree(ob);
 	if (fsrch(fn, 0, incdir[0]))
 		goto prt;
 
 	error("cannot find '%s'", fn);
+	fd = NULL; /* cannot happen */
 	/* error() do not return */
 
 okret:	bufree(ob);
-	pushfile(fn, fn, 0, NULL);
+	pushfile(fd, fn, 0, NULL);
 prt:	prtline(1);
 }
 
