@@ -57,21 +57,12 @@
  *	3) Tokenize.
  *	   Remove comments (fastcmnt)
  */
-/*  (low address)                                             (high address)
- *  pbeg                                                                pend
- *  |                                                                     |
- *  _______________________________________________________________________
- * |_______________________________________________________________________|
- *          |               |               |
- *          |<-- waiting -->|               |<-- waiting -->
- *          |    to be      |<-- current -->|    to be
- *          |    written    |    token      |    scanned
- *          |               |               |
- *          outp            inp             p
- *
- *  *outp   first char not yet written to output file
- *  *inp    first char of current token
- *  *p      first char not yet scanned
+/*
+ * Comment handling might be slightly awkward, most due to -C.
+ * - scan in newline() for comments in the beginning of a line, since
+ *	a preprocessing directive may be directly after that comment.
+ * - remove all comments in a line in ppdir() _except_ for #define, 
+ *	since comments should be retained inside macros if -C.
  */
 
 #ifndef pdp11
@@ -226,24 +217,41 @@ int lnmax;
 static int
 newline(int pp)
 {
-	register int ch, lnread = 0;
+	register int ch, lnread, inst;
 
-//printf("enter newline\n");
 newline:
+	lnread = 0;
 	for (;;) {
 		for (;;) {
 			if ((ch = getc(ifiles->fp)) == '\n' || ch < 0)
 				break;
-//printf("got char %d (%c)\n", ch, ch);
 			if (ch == '\r' || ch == '\f')
 				continue; /* ignore */
+			if (ch == '\"') {
+				if (inst && lnread &&
+				    lnbeg[lnread-1] != '\\')
+					inst = 0;
+				else
+					inst = 1;
+			}
+			if (ch == '*' && lnread && lnbeg[lnread-1] == '/') {
+				lnread--;
+				while ((ch = getc(ifiles->fp))) {
+					if (ch == '*') {
+						ch = getc(ifiles->fp);
+						if (ch == '/')
+							break;
+					}
+					if (ch == '\n')
+						ifiles->escln++;
+				}
+				continue;
+			}
 			if (lnmax == lnread)
 				lnbeg = xrealloc(lnbeg, lnmax += 256);
 			lnbeg[lnread++] = ch;
 		}
-//printf("got char %d lnread %d\n", ch, lnread);
 		if (ch < 0) {
-//printf("newline EOF\n");
 			return 1;
 		}
 		ifiles->lineno++;
@@ -263,19 +271,63 @@ newline:
 	while (*lncur == '\t' || *lncur == ' ')
 		lncur++;
 
-	/* resolve digraphs */
-	if (*lncur == '%' && lncur[1] == ':')
-		*++lncur = '#';
+	if (pp) {
+		/* resolve digraphs */
+		if (*lncur == '%' && lncur[1] == ':')
+			*++lncur = '#';
 
-	if (pp && *lncur == '#') {
-		lncur++;
-		ppdir();
-		goto newline;
+		if (*lncur == '#') {
+			lncur++;
+			ppdir();
+			goto newline;
+		}
 	}
-//printf("newline '%s'\n", lncur);
 	return 0;
 }
 
+/*
+ * Function to prepare to parse directives.
+ *
+ * Remove comments from input line (make spaces) (if not -C).
+ */
+void
+cleanline(void)
+{
+	int cmnt;
+	char *c;
+
+	for (c = lncur, cmnt = 0; c < lnend; c++) {
+		if (cmnt == 0 && c[0] == '/' && c[1] == '/') {
+			c[0] = 0;
+			return;
+		}
+		if (c[0] == '/' && c[1] == '*') {
+			cmnt = 1;
+			if (!Cflag)
+				c[0] = c[1] = ' ';
+			c++;
+		}
+		if (c[0] == '*' && c[1] == '/') {
+			if (!Cflag)
+				c[0] = c[1] = ' ';
+			c++;
+			cmnt = 0;
+		}
+		if (cmnt)
+			*c = ' ';
+	}
+}
+
+/*
+ * Skip over spaces and return next char (or 0 if buffer empty).
+ */
+static int
+nxtch(void)
+{
+	while (lncur[0] == ' ' || lncur[0] == '\t')
+		lncur++;
+	return lncur[0];
+}
 
 static int numnl;
 
@@ -740,14 +792,11 @@ fastscan(void)
 	 * "break" printing is between lastw and lncur.
 	 */
 for (;;) {
-//printf("fastscan0\n");
 	if (newline(1))	/* new line of data */
 		return;
-//printf("fastscan1: '%s'\n", lncur);
 	lastw = lncur;
 
 	for (;;) {
-
 		/* tight loop to find special chars */
 		for (;;) {
 			c2 = M_ID0;
@@ -756,7 +805,6 @@ for (;;) {
 			if (c2)
 				break;
 		}
-//printf("fastscan2: ch %d c2 %d\n", ch, c2);
 
 		switch (c2) {
 		case M_EOF:
@@ -850,7 +898,9 @@ for (;;) {
 			}
 			/* FALLTHROUGH */
 		case M_ID0:
+printf("Qid0: '%s'\n", lncur-1);
 			if ((nl = lookup(lncur-1, FIND)) != NULL) {
+printf("QidF: '%s'\n", lncur-1);
 				fwrite(lastw, lncur-1 - lastw, 1, stdout);
 				lastw = lncur-1;
 				if ((ob = kfind(nl)) != NULL) {
@@ -864,6 +914,9 @@ for (;;) {
 						putch(' ');
 					bufree(ob);
 				}
+			} else {
+				while (ISID(*lncur))
+					lncur++;
 			}
 			continue;
 		default:
@@ -1561,20 +1614,6 @@ static struct {
 };
 #define	NPPD	(int)(sizeof(ppd) / sizeof(ppd[0]))
 
-static void
-skpln(void)
-{
-	register int ch;
-
-	/* just ignore the rest of the line */
-	while ((ch = qcchar()) != 0) {
-		if (ch == '\n') {
-			unch('\n');
-			break;
-		}
-	}
-}
-
 /*
  * do an even faster scan than fastscan while at flslvl.
  * just search for a new directive.
@@ -1585,57 +1624,12 @@ flscan(void)
 	register int ch;
 
 	for (;;) {
-		ch = qcchar();
-again:		switch (ch) {
-		case 0:
+		if (newline(0))
+			error("unbalanced preprocessor conditionals");
+		if (Cflag == 0)
+			cleanline();
+		if ((ch = nxtch()) == '#')
 			return;
-		case '\n':
-			putch('\n');
-			ifiles->lineno++;
-			while ((ch = qcchar()) == ' ' || ch == '\t')
-				;
-			if ((ch == '#') ||
-			    (ch == '%' && (ch = qcchar()) == ':')) {
-				while ((ch = qcchar()) == ' ' || ch == '\t')
-					;
-				if (ISID0(ch)) {
-					unch(ch);
-					return;
-				}
-			}
-			goto again;
-		case '\'':
-			while ((ch = qcchar()) != '\'') {
-				if (ch == '\\')
-					qcchar();
-				if (ch == '\n')
-					goto again;
-			}
-			break;
-		case '\"':
-			instr = 1;
-			while ((ch = qcchar()) != '\"') {
-				switch (ch) {
-				case '\\':
-					incmnt = 1;
-					qcchar();
-					incmnt = 0;
-					break;
-				case '\n':
-					goto again;
-				case 0:
-					instr = 0;
-					return;
-				}
-			}
-			instr = 0;
-			break;
-		case '/':
-			ch = qcchar();
-			if (ch == '/' || ch == '*')
-				fastcmnt2(ch);
-			goto again;
-		}
         }
 }
 
@@ -1647,53 +1641,39 @@ again:		switch (ch) {
 void
 ppdir(void)
 {
-	register int ch, i, oldC;
-	usch *bp;
+	register int ch, i;
+	char *wp;
 
-	oldC = Cflag;
-redo:	Cflag = 0;
-	if ((ch = fastspc()) == '\n') { /* empty directive */
-		unch(ch);
-		Cflag = oldC;
-		return;
+	cleanline();
+	if ((ch = nxtch()) == 0)
+		return; /* empty directive */
+redo:
+
+	for (wp = lncur; *lncur <= 'z' && *lncur >= 'a'; lncur++)
+		;
+	if (*lncur != ' ' && *lncur != '\t') {
+		if (Aflag == 0)
+			error("invalid preprocessor directive");
 	}
-	Cflag = oldC;
-	if ((ISID0(ch)) == 0)
-		goto out;
-	bp = readid(ch);
+	*lncur++ = 0;
 
 	/* got some keyword */
 	for (i = 0; i < NPPD; i++) {
-		if (bp[0] == ppd[i].name[0] &&
-		    strcmp((char *)bp, ppd[i].name) == 0) {
+		if (wp[0] == ppd[i].name[0] && strcmp(wp, ppd[i].name) == 0) {
 			if (flslvl == 0) {
 				(*ppd[i].fun)();
-				if (flslvl == 0)
-					return;
 			} else {
 				if (ppd[i].flags & DIR_FLSLVL) {
 					(*ppd[i].fun)();
-					if (flslvl == 0)
-						return;
 				} else if (ppd[i].flags & DIR_FLSINC)
 					flslvl++;
 			}
-			flscan();
-			goto redo;
+			break;
 		}
 	}
-	if (flslvl == 0) {
-		if (Aflag)
-			skpln();
-		return;
+	if (flslvl) {
+		flscan();
+		goto redo;
 	}
-	flscan();
-	goto redo;
 
-out:
-	if (flslvl == 0 && Aflag == 0)
-		error("invalid preprocessor directive");
-
-	unch(ch);
-	skpln();
 }

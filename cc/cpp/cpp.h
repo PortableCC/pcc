@@ -49,8 +49,9 @@ extern	int	defining, inclevel;
 extern	int	escln;	/* escaped newlines, to be added */
 
 /* args for lookup() */
-#define FIND    0
-#define ENTER   1
+#define FIND	0
+#define ENTER	1
+#define ENOADD	2
 
 /* buffer used internally */
 #if SIZEOF_INT_P == 2 || LIBVMF
@@ -151,7 +152,7 @@ struct includ {
 	struct includ *next;
 	const usch *fname;	/* current fn, changed if #line found */
 	const usch *orgfn;	/* current fn, not changed */
-	int lineno;
+	int lineno, escln;
 	int infil;
 	int opend, oinp;
 	usch *opbeg;
@@ -168,6 +169,7 @@ struct includ {
 
 extern struct includ *ifiles;
 extern usch *pbeg, *pend, *outp, *inp;
+extern char *lnbeg, *lncur, *lnend;
 
 /* Symbol table entry  */
 struct symtab {
@@ -208,7 +210,7 @@ enum { NUMBER = 257, UNUMBER, LS, RS, EQ, NE, STRING, WSPACE, CMNT, IDENT,
 
 #define	SLO_IGNOREWS	001
 
-struct symtab *lookup(const usch *namep, int enterf);
+struct symtab *lookup(usch *namep, int enterf);
 struct blocker;
 struct iobuf *submac(struct symtab *nl, int, struct iobuf *, int);
 struct iobuf *kfind(struct symtab *nl);
@@ -243,3 +245,4 @@ void *xmalloc(int sz);
 void fastscan(void);
 void cntline(void);
 int inpbuf(void);
+void cleanline(void);
