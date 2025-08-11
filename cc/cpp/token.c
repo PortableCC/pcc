@@ -211,16 +211,22 @@ int lnmax;
  * Read in one line from input file.
  * Concatenate \\n-ending lines here.  If line is zero in length get
  * another.  Position beginning pointer over the first char in line.
+ * Comments are removed here as well.
  *
  * Returns 1 if EOF, 0 if succeeded reading a new line.
+ *
+ * About linefeeds:
+ * - Linefeeds do never show up outside this routine.
+ * - When a line feed is seen, lineno is incremented, as well as escln.
+ *   The latter will be printed out before next chunk of data.
  */
-static int
+int
 newline(int pp)
 {
-	register int ch, lnread, inst;
+	register int ch, lnread, inst, nrlf;
 
 newline:
-	lnread = 0;
+	lnread = nrlf = 0;
 	for (;;) {
 		for (;;) {
 			if ((ch = getc(ifiles->fp)) == '\n' || ch < 0)
@@ -243,7 +249,7 @@ newline:
 							break;
 					}
 					if (ch == '\n')
-						ifiles->escln++;
+						nrlf++;
 				}
 				continue;
 			}
@@ -254,13 +260,14 @@ newline:
 		if (ch < 0) {
 			return 1;
 		}
-		ifiles->lineno++;
+		nrlf++;
 		if (lnread == 0)
 			continue;
 		if (lnbeg[lnread-1] == '\\') {
 			lnread--;
 			continue;
 		}
+//printf("line %d : %s\n", ifiles->lineno+nrlf, lnbeg);
 		break;
 	}
 	lnbeg[lnread] = 0;
@@ -271,6 +278,7 @@ newline:
 	while (*lncur == '\t' || *lncur == ' ')
 		lncur++;
 
+	ifiles->lineno += nrlf, escln += nrlf;
 	if (pp) {
 		/* resolve digraphs */
 		if (*lncur == '%' && lncur[1] == ':')
@@ -327,6 +335,16 @@ nxtch(void)
 	while (lncur[0] == ' ' || lncur[0] == '\t')
 		lncur++;
 	return lncur[0];
+}
+
+int
+cnxtch(void)     
+{
+	int c;
+
+	while ((c = nxtch()) == 0)
+		newline(0);
+	return c;
 }
 
 static int numnl;
@@ -783,7 +801,7 @@ fastscan(void)
 	struct iobuf *ob;
 	struct symtab *nl;
 	register int ch, c2;
-	register usch *lastw;
+	register usch *lastw, *w;
 
 	/*
 	 * "continue" in switch will read next character from line.
@@ -808,6 +826,11 @@ for (;;) {
 
 		switch (c2) {
 		case M_EOF:
+			lncur--;	/* Put over \0 */
+			if (!Mflag)
+				while (escln)
+					putchar('\n'), escln--;
+			escln = 0;
 			break;
 
 		case M_ERR:
@@ -819,7 +842,8 @@ for (;;) {
 				continue;
 			/* FALLTHROUGH */
 		case M_CMNT:	/* got '/' */
-			fwrite(lastw, lncur - lastw - 1, 1, stdout);
+			if (!Mflag)
+				fwrite(lastw, lncur - lastw - 1, 1, stdout);
 			lastw = lncur-1;
 			if ((ch = *lncur++) == '/') { /* new-style comment */
 				lncur -= 2;
@@ -898,33 +922,44 @@ for (;;) {
 			}
 			/* FALLTHROUGH */
 		case M_ID0:
-printf("Qid0: '%s'\n", lncur-1);
-			if ((nl = lookup(lncur-1, FIND)) != NULL) {
-printf("QidF: '%s'\n", lncur-1);
-				fwrite(lastw, lncur-1 - lastw, 1, stdout);
-				lastw = lncur-1;
+			w = lncur-1;
+			while (ISID(*lncur))
+				lncur++;
+			if ((nl = lookup(w, FIND)) != NULL) {
+				if (escln > 10) {
+					prtline(1);
+					escln = 0;
+				} else while (escln)
+					putchar('\n'), escln--;
+				if (!Mflag)
+					fwrite(lastw, w - lastw, 1, stdout);
+				lastw = w;
 				if ((ob = kfind(nl)) != NULL) {
 					if (*ob->buf == '-' || *ob->buf == '+')
 						putch(' ');
 					ob->buf[ob->cptr] = 0;
-					putstr(ob->buf);
+					if (!Mflag)
+						putstr(ob->buf);
 					if (ob->cptr > 0 &&
 					    (ob->buf[ob->cptr-1] == '-' ||
 					    ob->buf[ob->cptr-1] == '+'))
 						putch(' ');
 					bufree(ob);
+					lastw = lncur;
 				}
-			} else {
-				while (ISID(*lncur))
-					lncur++;
 			}
 			continue;
 		default:
 			error("unhandled token");
 		}
-		if (lncur - lastw)
+		if (escln > 10) {
+			prtline(1);
+		} else if (!Mflag)
+			while (escln)
+				putchar('\n'), escln--;
+		escln = 0;
+		if (lncur - lastw && !Mflag)
 			fwrite(lastw, lncur - lastw, 1, stdout);
-		putchar('\n');
 		break;
 	}
 }
@@ -1108,15 +1143,17 @@ pushfile(FILE *fp, const char *fname, int idx, void *incs)
 	/* dump(); */
 	pend = inp = pbeg = xmalloc(CPPBUF);
 	*inp = 0;
-	ic->lineno = 1;
+	ic->lineno = 0;
 	escln = 0;
 	ic->idx = idx;
 	ic->incs = incs;
 	ic->fp = fp;
-	prtline(1);
+	if (!Pflag)
+		printf("\n# 1 \"%s\"%s\n", fname, idx == SYSINC ? " 3" : "");
 	otrulvl = trulvl;
 
 	fastscan();
+	putchar('\n');
 
 	if (otrulvl != trulvl || flslvl)
 		error("unterminated conditional");
@@ -1128,89 +1165,6 @@ pushfile(FILE *fp, const char *fname, int idx, void *incs)
 	pend = pbeg + ic->opend;
 	inp = pbeg + ic->oinp;
 }
-
-#if 0
-/*
- * A new file included.
- * If ifiles == NULL, this is the first file and already opened (stdin).
- */
-void
-pushfile(const usch *file, const usch *fn, int idx, void *incs)
-{
-	struct includ ibuf;
-	register struct includ *ic;
-	register int otrulvl;
-
-	ic = &ibuf;
-	ic->next = ifiles;
-
-	if (file != NULL) {
-		if ((ic->infil = open((const char *)file, O_RDONLY)) < 0)
-			error("pushfile: error open %s", file);
-		ic->orgfn = ic->fname = file;
-		if (++inclevel > MAX_INCLEVEL)
-			error("limit for nested includes exceeded");
-	} else {
-		ic->infil = 0;
-		ic->orgfn = ic->fname = (const usch *)"<stdin>";
-	}
-#if LIBVMF
-	if (ifiles) {
-		vmmodify(ifiles->vseg);
-		vmunlock(ifiles->vseg);
-	}
-	ic->vseg = vmmapseg(&ibspc, inclevel);
-	vmlock(ic->vseg);
-#endif
-	ifiles = ic;
-
-	ic->pbb[9] = 0;
-	ic->opend = pend - pbeg;
-	ic->oinp = inp - pbeg;
-	ic->opbeg = pbeg;
-	/* dump(); */
-#if LIBVMF
-	pend = inp = pbeg = (usch *)ifiles->vseg->s_cinfo;
-#else
-	pend = inp = pbeg = xmalloc(CPPBUF);
-	*inp = 0;
-#endif
-	ic->lineno = 1;
-	escln = 0;
-	ic->idx = idx;
-	ic->incs = incs;
-	ic->fn = fn;
-	prtline(1);
-	otrulvl = trulvl;
-
-	fastscan();
-
-	if (otrulvl != trulvl || flslvl)
-		error("unterminated conditional");
-
-	ifiles = ic->next;
-	inclevel--;
-#if LIBVMF
-	vmmodify(ic->vseg);
-	vmunlock(ic->vseg);
-	if (ifiles) {
-		ifiles->vseg = vmmapseg(&ibspc, inclevel);
-		vmlock(ifiles->vseg);
-
-		pbeg = (usch *)ifiles->vseg->s_cinfo;
-		pend = pbeg + ic->opend;
-		inp = pbeg + ic->oinp;
-		/* XXX adjust offsets */
-	}
-#else /* LIBVMF */
-	free(pbeg);
-	pbeg = ic->opbeg;
-	pend = pbeg + ic->opend;
-	inp = pbeg + ic->oinp;
-#endif /* LIBVMF */
-	close(ic->infil);
-}
-#endif
 
 /*
  * Print current position to output file.
@@ -1230,10 +1184,8 @@ prtline(int nl)
 		}
 	} else if (!Pflag) {
 		skpows = 0;
-		printf("\n# %d \"%s\"", ifiles->lineno, ifiles->fname);
-		if (ifiles->idx == SYSINC)
-			printf(" 3");
-		if (nl) printf("\n");
+		printf("\n# %d \"%s\"%s\n", ifiles->lineno, ifiles->fname,
+		    ifiles->idx == SYSINC ? " 3" : "");
 	} else
 		putch('\n');
 }
@@ -1339,24 +1291,16 @@ static void
 chknl(int ignore)
 {
 	register void (*f)(const char *, ...);
-	register int t, c;
+	register int t;
 
-	c = Cflag;
-	Cflag = 0;
 	f = ignore ? warning : error;
-	if ((t = fastspc()) != '\n') {
+	if ((t = nxtch()) != 0) {
 		if (t) {
 #ifndef pdp11
 			f("newline expected");
 #endif
-			/* ignore rest of line */
-			while ((t = qcchar()) > 0 && t != '\n')
-				;
-		} else
-			f("no newline at end of file");
+		}
 	}
-	Cflag = c;
-	unch(t);
 }
 
 static void
@@ -1542,14 +1486,14 @@ static void
 undefstmt(void)
 {
 	register struct symtab *np;
-	register usch *bp;
 	register int ch;
 
-	if (!ISID0(ch = fastspc()))
+	if (!ISID0(ch = nxtch()))
 		error("bad #undef");
-	bp = readid(ch);
-	if ((np = lookup(bp, FIND)) != NULL)
+	if ((np = lookup(lncur, FIND)) != NULL)
 		np->valoff = 0;
+	while (ISID(*lncur))
+		lncur++;
 	chknl(0);
 }
 

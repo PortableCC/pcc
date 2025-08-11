@@ -246,3 +246,5 @@ void fastscan(void);
 void cntline(void);
 int inpbuf(void);
 void cleanline(void);
+int cnxtch(void);
+int newline(int);

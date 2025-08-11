@@ -353,6 +353,9 @@ main(int argc, char **argv)
 		c[2] = 0;
 	}
 
+	if (dMflag)
+		Pflag = 1;	/* no line output */
+
 	if (argc == 2) {
 		if (freopen(argv[1], "w", stdout) == NULL)
 			error("Can't freopen %s", argv[1]);
@@ -970,15 +973,17 @@ define(void)
 		switch (c) {
 		case ' ':
 		case '\t':
+			SKPWS();
+			needws++;
 			continue;
 
 		case '#':
 //printf("X2: '%s'\n", lncur);
-			RWR(c);
 			if (*lncur == '#') {
 				/* concat op */
-				RWP(CONC);
+				RWR(CONC);
 				lncur++;
+				needws = 0;
 				SKPWS();
 				if (ISID0(c = *lncur) && type == FUNLIKE)
 					wascon = 1;
@@ -987,17 +992,21 @@ define(void)
 				continue;
 			}
 
+			if (needws)
+				RWR(' '), needws = 0;
+
 			if (type == OBJCT) {
 				/* no meaning in object-type macro */
+				RWR(c);
 				continue;
 			}
 
 			/* remove spaces between # and arg */
-			SKPWS();
+			RWR(SNUFF);	/* overwrite # */
+			SKPWS();	/* remove spaces between # and arg */
 //printf("X5: '%s'\n", lncur);
 			if (!ISID0(c = *lncur))
 				goto bad;
-			RWP(SNUFF);
 //printf("X6: '%s'\n", lncur);
 			gotsnuff = 1;
 			break;
@@ -1123,9 +1132,7 @@ define(void)
 	/* remove trailing whitespace */
 
 	RWR(0);
-printf("en define: '");
-prline(rbeg);
-printf("'\n");
+	fwrite(rbeg, 1, mwa - rbeg, mfp);
 
 	if (vararg)
 		type = VARG;
@@ -1575,6 +1582,7 @@ newmac:				if ((xob = submac(sp, 1, ib, 0)) == NULL) {
 	}
 
 	bufree(xb);
+	putob(ob, 0);
 	DPRINT(("loopover return 0\n"));
 	return 0;
 }
@@ -1624,19 +1632,10 @@ kfind(struct symtab *sp)
 
 	default:
 		/* Search for '(' */
-		while (ISWSNL(c = cinput()))
-			if (c == '\n')
-				n++;
-		if (c != '(') {
-			putstr(sp->namep);
-			if (n == 0)
-				putch(' ');
-			else for (ifiles->lineno += n; n; n--)
-				putch('\n');
-			cunput(c);
+		c = cnxtch();
+		lncur++;
+		if (c != '(')
 			return 0; /* Failed */
-		}
-
 		/* fetch arguments */
 again:		if ((ab = readargs(NULL, sp, argary)) == 0)
 			error("readargs");
@@ -1661,9 +1660,8 @@ again:		if ((ab = readargs(NULL, sp, argary)) == 0)
 
 	if ((sp = loopover(ob, outb))) {
 		/* Search for '(' */
-		while (ISWSNL(c = cinput()))
-			if (c == '\n')
-				n++;
+		c = cnxtch();
+		lncur++;
 		if (c == '(') {
 			bufree(ob);
 			goto again;
@@ -1750,13 +1748,40 @@ submac(struct symtab *sp, int lvl, register struct iobuf *ib, int l)
 	return ob;
 }
 
-static int
-skpws(void)
+static int              
+rdainp(register struct iobuf *in)
 {
 	register int c;
-	while ((c = cinput()) == ' ' || c == '\t')
+
+	if (in)
+		return in->buf[in->cptr++];
+	while ((c = *lncur++) == 0)
+		newline(0);
+	return c;
+}
+
+static int
+skpws(register struct iobuf *in)
+{
+	register int c;
+	while ((c = rdainp(in)) == ' ' || c == '\t')
 		;
 	return c;
+}
+
+static void
+rdastr(int c, register struct iobuf *ab, register struct iobuf *in)
+{
+	register int j;
+
+	putob(ab, c);
+	for (;;) {
+		putob(ab, j = rdainp(in));
+		if (j == c)
+			break;
+		if (j == '\\')
+			putob(ab, rdainp(in));
+	}
 }
 
 /*
@@ -1766,29 +1791,13 @@ skpws(void)
 struct iobuf *
 readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 {
-	usch *opbeg, *opend, *oinp;
 	register struct iobuf *ab;
-	register int c, infil, i, j, plev, narg, ellips = 0;
+	register int c, i, j, plev, narg, ellips = 0;
 	int argary[MAXARGS+1];
 
 	DPRINT(("readargs: in %p\n", in));
 	narg = sp->narg;
 	ellips = sp->type == VARG;
-
-#ifdef __GNUC__
-	opbeg = opend = oinp = 0;
-#endif
-
-	infil = ifiles->infil;
-	if (in) {
-		oinp = inp;
-		opend = pend;
-		opbeg = pbeg;
-		ifiles->infil = -1;
-		pbeg = in->buf;
-		inp = pbeg + in->cptr;
-		pend = pbeg + in->bsz;
-	}
 
 #ifdef PCC_DEBUG
 	if (dflag > 1) {
@@ -1807,8 +1816,10 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 		argary[i] = ab->cptr;
 		plev = 0;
 
-		c = skpws();
+		c = skpws(in);
+//printf("readargs: i %d narg %d c '%c' plev %d lncur '%s'\n", i, narg, c, plev, lncur);
 		for (;;) {
+//printf("readargs infor c '%c'\n", c);
 			if (plev == 0 && (c == ')' || c == ','))
 				break;
 			if (c == '(') plev++;
@@ -1816,10 +1827,6 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 			switch (c) {
 			case 0:
 				if (in) {
-					in->cptr = inp - pbeg;
-					pend = opend;
-					inp = oinp;
-					pbeg = opbeg;
 					in = NULL;
 				} else
 					error("eof in macro");
@@ -1827,44 +1834,36 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 			case BLKID2:
 			case BLKID:
 				putob(ab, c);
-				putob(ab, *inp++);
+				putob(ab, rdainp(in));
 				if (c == BLKID2)
-					putob(ab, *inp++);
+					putob(ab, rdainp(in));
 				break;
+
 			case '/':
-				if ((c = cinput()) == '*' || c == '/')
-					Ccmnt2(ab, c);
-				else {
-					putob(ab, '/');
-					cunput(c);
-				}
+				if ((c = rdainp(in)) == '/') {
+					/* only from infile */
+					lncur = lnend;
+					break;
+				} else if (c == '/')
+					error("comment in readargs");
 				break;
-			case '\n':
-				escln++;
-				c = skpws();
-				if (c == '#') {
-					ppdir();
-				} else {
-					/* only if not first char on line */
-					if (argary[i] != ab->cptr)
-						putob(ab, ' ');
+
+			case '\"':
+			case '\'':
+				rdastr(c, ab, in);
+				break;
+			default:
+				putob(ab, c);
+				if (ISID0(c)) {
+					while (ISID(c = rdainp(in)))
+						putob(ab, c);
 					continue;
 				}
 				break;
-			case '\"':
-			case '\'':
-				*--inp = c;
-				fstrstr(NULL, ab);
-				break;
-			default:
-				if (ISID0(c)) {
-					bufid(c, ab);
-				} else
-					putob(ab, c);
-				break;
 			}
-			c = cinput();
+			c = rdainp(in);
 		}
+//printf("readargsE: i %d narg %d c '%c' plev %d lncur '%s'\n", i, narg, c, plev, lncur);
 
 		while (argary[i] < ab->cptr && ISWSNL(ab->buf[ab->cptr-1]))
 			ab->cptr--;
@@ -1884,19 +1883,16 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	ab->cptr--;
 	if (ellips && c != ')') {
 		plev = 0;
-		c = skpws();
+		c = skpws(in);
 		for (;;) {
 			if ((plev == 0 && c == ')') || c == 0)
 				break;
 			if (c == '(') plev++;
 			if (c == ')') plev--;
 			if (c == '\"' || c == '\'') {
-				*--inp = c;
-				fstrstr(NULL, ab);
+				rdastr(c, ab, in);
 			} else
 				putob(ab, c);
-			if ((c = cinput()) == '\n')
-				escln++, c = ' ';
 		}
 		if (c == 0)
 			error("unterminated macro invocation");
@@ -1914,20 +1910,13 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	if (ellips)
 		i++;
 	if (narg == 0 && ellips == 0)
-		c = skpws();
+		c = skpws(in);
 
 	if (c != ')' || (i != narg && ellips == 0) || (i < narg && ellips == 1))
 		error("wrong arg count");
 	for (j = 0; j < i; j++)
 		args[j] = ab->buf + argary[j];
 
-	ifiles->infil = infil;
-	if (in) {
-		in->cptr = inp - pbeg;
-		inp = oinp;
-		pend = opend;
-		pbeg = opbeg;
-	}
 	return ab;
 }
 
@@ -2188,18 +2177,22 @@ prrep(mvtyp ptr)
 {
 	int s;
 
-	while ((s = macget(ptr++))) {
+	fseek(mfp, ptr, SEEK_SET);
+	while ((s = fgetc(mfp))) {
 		switch (s) {
 		case WARN:
-			s = macget(ptr++);
+			s = fgetc(mfp);
 			if (s == (usch)C99ARG) printf("<C99ARG>");
 			else if (s == (usch)GCCARG) printf("<GCCARG>");
 			else printf("<ARG(%d)>", s);
 			break;
 		case CONC: printf("<CONC>"); break;
 		case SNUFF: printf("<SNUFF>"); break;
-		case BLKID: blkprint(macget(ptr++)); break;
-		case BLKID2: blkprint(macget(ptr) << 8 | macget(ptr+1)); ptr += 2; break;
+		case BLKID: blkprint(fgetc(mfp)); break;
+		case BLKID2:
+			s = fgetc(mfp);
+			blkprint(s << 8 | fgetc(mfp));
+			break;
 		default: printf("%c", s); break;
 		}
 	}
