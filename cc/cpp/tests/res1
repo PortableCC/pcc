@@ -1,12 +1,7 @@
 
-# 1 "<command line>"
-
-
 # 1 "<stdin>"
 
 
 
 
-
-char p[] = "x ## y";	
-
+char p[] = "x ## y";	 
