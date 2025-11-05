@@ -196,7 +196,7 @@ static void savebc(void);
 static void swstart(int, TWORD);
 static void genswitch(int, TWORD, struct swents **, int);
 static char *mkpstr(char *str);
-static struct symtab *clbrace(P1ND *);
+static struct initctx *clbrace(P1ND *);
 static P1ND *cmop(P1ND *l, P1ND *r);
 static P1ND *xcmop(P1ND *out, P1ND *in, P1ND *str);
 static void mkxasm(char *str, P1ND *p);
@@ -211,7 +211,7 @@ static P1ND *funargs(P1ND *p);
 static void oldargs(P1ND *p);
 static void uawarn(P1ND *p, char *s);
 static int con_e(P1ND *p);
-static void dainit(P1ND *d, P1ND *a);
+static void dainit(struct initctx *, P1ND *d, P1ND *a);
 static P1ND *tymfix(P1ND *p);
 static P1ND *namekill(P1ND *p, int clr);
 static P1ND *aryfix(P1ND *p);
@@ -266,6 +266,7 @@ struct savbc {
 	struct flt flt;
 	struct lexint li;
 	struct genlist *g;
+	struct initctx *ctx;
 }
 
 	/* define types */
@@ -287,7 +288,8 @@ struct savbc {
 %type <g>	gen_ass_list gen_assoc
 %type <strp>	string svstr moe
 %type <rp>	str_head
-%type <symp>	xnfdeclarator clbrace enum_head
+%type <symp>	xnfdeclarator enum_head
+%type <ctx>	begbr clbrace
 
 %%
 
@@ -774,26 +776,28 @@ init_declarator:   declarator attr_var {
 			xnf = NULL;
 		}
 		|  xnfdeclarator '=' begbr init_list optcomma '}' {
-			endinit(0);
+			endinit($3, 0);
 			xnf = NULL;
 		}
- /*COMPAT_GCC*/	|  xnfdeclarator '=' begbr '}' { endinit(0); xnf = NULL; }
+ /*COMPAT_GCC*/	|  xnfdeclarator '=' begbr '}' { endinit($3, 0); xnf = NULL; }
 		;
 
-begbr:		   '{' { beginit($<symp>-1); }
+begbr:		   '{' { $$ = beginit($<symp>-1); }
 		;
 
 initializer:	   e %prec ',' {  $$ = eve($1); }
-		|  ibrace init_list optcomma '}' { $$ = NULL; }
-		|  ibrace '}' { asginit(bcon(0)); $$ = NULL; }
+		|  ibrace { $<ctx>$ = $<ctx>-1; }
+			init_list optcomma '}' { $$ = NULL; }
+		|  ibrace '}' { asginit($<ctx>-1, bcon(0)); $$ = NULL; }
 		;
 
-init_list:	   designation initializer { dainit($1, $2); }
-		|  init_list ','  designation initializer { dainit($3, $4); }
+init_list:	   designation initializer { dainit($<ctx>0, $1, $2); }
+		|  init_list ',' { $<ctx>$ = $<ctx>0; }
+			designation initializer { dainit($<ctx>0, $4, $5); }
 		;
 
-designation:	   designator_list '=' { desinit($1); $$ = NULL; }
-		|  GCC_DESIG { desinit(bdty(NAME, $1)); $$ = NULL; }
+designation:	   designator_list '=' { desinit($<ctx>0, $1); $$ = NULL; }
+		|  GCC_DESIG { desinit($<ctx>0, bdty(NAME, $1)); $$ = NULL; }
 		|  '[' e C_ELLIPSIS e ']' '=' { $$ = biop(CM, $2, $4); }
 		|  { $$ = NULL; }
 		;
@@ -826,7 +830,7 @@ optcomma	:	/* VOID */
 		|  ','
 		;
 
-ibrace:		   '{' {  ilbrace(); }
+ibrace:		   '{' {  ilbrace($<ctx>-1); }
 		;
 
 /*	STATEMENTS	*/
@@ -1200,12 +1204,13 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 			p1tfree($4);
 		}
 		| '(' cast_type ')' clbrace init_list optcomma '}' {
-			endinit(0);
-			$$ = bdty(NAME, $4);
+			endinit($4, 0);
+			struct { char *c1, *c2; } *cx = (void *)$4; /* XXX */
+			$$ = bdty(NAME, cx->c2);
 			$$->n_op = CLOP;
 		}
 		| '(' cast_type ')' clbrace '}' {
-			endinit(0);
+			endinit($4, 0);
 			$$ = bdty(NAME, $4);
 			$$->n_op = CLOP;
 		}
@@ -1962,9 +1967,10 @@ mkpstr(char *str)
 /*
  * Fake a symtab entry for compound literals.
  */
-static struct symtab *
+static struct initctx *
 clbrace(P1ND *p)
 {
+	struct initctx *ctx;
 	struct symtab *sp;
 
 	sp = getsymtab(simname("cl"), STEMP);
@@ -1985,8 +1991,8 @@ clbrace(P1ND *p)
 			oalloc(sp, &autooff);
 		}
 	}
-	beginit(sp);
-	return sp;
+	ctx = beginit(sp);
+	return ctx;
 }
 
 char *
@@ -2438,10 +2444,10 @@ uawarn(P1ND *p, char *s)
 }
 
 static void
-dainit(P1ND *d, P1ND *a)
+dainit(struct initctx *ctx, P1ND *d, P1ND *a)
 {
 	if (d == NULL) {
-		asginit(a);
+		asginit(ctx, a);
 	} else if (d->n_op == CM) {
 		int is = con_e(d->n_left);
 		int ie = con_e(d->n_right);
@@ -2450,10 +2456,10 @@ dainit(P1ND *d, P1ND *a)
 		p1nfree(d);
 		if (ie < is)
 			uerror("negative initializer range");
-		desinit(biop(LB, NULL, bcon(is)));
+		desinit(ctx, biop(LB, NULL, bcon(is)));
 		for (i = is; i < ie; i++)
-			asginit(p1tcopy(a));
-		asginit(a);
+			asginit(ctx, p1tcopy(a));
+		asginit(ctx, a);
 	} else {
 		cerror("dainit");
 	}

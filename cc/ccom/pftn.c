@@ -1476,6 +1476,8 @@ falloc(struct symtab *p, int w, NODE *pty)
 static void
 commchk(struct symtab *sp)
 {
+	struct initctx *ctx;
+
 	if ((sp->sflags & STLS)
 #ifdef GCC_COMPAT
 		|| attr_find(sp->sap, GCC_ATYP_SECTION)
@@ -1484,8 +1486,8 @@ commchk(struct symtab *sp)
 		/* TLS handled in data segment */
 		if (sp->sclass == EXTERN)
 			sp->sclass = EXTDEF;
-		beginit(sp);
-		endinit(1);
+		ctx = beginit(sp);
+		endinit(ctx, 1);
 	} else {
 		symdirec(sp);
 		defzero(sp);
