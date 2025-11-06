@@ -1204,14 +1204,11 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 			p1tfree($4);
 		}
 		| '(' cast_type ')' clbrace init_list optcomma '}' {
-			endinit($4, 0);
-			struct { char *c1, *c2; } *cx = (void *)$4; /* XXX */
-			$$ = bdty(NAME, cx->c2);
+			$$ = bdty(NAME, endinit($4, 0));
 			$$->n_op = CLOP;
 		}
 		| '(' cast_type ')' clbrace '}' {
-			endinit($4, 0);
-			$$ = bdty(NAME, $4);
+			$$ = bdty(NAME, endinit($4, 0));
 			$$->n_op = CLOP;
 		}
 		|  term '[' e ']' { $$ = biop(LB, $1, $3); }

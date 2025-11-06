@@ -807,7 +807,7 @@ clearbf(struct initctx *ctx, OFFSZ off, OFFSZ fsz)
  * final step of initialization.
  * print out init nodes and generate copy code (if needed).
  */
-void
+struct symtab *
 endinit(struct initctx *ctx, int seg)
 {
 	struct llist *ll;
@@ -894,6 +894,7 @@ endinit(struct initctx *ctx, int seg)
 	if (ctx->psym->sclass == STATIC || ctx->psym->sclass == EXTDEF)
 		statinit--;
 	ID(("endinit() end\n"));
+	return ctx->psym;
 }
 
 /*

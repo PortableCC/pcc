@@ -362,7 +362,7 @@ struct rstack *bstruct(char *, int, P1ND *);
 void moedef(char *, int);
 struct initctx *beginit(struct symtab *);
 void asginit(struct initctx *, P1ND *);
-void endinit(struct initctx *, int seg);
+struct symtab *endinit(struct initctx *, int seg);
 void simpleinit(struct symtab *, P1ND *);
 CONSZ scalinit(struct initctx *, P1ND *);
 void ilbrace(struct initctx *);
