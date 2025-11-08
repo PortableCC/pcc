@@ -153,6 +153,7 @@ struct ilist {
 	CONSZ off;	/* bit offset of this entry */
 	int fsz;	/* bit size of this entry */
 	NODE *n;	/* node containing this data info */
+	NODE *oldp;	/* delayed unevaluated data */
 };
 
 struct llist {
@@ -173,13 +174,14 @@ struct initctx {
 };
 
 static struct ilist *
-getil(struct ilist *next, CONSZ b, int sz, NODE *n)
+getil(struct ilist *next, CONSZ b, int sz, NODE *n, NODE *oldp)
 {
 	struct ilist *il = tmpalloc(sizeof(struct ilist));
 
 	il->off = b;
 	il->fsz = sz;
 	il->n = n;
+	il->oldp = oldp;
 	il->next = next;
 	return il;
 }
@@ -626,7 +628,7 @@ findoff(struct initctx *ctx)
  * with correct alignment and correct bit offset is given.
  */
 static void
-nsetval(struct initctx *ctx, CONSZ off, int fsz, NODE *p)
+nsetval(struct initctx *ctx, CONSZ off, int fsz, NODE *p, NODE *oldp)
 {
 	struct llist *ll;
 	struct ilist *il;
@@ -640,11 +642,11 @@ nsetval(struct initctx *ctx, CONSZ off, int fsz, NODE *p)
 	ll = setll(ctx, off);
 	off -= ll->begsz;
 	if (ll->il == NULL) {
-		ll->il = getil(NULL, off, fsz, p);
+		ll->il = getil(NULL, off, fsz, p, oldp);
 	} else {
 		il = ll->il;
 		if (il->off > off) {
-			ll->il = getil(ll->il, off, fsz, p);
+			ll->il = getil(ll->il, off, fsz, p, oldp);
 		} else {
 			for (il = ll->il; il->next; il = il->next)
 				if (il->off <= off && il->next->off > off)
@@ -654,7 +656,7 @@ nsetval(struct initctx *ctx, CONSZ off, int fsz, NODE *p)
 				nfree(il->n);
 				il->n = p;
 			} else
-				il->next = getil(il->next, off, fsz, p);
+				il->next = getil(il->next, off, fsz, p, oldp);
 		}
 	}
 }
@@ -665,8 +667,8 @@ nsetval(struct initctx *ctx, CONSZ off, int fsz, NODE *p)
  * in the current word being generated
  * Returns the offset.
  */
-CONSZ
-scalinit(struct initctx *ctx, NODE *p)
+static void
+scalinit(struct initctx *ctx, NODE *p, NODE *oldp)
 {
 	CONSZ woff;
 	NODE *q;
@@ -681,7 +683,7 @@ scalinit(struct initctx *ctx, NODE *p)
 #endif
 
 	if (nerrors)
-		return 0;
+		return;
 
 	p = optim(p);
 
@@ -694,7 +696,7 @@ scalinit(struct initctx *ctx, NODE *p)
 	/* Out of elements? */
 	if (ctx->pstk == NULL) {
 		uerror("excess of initializing elements");
-		return 0;
+		return;
 	}
 
 	/*
@@ -732,14 +734,13 @@ scalinit(struct initctx *ctx, NODE *p)
 		fsz = (int)tsize(ctx->pstk->in_t, ctx->pstk->in_sym->sdf,
 		    ctx->pstk->in_sym->sss);
 
-	nsetval(ctx, woff, fsz, q);
+	nsetval(ctx, woff, fsz, q, oldp);
 	if (q->n_op == ICON && q->n_sp &&
 	    ((q->n_sp->sflags & SMASK) == SSTRING))
 		q->n_sp->sflags |= SASG;
 
 	stkpop(ctx);
 	ID(("scalinit end(%p)\n", q));
-	return woff;
 }
 
 /*
@@ -855,6 +856,10 @@ endinit(struct initctx *ctx, int seg)
 					clearbf(ctx, lastoff,
 					    (ll->begsz + il->off) - lastoff);
 
+				if (il->oldp) {
+					p1tfree(il->n);
+					il->n = optloop(eve(il->oldp));
+				}
 				/* Fake a struct reference */
 				p = buildtree(ADDROF, nametree(ctx->psym), NIL);
 				n = il->n;
@@ -1072,11 +1077,32 @@ strcvt(struct initctx *ctx, NODE *p)
 }
 
 /*
+ * Search for an initialization that reference itself (pre-eve).
+ */
+static int
+refself(P1ND *p, char *s)
+{
+	int o = coptype(p->n_op);
+	int n = 0;
+
+	if (o == LTYPE) {
+		if (p->n_op == NAME && (char *)p->n_sp == s)
+			return 1;
+		return 0;
+	}
+	if (o == BITYPE)
+		n = refself(p->n_right, s);
+	n |= refself(p->n_left, s);
+	return n;
+}
+
+/*
  * Do an assignment to a struct element.
  */
 void
-asginit(struct initctx *ctx, NODE *p)
+asginit(struct initctx *ctx, P1ND *p)
 {
+	NODE *oldp;
 	int g;
 
 #ifdef PCC_DEBUG
@@ -1085,6 +1111,17 @@ asginit(struct initctx *ctx, NODE *p)
 	if (idebug > 1 && p)
 		fwalk(p, eprint, 0);
 #endif
+
+	/* save an unaltered version of the initialization */
+	oldp = NULL;
+	if (p && ISARY(ctx->psym->stype) && ctx->psym->sdf->ddim == NOOFFSET &&
+	    ctx->psym->sclass == AUTO) {
+		if (refself(p, ctx->psym->sname))
+			oldp = p1tcopy(p);
+	}
+
+	if (p)
+		p = eve(p);
 
 	/* convert string to array of char/wchar */
 	if (p && (DEUNSIGN(p->n_type) == ARY+CHAR ||
@@ -1101,8 +1138,6 @@ asginit(struct initctx *ctx, NODE *p)
 		/* HACKHACKHACK */
 		is = ctx->pstk;
 
-//		if (pstk == NULL)
-//			stkpush();
 		while (ISSOU(ctx->pstk->in_t) || ISARY(ctx->pstk->in_t))
 			stkpush(ctx);
 		if (ctx->pstk->in_prev && 
@@ -1123,10 +1158,11 @@ asginit(struct initctx *ctx, NODE *p)
 		/* END HACKHACKHACK */
 	}
 
+
 	if (p == NULL) { /* only end of compound stmt */
 		irbrace(ctx);
 	} else /* assign next element */
-		scalinit(ctx, p);
+		scalinit(ctx, p, oldp);
 }
 
 #ifdef PCC_DEBUG
@@ -1184,7 +1220,7 @@ simpleinit(struct symtab *sp, NODE *p)
 		ctx = beginit(sp);
 		strcvt(ctx, p);
 		if (ctx->psym->sdf->ddim == NOOFFSET)
-			scalinit(ctx, bcon(0)); /* Null-term arrays */
+			scalinit(ctx, bcon(0), NULL); /* Null-term arrays */
 		endinit(ctx, 0);
 		return;
 	}

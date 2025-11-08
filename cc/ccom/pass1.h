@@ -346,6 +346,18 @@ void	floatcon(char *);
 P1ND	*bdty(int op, ...);
 extern struct rstack *rpole;
 
+/*
+ * data initialization routines.
+ * struct initctx is not used outside init.c.
+ */
+struct initctx *beginit(struct symtab *);
+void asginit(struct initctx *, P1ND *);
+struct symtab *endinit(struct initctx *, int seg);
+void ilbrace(struct initctx *);
+void irbrace(struct initctx *);
+void desinit(struct initctx *ctx, P1ND *);
+void simpleinit(struct symtab *, P1ND *);
+
 int oalloc(struct symtab *, int *);
 void deflabel(char *, P1ND *);
 void gotolabel(char *);
@@ -360,14 +372,6 @@ P1ND *inlinetree(struct symtab *, P1ND *, P1ND *);
 void argsave(P1ND *p);
 struct rstack *bstruct(char *, int, P1ND *);
 void moedef(char *, int);
-struct initctx *beginit(struct symtab *);
-void asginit(struct initctx *, P1ND *);
-struct symtab *endinit(struct initctx *, int seg);
-void simpleinit(struct symtab *, P1ND *);
-CONSZ scalinit(struct initctx *, P1ND *);
-void ilbrace(struct initctx *);
-void irbrace(struct initctx *);
-void desinit(struct initctx *ctx, P1ND *);
 struct symtab *lookup(char *, int);
 struct symtab *getsymtab(char *, int);
 char *addstring(char *);

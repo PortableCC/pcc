@@ -785,7 +785,7 @@ init_declarator:   declarator attr_var {
 begbr:		   '{' { $$ = beginit($<symp>-1); }
 		;
 
-initializer:	   e %prec ',' {  $$ = eve($1); }
+initializer:	   e %prec ',' {  $$ = $1; }
 		|  ibrace { $<ctx>$ = $<ctx>-1; }
 			init_list optcomma '}' { $$ = NULL; }
 		|  ibrace '}' { asginit($<ctx>-1, bcon(0)); $$ = NULL; }
