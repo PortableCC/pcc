@@ -63,7 +63,7 @@ getsoname(struct symtab *sp)
 	struct attr *ap;
 	return (ap = attr_find(sp->sap, ATTR_SONAME)) ?
 	    ap->sarg(0) : sp->sname;
-	
+
 }
 
 #if defined(MACHOABI)
@@ -154,21 +154,21 @@ int def = EXTERN;
 		sp = picsymtab("\"L", name, buf1);
 		addstub(&stublist, name);
 	}
-	
+
 	q = block(REG, NIL, NIL, PTR+VOID, 0, 0);
 	regno(q) = PICREG;
 	r = xbcon(0, sp, INT);
-	q = buildtree(PLUS, q, r);		
+	q = buildtree(PLUS, q, r);
 	q->n_sp->sclass = def;
-	
+
 
 /* the code below adds an extra indirection
  * that loads a PowerPC instruction into CTR
  * instead of the address to that instruction
  */
-//	if (p->n_sp->sclass != EXTDEF) {
-	//	q = block(UMUL, q, 0, PTR+VOID, 0, 0);
-	//}
+	/* if (p->n_sp->sclass != EXTDEF) { */
+	/* q = block(UMUL, q, 0, PTR+VOID, 0, 0); */
+	/* } */
 
 #endif
 	q = block(UMUL, q, 0, p->n_type, p->n_df, p->n_ap);
@@ -202,7 +202,7 @@ picstatic(NODE *p)
 	sp->sclass = STATIC;
 	sp->stype = p->n_sp->stype;
 	q = xbcon(0, sp, PTR+VOID);
-	
+
 	q = block(UMUL, q, 0, p->n_type, p->n_df, p->n_ap);
 	q->n_sp = p->n_sp;
 	p1nfree(p);
@@ -226,16 +226,16 @@ picstatic(NODE *p)
 	}
 	sp->sclass = STATIC;
 	sp->stype = p->n_sp->stype;
-	
+
 	q = block(REG, NIL, NIL, PTR+VOID, 0, 0);
 	regno(q) = PICREG;
 
 	r = xbcon(0, sp, INT);
 	q = buildtree(PLUS, q, r);
 	q = block(UMUL, q, 0, p->n_type, p->n_df, p->n_ap);
-	
+
 	q->n_sp = p->n_sp;
-//printf("; q = 0x%x, q->n_sp = 0x%x\n", q, q->n_sp);
+/* printf("; q = 0x%x, q->n_sp = 0x%x\n", q, q->n_sp); */
 	nfree(p);
 
 #endif
@@ -391,7 +391,7 @@ printf("; breaking\n");
 			if (ISFTN(DECREF(q->stype)))
 				break;
 #endif
-		case EXTERN: 
+		case EXTERN:
 			if (kflag == 0)
 				break;
 			if (blevel > 0)
@@ -432,7 +432,7 @@ printf("; breaking\n");
 		ecomp(r);
 #endif
 		break;
-		
+
 	case CBRANCH:
 		l = p->n_left;
 
@@ -489,7 +489,7 @@ printf("; breaking\n");
 		nfree(p);
 		p = l;
 		break;
-		
+
 	case SCONV:
 		l = p->n_left;
 
@@ -584,7 +584,7 @@ printf("; breaking\n");
 		p->n_op = ASSIGN;
 		p->n_right = p->n_left;
 		p->n_left = block(REG, NIL, NIL, p->n_type, 0, 0);
-		p->n_left->n_rval = p->n_left->n_type == BOOL ? 
+		p->n_left->n_rval = p->n_left->n_type == BOOL ?
 		    RETREG(BOOL_TYPE) : RETREG(p->n_type);
 		break;
 
@@ -643,20 +643,20 @@ fixnames(NODE *p, void *arg)
 
 	    q->n_right->n_op == ICON) {
 			sp = q->n_right->n_sp;
-			
+
 #endif
 
 			if (sp == NULL)
 					return; /* nothing to do */
 			if (sp->sclass == STATIC && !ISFTN(sp->stype))
 					return; /* function pointer */
-			
+
 			if (sp->sclass != STATIC && sp->sclass != EXTERN &&
 				sp->sclass != EXTDEF)
 					cerror("fixnames");
 			c = NULL;
 #if defined(ELFABI)
-			
+
 			if ((ap2 = attr_find(sp->sap, ATTR_SONAME)) == NULL ||
 				(c = strstr(ap2->sarg(0), "@got(31)")) == NULL)
 							cerror("fixnames2");
@@ -666,10 +666,10 @@ fixnames(NODE *p, void *arg)
 				*c = 0;
 
 #elif defined(MACHOABI)
-	
+
 			if (!ISFTN(sp->stype))
 				return; /* function pointer */
-		
+
 			if ((ap2 = attr_find(sp->sap, ATTR_SONAME)) == NULL ||
 		    	(c = strchr(ap2->sarg(0), '$')) == NULL)
 					cerror("fixnames2: %p %s", ap2, c);
@@ -678,7 +678,7 @@ fixnames(NODE *p, void *arg)
 				addstub(&stublist, getexname(sp)+1);
 				memcpy(c, "$stub", sizeof("$stub"));
 			}
-			
+
 			nfree(q->n_left);
 			q = q->n_right;
 			if (isu)
@@ -700,18 +700,18 @@ myp2tree(NODE *p)
 {
 	int o = p->n_op;
 	struct symtab *sp;
-	
+
 #if defined(ELFABI)
 	if (kflag)
 		p1walkf(p, fixnames, 0);
 #endif
-		
-	if (o != FCON) 
+
+	if (o != FCON)
 		return;
 
 	/* Write float constants to memory */
 	/* Should be voluntary per architecture */
- 
+
 	sp = IALLOC(sizeof(struct symtab));
 	sp->sclass = STATIC;
 	sp->sap = 0;
@@ -733,7 +733,7 @@ myp2tree(NODE *p)
 #endif
 
 	p->n_op = NAME;
-	slval(p, 0);	
+	slval(p, 0);
 	p->n_sp = sp;
 }
 
@@ -788,7 +788,7 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 	q = block(REG, NIL, NIL, PTR+INT, 0, 0);
 	regno(q) = SPREG;
 	q = block(UMUL, q, NIL, INT, 0, 0);
-	
+
 	/* save old top-of-stack value to new top-of-stack position */
 	r = block(REG, NIL, NIL, PTR+INT, 0, 0);
 	regno(r) = SPREG;
@@ -814,8 +814,8 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
  * C-style escape sequences. (which it doesn't!)
  * Location is already set.
  */
- 
-#if !(defined(MACHOABI)) 
+
+#if !(defined(MACHOABI))
 void
 instring(struct symtab *sp)
 {
@@ -875,7 +875,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 		uerror("element not constant");
 
 	switch (t) {
-	
+
 		case FLOAT:
 		case DOUBLE:
 		case LDOUBLE:
@@ -973,7 +973,7 @@ ctype(TWORD type)
 }
 
 void
-calldec(NODE *p, NODE *q) 
+calldec(NODE *p, NODE *q)
 {
 #ifdef PCC_DEBUG
 	if (xdebug)

@@ -34,7 +34,7 @@
  * A function found with the keyword "inline" is always saved.
  * If it also has the keyword "extern" it is written out thereafter.
  * If it has the keyword "static" it will be written out if it is referenced.
- * inlining will only be done if -xinline is given, and only if it is 
+ * inlining will only be done if -xinline is given, and only if it is
  * possible to inline the function.
  */
 static void printip(struct interpass *pole);
@@ -44,7 +44,7 @@ struct ntds {
 	TWORD type;
 	union dimfun *df;
 	struct ssdesc *ss;
-//	struct attr *attr;
+	/* struct attr *attr; */
 };
 
 /*
@@ -228,15 +228,15 @@ inline_start(struct symtab *sp, int class)
  *
  * Gcc inline syntax is a mess, see matrix below on emitting functions:
  *		    without extern
- *	-std=		-	gnu89	gnu99	
+ *	-std=		-	gnu89	gnu99
  *	gcc 3.3.5:	ja	ja	ja
  *	gcc 4.1.3:	ja	ja	ja
- *	gcc 4.3.1	ja	ja	nej	
- * 
+ *	gcc 4.3.1	ja	ja	nej
+ *
  *		     with extern
  *	gcc 3.3.5:	nej	nej	nej
  *	gcc 4.1.3:	nej	nej	nej
- *	gcc 4.3.1	nej	nej	ja	
+ *	gcc 4.3.1	nej	nej	ja
  *
  * The above is only true if extern is given on the same line as the
  * function declaration.  If given as a separate definition it do not count.
@@ -463,7 +463,7 @@ rtmps(NODE *p, void *arg)
 
 /*
  * Inline a function. Returns the return value.
- * There are two major things that must be converted when 
+ * There are two major things that must be converted when
  * inlining a function:
  * - Label numbers must be updated with an offset.
  * - The stack block must be relocated (add to REG or OREG).
@@ -556,7 +556,7 @@ inlinetree(struct symtab *sp, P1ND *f, P1ND *ap)
 		if (ipl->type == IP_DEFLAB)
 			break;
 	}
-		
+
 	/* So, walk over all statements and emit them */
 	for (ip = ipf; ip != ipl; ip = DLIST_NEXT(ip, qelem)) {
 		switch (ip->type) {

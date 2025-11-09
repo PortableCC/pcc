@@ -130,7 +130,7 @@ typedef long long OFFSZ;
 #define R28	28
 #define R29	29
 #define R30	30
-#define R31	31   //SP register
+#define R31	31   /* SP register */
 
 #define FP	R29
 #define IP	R16
@@ -138,7 +138,7 @@ typedef long long OFFSZ;
 #define LR	R30
 
 #define NUMCLASS 3
-#define	MAXREGS  34	
+#define	MAXREGS  34
 
 #define RSTATUS \
 	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\

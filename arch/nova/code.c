@@ -125,7 +125,7 @@ defzero(struct symtab *sp)
 }
 
 
-//static int ac3temp;
+/* static int ac3temp; */
 /*
  * code for the end of a function
  * deals with struct return here
@@ -134,7 +134,7 @@ void
 efcode(void)
 {
 	P1ND *p, *q;
-//	int sz;
+	/* int sz; */
 
 #if 0
 	/* restore ac3 */
@@ -152,13 +152,13 @@ cerror("efcode");
 	/* create a call to memcpy() */
 	/* will get the result in eax */
 	p = block(REG, NULL, NULL, CHAR+PTR, 0, 0);
-//	p->n_rval = EAX;
+	/* p->n_rval = EAX; */
 	q = block(OREG, NULL, NULL, CHAR+PTR, 0, 0);
-//	q->n_rval = EBP;
+	/* q->n_rval = EBP; */
 	slval(q, 8); /* return buffer offset */
 	p = block(CM, q, p, INT, 0, 0);
-//	sz = (tsize(STRTY, cftnsp->sdf, cftnsp->ssue)+SZCHAR-1)/SZCHAR;
-//	p = block(CM, p, bcon(sz), INT, 0, 0);
+	/* sz = (tsize(STRTY, cftnsp->sdf, cftnsp->ssue)+SZCHAR-1)/SZCHAR; */
+	/* p = block(CM, p, bcon(sz), INT, 0, 0); */
 	p->n_right->n_name = "";
 	p = block(CALL, bcon(0), p, CHAR+PTR, 0, 0);
 	p->n_left->n_name = "memcpy";
@@ -173,7 +173,7 @@ cerror("efcode");
 void
 bfcode(struct symtab **a, int n)
 {
-//	P1ND *p, *q;
+	/* P1ND *p, *q; */
 	int i;
 
 	for (i = 0; i < n; i++) {

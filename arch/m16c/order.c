@@ -97,7 +97,7 @@ offstar(NODE *p, int shape)
 int
 shumul(NODE *p, int shape)
 {
-//	NODE *l = p->n_left;
+	/* NODE *l = p->n_left; */
 
 #ifdef PCC_DEBUG
 	if (x2debug) {
@@ -265,7 +265,7 @@ nspecial(struct optab *q)
 	    }*/
 	comperr("multiplication not implemented");
 	break;
-	
+
     default:
 	break;
     }
@@ -299,7 +299,7 @@ gencall(NODE *p, NODE *prev)
 		/* swap arguments on some hardop-converted insns */
 		/* Normal call, just push args and be done with it */
 		p->n_op = UCALL;
-//printf("call\n");
+		/* printf("call\n"); */
 		/* Check if left can be evaluated directly */
 		if (p->n_left->n_op == UMUL) {
 			TWORD t = p->n_left->n_type;
@@ -311,7 +311,7 @@ gencall(NODE *p, NODE *prev)
 		}
 		gencall(p->n_left, p);
 		p->n_rval = storearg(p->n_right);
-//printf("end call\n");
+		/* printf("end call\n"); */
 		break;
 
 	case UFORTCALL:
@@ -334,7 +334,7 @@ gencall(NODE *p, NODE *prev)
 			n = mkbinode(ASSIGN, mklnode(REG, 0, STKREG, INT),
 			    mkbinode(MINUS, mklnode(REG, 0, STKREG, INT),
 			    mklnode(ICON, p->n_stsize, 0, INT), INT), INT);
-//printf("stsize %d\n", p->n_stsize);
+			/* printf("stsize %d\n", p->n_stsize); */
 			pass2_compile(ipnode(n));
 		} else if (prev->n_op == STASG) {
 			n = prev->n_left;
@@ -378,7 +378,7 @@ gencall(NODE *p, NODE *prev)
 			*prev = *p;
 			nfree(n);
 		}
-//printf("end stcall\n");
+		/* printf("end stcall\n"); */
 		break;
 
 	default:
@@ -391,7 +391,7 @@ gencall(NODE *p, NODE *prev)
 
 /*
  * Create separate node trees for function arguments.
- * This is partly ticky, the strange calling convention 
+ * This is partly ticky, the strange calling convention
  * may cause a bunch of code reorganization here.
  */
 static int
@@ -440,7 +440,7 @@ storearg(NODE *p)
 			sz += 2;
 		} else /* long, double */
 			sz += 4;
-			
+
 	}
 
 	/*
@@ -546,7 +546,7 @@ storearg(NODE *p)
 	/* move args to registers */
 	for (i = 0; i < stk; i++) {
 		t = narry[i]->n_type;
-		pass2_compile(ipnode(mkbinode(ASSIGN, 
+		pass2_compile(ipnode(mkbinode(ASSIGN,
 		    mklnode(REG, 0, rary[i], t), narry[i], t)));
 	}
 	return sz;

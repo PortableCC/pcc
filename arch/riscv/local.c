@@ -1,6 +1,6 @@
 /*	$Id$	*/
 /*
- * Copyright (c) 2022, Tim Kelly/Dialectronics.com (gtkelly@). 
+ * Copyright (c) 2022, Tim Kelly/Dialectronics.com (gtkelly@).
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,7 +22,7 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */ 
+ */
 /*
  * Copyright (c) 2003 Anders Magnusson (ragge@ludd.luth.se).
  * All rights reserved.
@@ -305,7 +305,7 @@ clocal(NODE *p)
 			p->n_rval = q->soffset;
 			break;
 
-		case EXTERN: 
+		case EXTERN:
 		case EXTDEF:
 			if (kflag == 0)
 				break;
@@ -347,7 +347,7 @@ clocal(NODE *p)
 		ecomp(r);
 #endif
                 break;
-		
+
 	case CBRANCH:
 		l = p->n_left;
 
@@ -368,8 +368,8 @@ clocal(NODE *p)
 				l->n_type = t;
 				l->n_right->n_type = t;
 			}
-		} // else
-//			printf("CBRANCH not handled op: 0%o, left op: 0%o \n", p->n_op, l->n_left->n_op);
+		} /* else */
+		/* printf("CBRANCH not handled op: 0%o, left op: 0%o \n", p->n_op, l->n_left->n_op); */
 
 		break;
 
@@ -406,7 +406,7 @@ clocal(NODE *p)
 		nfree(p);
 		p = l;
 		break;
-		
+
 	case SCONV:
 		l = p->n_left;
 
@@ -500,7 +500,7 @@ clocal(NODE *p)
 		p->n_op = ASSIGN;
 		p->n_right = p->n_left;
 		p->n_left = block(REG, NIL, NIL, p->n_type, 0, 0);
-		p->n_left->n_rval = p->n_left->n_type == BOOL ? 
+		p->n_left->n_rval = p->n_left->n_type == BOOL ?
 		    RETREG(BOOL_TYPE) : RETREG(p->n_type);
 		break;
 
@@ -547,7 +547,7 @@ fixnames(NODE *p, void *arg)
 
         if (q->n_op == ICON) {
                 sp = q->n_sp;
-                
+
 #endif
 
                 if (sp == NULL)
@@ -570,7 +570,7 @@ fixnames(NODE *p, void *arg)
 			memcpy(c, "@plt", sizeof("@plt"));
                 } else
                         *c = 0;
-                        
+
 #endif
         }
 }
@@ -583,12 +583,12 @@ myp2tree(NODE *p)
 
 	if (kflag)
 		p1walkf(p, fixnames, 0);
-	if (o != FCON) 
+	if (o != FCON)
 		return;
 
 	/* Write float constants to memory */
 	/* Should be voluntary per architecture */
- 
+
 	sp = IALLOC(sizeof(struct symtab));
 	sp->sclass = STATIC;
 	sp->sap = 0;
@@ -603,7 +603,7 @@ myp2tree(NODE *p)
 	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
 
 	p->n_op = NAME;
-	slval(p, 0);	
+	slval(p, 0);
 	p->n_sp = sp;
 }
 
@@ -651,7 +651,7 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 	sp->n_rval = SP;
 	t->n_type = sp->n_type;
 	ecomp(buildtree(ASSIGN, t, sp));
-	
+
 #else
 /*
  * Allocate bits on the stack.
@@ -725,8 +725,8 @@ ninval(CONSZ off, int fsz, NODE *p)
 	TWORD t;
 	int i, nbits;
 	uint32_t *ufp;
-//	union { float f; double d; long double l; int i[3]; } u;
-        
+	/* union { float f; double d; long double l; int i[3]; } u; */
+
 	t = p->n_type;
 	if (t > BTMASK)
 		p->n_type = t = INT; /* pointer */
@@ -737,15 +737,15 @@ ninval(CONSZ off, int fsz, NODE *p)
 	switch (t) {
 #ifndef LANG_CXX
 	case FLOAT:
-		
+
 		ufp = soft_toush(p->n_scon, t, &nbits);
 		for (i = 0; i < sztable[t]; i += SZINT) {
 			printf(PRTPREF "%s %d \t" COM " floating point value\n",  astypnames[INT],
 				(i < nbits ? ufp[i/SZINT] : 0));
 		}
 		break;
-#if 0	
-	case DOUBLE:		
+#if 0
+	case DOUBLE:
 		ufp = soft_toush(p->n_scon, t, &nbits);
 		printf(PRTPREF "%s %d \t" COM " double value\n",  astypnames[INT], ufp[0]);
 		for (i = SZINT; i < sztable[t]; i += SZINT) {
@@ -754,7 +754,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 		}
 		break;
 #endif
-#endif	
+#endif
 
 	case LONGLONG:
 	case ULONGLONG:
@@ -776,7 +776,7 @@ ninval(CONSZ off, int fsz, NODE *p)
 		ninval(off+32, 32, p);
 #endif
 		break;
-			
+
 	case INT:
 	case UNSIGNED:
 		printf("\t.long %d", (int)glval(p));
@@ -826,7 +826,7 @@ ctype(TWORD type)
 }
 
 void
-calldec(NODE *p, NODE *q) 
+calldec(NODE *p, NODE *q)
 {
 #ifdef PCC_DEBUG
 	if (xdebug)

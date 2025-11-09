@@ -53,7 +53,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -488,7 +488,7 @@ defid2(NODE *q, int class, char *astr)
 		if (q->n_type != FARG)
 			oalloc(p, &argoff);
 		break;
-		
+
 	case STATIC:
 	case EXTDEF:
 	case EXTERN:
@@ -819,7 +819,7 @@ enumdcl(struct symtab *sp)
 		t = ctype(INT);
 #endif
 #endif
-	
+
 	if (sp)
 		sp->stype = t;
 	p = mkty(t, 0, 0);
@@ -965,10 +965,10 @@ soumemb(NODE *n, char *name, int class)
 	struct symtab *sp, *lsp;
 	int incomp, tsz, al;
 	TWORD t;
- 
+
 	if (rpole == NULL)
 		cerror("soumemb");
- 
+
 #ifdef PCC_DEBUG
         if (ddebug) {
 		printf("soumemb %s\n", name);
@@ -1253,7 +1253,7 @@ instring(struct symtab *sp)
 				(void)esccon(&s);
 			else
 				s++;
-	
+
 			if (s - str > 60) {
 				fwrite(str, 1, s - str, stdout);
 				printf("\"\n" PRTPREF "\t.ascii \"");
@@ -1289,7 +1289,7 @@ upoff(int size, int alignment, int *poff)
 /*
  * allocate p with offset *poff, and update *poff.
  * This routine is used to create stack reference for arguments and automatics.
- * poff is always increasing even if the stack goes downwards, hence 
+ * poff is always increasing even if the stack goes downwards, hence
  * the off must must be calculated before/after the increase/decrease
  * of the stack pointer.
  */
@@ -1670,7 +1670,7 @@ typwalk(NODE *p, void *arg)
 		break;
 
 	case QUALIFIER:
-		if (p->n_qual == 0 && 
+		if (p->n_qual == 0 &&
 		    ((tc->saved && !ISPTR(tc->saved->n_type)) ||
 		    (tc->saved == 0)))
 			uerror("invalid use of 'restrict'");
@@ -1848,7 +1848,7 @@ typenode(NODE *p)
 #endif
 
 	if (tc.align) {
-		if (q->pss == NULL) 
+		if (q->pss == NULL)
 			q->pss = SEDESC();
 		if (tc.align > talign(q->n_type, q->pss)/SZCHAR)
 			q->pss->al = tc.align * tc.align;
@@ -1989,11 +1989,11 @@ tymerge(NODE *typ, NODE *idp)
 		idp->n_df = memcpy(a, dfs, sizeof(union dimfun) * numdfs);
 	} else
 		idp->n_df = NULL;
-//{int i; for (i = 0; i < numdfs; i++)printf("tym%d: %p\n", i, &idp->n_df[i]); }
+	/* {int i; for (i = 0; i < numdfs; i++)printf("tym%d: %p\n", i, &idp->n_df[i]); } */
 
 	/* now idp is a single node: fix up type */
 	idp->n_type = ctype(idp->n_type);
-	
+
 	if (idp->n_op != NAME)
 		p1tfree(idp->n_left);
 	idp->n_op = NAME;

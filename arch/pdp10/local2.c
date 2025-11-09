@@ -108,7 +108,7 @@ prologue(int regs, int autos)
 		printf("L%d:\n", ftlab2);
 	} else {
 		/*
-		 * We here know what register to save and how much to 
+		 * We here know what register to save and how much to
 		 * add to the stack.
 		 */
 		autos = autos + (SZINT-1);
@@ -318,9 +318,9 @@ ptrcomp(NODE *p)
  * Do a binary comparision of two long long, and jump accordingly.
  * XXX - can optimize for constants.
  */
-static void     
+static void
 twollcomp(NODE *p)
-{       
+{
 	int o = p->n_op;
 	int iscon = p->n_right->n_op == ICON;
 	int m = 0; /* XXX gcc */
@@ -381,7 +381,7 @@ twollcomp(NODE *p)
 	    o == LT || o == GT ? 'e' : ' ');
 	upput(getlr(p, 'L'), SZLONG);
 	putchar(',');
-	if (iscon)  
+	if (iscon)
 		printf("[ .long ");
 	upput(getlr(p, 'R'), SZLONG);
 	if (iscon)
@@ -468,8 +468,8 @@ emitshort(NODE *p)
 		if (off >= 0700000000000LL && p->n_name[0] != '\0') {
 			cerror("emitsh");
 			/* reg contains index integer */
-//			if (!istreg(reg))
-//				cerror("emitshort !istreg");
+			/* if (!istreg(reg)) */
+			/* cerror("emitshort !istreg"); */
 			printf("	adjbp %s,[ .long 0%llo+%s ]\n",
 			    rnames[reg], off, p->n_name);
 			printf("	ldb ");
@@ -525,7 +525,7 @@ storeshort(NODE *p)
 		printf("	hr%cm ", off & 1 ? 'r' : 'l');
 		setlval(l, getlval(l) / 2);
 		adrput(stdout, getlr(p, 'R'));
-		putchar(',');   
+		putchar(',');
 		adrput(stdout, getlr(p, 'L'));
 		putchar('\n');
 		return;
@@ -562,7 +562,7 @@ storeshort(NODE *p)
 /*
  * Multiply a register with a constant.
  */
-static void     
+static void
 imuli(NODE *p)
 {
 	NODE *r = p->n_right;
@@ -581,7 +581,7 @@ imuli(NODE *p)
 /*
  * Divide a register with a constant.
  */
-static void     
+static void
 idivi(NODE *p)
 {
 	NODE *r = p->n_right;
@@ -625,7 +625,7 @@ xmovei(NODE *p)
 }
 
 static void
-printcon(NODE *p) 
+printcon(NODE *p)
 {
 	CONSZ cz;
 
@@ -651,7 +651,7 @@ printcon(NODE *p)
 
 static void
 putcond(NODE *p)
-{               
+{
 	char *c = 0; /* XXX gcc */
 
 	switch (p->n_op) {
@@ -763,7 +763,7 @@ zzzcode(NODE *p, int c)
 	case 'U':
 		emitshort(p);
 		break;
-		
+
 	case 'V':
 		storeshort(p);
 		break;
@@ -1055,7 +1055,7 @@ adrput(FILE *fp, NODE *p)
 		}
 		if (p->n_name[0] != '\0')
 			fprintf(fp, "%s", p->n_name);
-		if (getlval(p) < 0) 
+		if (getlval(p) < 0)
 			acon(fp, p);
 		if (p->n_name[0] == '\0' && getlval(p) == 0)
 			putc('0', fp);
@@ -1109,7 +1109,7 @@ optim2(NODE *p, void *arg)
 		    m == DOUBLE || m == STRTY || m == UNIONTY ||
 		    m == UNSIGNED || m == ULONG || m == ULONGLONG) &&
 		    (ml == INT || ml == LONG || ml == LONGLONG || ml == FLOAT ||
-		    ml == DOUBLE || ml == STRTY || ml == UNIONTY || 
+		    ml == DOUBLE || ml == STRTY || ml == UNIONTY ||
 		    ml == UNSIGNED || ml == ULONG ||
 		    ml == ULONGLONG) && ISPTR(l->n_type)) {
 			*p = *l;

@@ -196,7 +196,7 @@ clocal(NODE *p)
 		p->n_op = ASSIGN;
 		p->n_right = p->n_left;
 		p->n_left = block(REG, NIL, NIL, p->n_type, 0, 0);
-		p->n_left->n_rval = p->n_left->n_type == BOOL ? 
+		p->n_left->n_rval = p->n_left->n_type == BOOL ?
 		    RETREG(CHAR) : RETREG(p->n_type);
 		break;
 
@@ -251,9 +251,9 @@ andable(NODE *p)
 int
 cisreg(TWORD t)
 {
-//	if (t == FLOAT || t == DOUBLE || t == LDOUBLE ||
-//	    t == LONGLONG || t == ULONGLONG)
-//		return 0; /* not yet */
+	/* if (t == FLOAT || t == DOUBLE || t == LDOUBLE ||
+	t == LONGLONG || t == ULONGLONG)
+	return 0;  not yet */
 	return 1;
 }
 
@@ -429,7 +429,7 @@ ctype(TWORD type)
 }
 
 void
-calldec(NODE *p, NODE *q) 
+calldec(NODE *p, NODE *q)
 {
 }
 

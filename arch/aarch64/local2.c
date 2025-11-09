@@ -45,7 +45,7 @@ In a 64-bit context,registers are specified by using x0-x30 in A64 instruction s
 */
 char *rnames[] = {
 	"x0", "x1", "x2", "x3","x4","x5", "x6", "x7",
-	"x8", "x9", "x10","x11","x12","x13","x14", 
+	"x8", "x9", "x10","x11","x12","x13","x14",
 	"x15", "x16","x17","x18","x19","x20", "x21",
 	"x22","x23","x24","x25","x26","x27","x28",
 	"x29","x30","sp",
@@ -95,7 +95,7 @@ encode_constant(int constant, int *values)
 }
 
 /*
- * Use W registers to load value in 32-bit context 
+ * Use W registers to load value in 32-bit context
  */
 static void
 load_constant_into_reg(int reg, int v)
@@ -162,7 +162,7 @@ prologue(struct interpass_prolog *ipp)
         printf("%s:\n", exname(ipp->ipp_name));
         addto = offcalc(ipp);
         if (addto < 64){
-		addto = 64;       
+		addto = 64;
         }
         if((addto % 16)){
                 addto = addto + (16 - (addto % 16));
@@ -501,7 +501,7 @@ emul(NODE *p)
 	else if (p->n_op == RS && p->n_type == LONGLONG) ch = "ashrdi3";
 	else if (p->n_op == RS && p->n_type == LONG) ch = "ashrsi3";
 	else if (p->n_op == RS && p->n_type == INT) ch = "ashrsi3";
-	
+
 	else if (p->n_op == MUL && p->n_type == LONGLONG) ch = "muldi3";
 	else if (p->n_op == MUL && p->n_type == LONG) ch = "mulsi3";
 	else if (p->n_op == MUL && p->n_type == INT) ch = "mulsi3";
@@ -692,7 +692,7 @@ conput(FILE *fp, NODE *p)
 				s = exname(p->n_name);
 #else
 			s = p->n_name;
-#endif		
+#endif
 			if (*s != '\0') {
 				fprintf(fp, "%s", s);
 				if (val > 0)
@@ -773,7 +773,7 @@ adrput(FILE *io, NODE *p)
 			/* addressable value of the constant */
 			conput(io, p);
 			return;
-	
+
 		case REG:
 			switch (p->n_type) {
 				case CHAR:
@@ -943,7 +943,7 @@ prtaddr(NODE *p, void *arg)
 				    lab, l->n_name, getlval(l));
 			 else
                                 printf(PRTLAB ":\n\t.dword %s\n",
-                                    lab, l->n_name);	
+                                    lab, l->n_name);
 		}
 		el = tmpalloc(sizeof(struct addrsymb));
 		el->num = getlval(l);
@@ -1178,7 +1178,7 @@ static int fset = DEFAULT_FEATURES;
 void
 mflags(char *str)
 {
-	//Handling needs to be done for ARMv8
+	/* Handling needs to be done for ARMv8 */
 }
 int
 features(int mask)

@@ -94,7 +94,7 @@ setseg(int seg, char *name)
 	case TLSUDATA: name = ".section .tbss,\"awT\",@nobits"; break;
 	case CTORS: name = ".section\t.ctors,\"aw\",@progbits"; break;
 	case DTORS: name = ".section\t.dtors,\"aw\",@progbits"; break;
-	case NMSEG: 
+	case NMSEG:
 		printf("\t.section %s,\"a%c\",@progbits\n", name,
 		    cftnsp ? 'x' : 'w');
 		return;
@@ -238,7 +238,7 @@ int tmpnr;
 		p = block(UMUL, p, NIL, ULONGLONG, 0, 0);
 		p = buildtree(ASSIGN, p, q);
 		ecomp(p);
-		
+
 		t = tempnode(0, sym->stype, sym->sdf, sym->sap);
 		tmpnr = regno(t);
 		p = block(REG, NIL, NIL,
@@ -259,13 +259,13 @@ int tmpnr;
 	}
 
 	(*argofsp) += 2;
-	
+
 	sym->soffset = tmpnr;
 	sym->sflags |= STNODE;
-	
+
 #elif defined(MACHOABI)
 	int fpr = *arg_fprp;
-	
+
 	if (fpr < NFPARGREGS) {
 
 		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sss);
@@ -275,7 +275,7 @@ int tmpnr;
 			sym->soffset = regno(p);
 			sym->sflags |= STNODE;
 		} else {
-			//cerror("param64bit called without dotemps");
+			/* cerror("param64bit called without dotemps"); */
 			p = nametree(sym);
 		}
 		p = buildtree(ASSIGN, p, q);
@@ -294,7 +294,7 @@ int tmpnr;
 #else
 #error no ABI in arch/powerpc/code.c:param_double()
 #endif
-	
+
 }
 
 /* setup a float param on the stack
@@ -421,7 +421,7 @@ bfcode(struct symtab **sp, int cnt)
          */
 	if (cftnsp->sdf->dlst)
 		saveallargs = pr_hasell(cftnsp->sdf->dlst);
-printf("; saveallargs: %d, cnt: %d\n", saveallargs, cnt);		
+printf("; saveallargs: %d, cnt: %d\n", saveallargs, cnt);
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
 		param_retstruct();
 		++arg_gpr;
@@ -449,7 +449,7 @@ printf("; saveallargs: %d, cnt: %d\n", saveallargs, cnt);
 #ifndef ELFABI
 		int spclass = sp[i]->sclass;
 #endif
-	
+
 		if ((arg_gpr >= NARGREGS) && !xtemps)
 				break;
 
@@ -464,15 +464,15 @@ printf("; saveallargs: %d, cnt: %d\n", saveallargs, cnt);
 #if defined(ELFABI)
 				param_double(sp[i], &arg_gpr, xtemps && !saveallargs);
 
-#else			
+#else
 			{
 				param_double(sp[i], &arg_fpr, xtemps && !saveallargs);
 				/* ABI calls for space in GPRs */
 				if (spclass != EXTDEF)
-					arg_gpr+=2;	
+					arg_gpr+=2;
 			}
 #endif
-			
+
 			else
 				param_64bit(sp[i], &arg_gpr, xtemps && !saveallargs);
 		} else if (sptype == FLOAT) {
@@ -611,7 +611,7 @@ ejobcode(int flag)
 `	 */
 	struct stub *p;
 
-	DLIST_FOREACH(p, &stublist, link) { 
+	DLIST_FOREACH(p, &stublist, link) {
 		printf("\t.section __TEXT, __picsymbolstub1,symbol_stubs,pure_instructions,32\n");
 		printf("\t.align 5\n");
 		printf("\"L%s$stub\":\n", p->name);
@@ -697,7 +697,7 @@ bycode(int t, int i)
 		} else if (lastoctal && '0' <= t && t <= '9') {
 			lastoctal = 0;
 			printf("\"\n\t.ascii \"%c", t);
-		} else {	
+		} else {
 			lastoctal = 0;
 			putchar(t);
 		}
@@ -939,11 +939,11 @@ mrst_rec(int num, struct swents **p, int n, int *state, int lab)
 
 	DPRINTF(("generating table with %d elements\n", tblsize));
 
-	// AND with Wmax
+	/* AND with Wmax */
 	t = tempnode(num, UNSIGNED, 0, 0);
 	r = buildtree(AND, t, bcon(Wmax));
 
-	// RS lowbits
+	/* RS lowbits */
 	r = buildtree(RS, r, bcon(lowbit));
 
 	t = tempnode(0, UNSIGNED, 0, 0);
@@ -979,7 +979,7 @@ mrst_rec(int num, struct swents **p, int n, int *state, int lab)
 	ecomp(r);
 
 	plabel(tbllabel);
-	
+
 	mrst_put_entry_and_recurse(num, p, n, state, tbllabel, lab,
 		0, tblsize, Wmax, lowbit);
 }
@@ -1109,7 +1109,7 @@ mrst_find_window(struct swents **p, int n, int *state, int lab, int *len, int *l
 
 	for (; b > 0; b >>= 1, no_b--) {
 
-		// select the next bit
+		/* select the next bit */
 		W |= b;
 		L += 1;
 
@@ -1416,7 +1416,7 @@ movearg_double(NODE *p, int *fregp, int *regp, int sclass)
 	 * compiled to handle soft-float.
 	 */
 
-#if defined(MACHOABI)// && defined(SOFTFLOAT)
+#if defined(MACHOABI) /* && defined(SOFTFLOAT) */
 	/* don't move floats for local functions */
 
 	if (sclass == EXTDEF)
@@ -1457,7 +1457,7 @@ movearg_double(NODE *p, int *fregp, int *regp, int sclass)
 	(*regp) += 2;
 
 #endif
-	
+
 	return p;
 }
 
@@ -1558,13 +1558,13 @@ moveargs(NODE *p, int *regp, int *fregp, int sclass)
 
 	if (reg > R10 && r->n_op != STARG) {
 	  *rp = pusharg(r, regp);
-                
+
 	} else if (r->n_op == STARG) {
 		*rp = movearg_struct(r, regp);
-		
+
 	} else if (DEUNSIGN(r->n_type) == LONGLONG) {
 	  *rp = movearg_64bit(r, regp);
-                
+
 	} else if (r->n_type == DOUBLE || r->n_type == LDOUBLE) {
 		if (features(FEATURE_HARDFLOAT))
 #ifndef MACHOABI
@@ -1574,7 +1574,7 @@ moveargs(NODE *p, int *regp, int *fregp, int sclass)
 #endif
 		else
             *rp = movearg_64bit(r, regp);
-            
+
 	} else if (r->n_type == FLOAT) {
 		if (features(FEATURE_HARDFLOAT))
 			*rp = movearg_float(r, fregp, regp);

@@ -65,7 +65,7 @@
 
 struct optab table[] = {
 /* First entry must be an empty entry */
-{ -1, FOREFF, SANY, TANY, SANY, TANY, 0, 0, "", }, 
+{ -1, FOREFF, SANY, TANY, SANY, TANY, 0, 0, "", },
 
 /* PCONVs are not necessary */
 { PCONV,	INAREG,
@@ -131,48 +131,48 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SAREG,	TCHAR,
 	SAREG,	TUSHORT|TUWORD,
-		NLA0,	RESC1, //NSPECIAL|NAREG|NASL
+		NLA0,	RESC1, /* NSPECIAL|NAREG|NASL */
 		"	extsb A1,AL" COM "convert char to ushort/unsigned\n", },
 
 { SCONV,	INBREG | FEATURE_BIGENDIAN,
 	SAREG,	TUCHAR|TUSHORT|TUNSIGNED,
 	SBREG,	TLONGLONG|TULONGLONG,
-		NEEDS(NREG(B, 1)), RESC1, // NBREG
+		NEEDS(NREG(B, 1)), RESC1, /* NBREG */
 		"	mr U1,AL" COM "convert uchar/ushort/uint to (u)longlong\n"
 		"	li A1,0\n", },
 
 { SCONV,	INBREG,
 	SAREG,	TUCHAR|TUSHORT|TUNSIGNED,
 	SBREG,	TLONGLONG|TULONGLONG,
-		NEEDS(NREG(B, 1)), RESC1, //NBREG
+		NEEDS(NREG(B, 1)), RESC1, /* NBREG */
 		"	mr A1,AL" COM "convert uchar/ushort/uint to (u)longlong\n"
 		"	li U1,0\n", },
 
 { SCONV,	INBREG | FEATURE_BIGENDIAN,
 	SAREG,	TCHAR|TSHORT|TSWORD,
 	SBREG,	TULONGLONG|TLONGLONG,
-		NEEDS(NREG(B, 1)), RESC1, // NBREG
+		NEEDS(NREG(B, 1)), RESC1, /* NBREG */
 		"	mr U1,AL" COM "convert char/short/int to ulonglong\n"
 		"	srawi A1,AL,31\n", },
 
 { SCONV,	INBREG,
 	SAREG,	TCHAR|TSHORT|TSWORD,
 	SBREG,	TULONGLONG|TLONGLONG,
-		NEEDS(NREG(B, 1)), RESC1, // NBREG
+		NEEDS(NREG(B, 1)), RESC1, /* NBREG */
 		"	mr A1,AL" COM "convert char/short/int to ulonglong\n"
 		"	srawi U1,AL,31\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TSHORT|TUSHORT,
 	SAREG,	TCHAR|TUCHAR,
-		NLA0,	RESC1,	//NSPECIAL|NAREG|NASL
+		NLA0,	RESC1,	/* NSPECIAL|NAREG|NASL */
 		"	andi. A1,AL,255" COM "convert (u)short to (u)char\n", },
 
 /* extsh copies bit 16 of AL to upper 16 bits of A1 */
 { SCONV,	INAREG,
 	SAREG,	TSHORT,
 	SAREG,	TWORD,
-		NEEDS(NREG(A, 1), NEVER(R0)),	RESC1,  // NAREG|NASL
+		NEEDS(NREG(A, 1), NEVER(R0)),	RESC1,  /* NAREG|NASL */
 		"	extsh A1,AL" COM "convert short to int\n", },
 
 { SCONV,	INAREG,
@@ -344,7 +344,7 @@ struct optab table[] = {
 	SAREG,	TWORD,
 		NSCAA,	RESC1,
 		"ZF", },
-	
+
 { SCONV,	INCREG | FEATURE_HARDFLOAT,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SCREG,	TFLOAT|TDOUBLE|TLDOUBLE,
@@ -436,7 +436,7 @@ struct optab table[] = {
 	SCREG,	TFLOAT|TDOUBLE|TLDOUBLE,
 		XSL(C),	RESC1,	/* should be 0 */
 		"	bl CL" COM "call (no args, result) to scon\n", },
-		
+
 { CALL,		INCREG | FEATURE_HARDFLOAT,
 	SCREG,	TFLOAT|TDOUBLE|TLDOUBLE,
 	SCREG,	TFLOAT|TDOUBLE|TLDOUBLE,
@@ -497,7 +497,7 @@ struct optab table[] = {
 		"	mtctr AL" COM "ucall (no args, result) to ctr\n"
 		"	bctrl\n", },
 
-	
+
 { CALL,		INCREG | FEATURE_HARDFLOAT,
 	SAREG, TFTN,
 	SCREG, TFLOAT|TDOUBLE|TLDOUBLE,
@@ -790,7 +790,7 @@ struct optab table[] = {
 /*
  * The next rules takes care of assignments. "=".
  */
- 
+
 
 { ASSIGN,	FOREFF|INAREG,
 	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
@@ -1051,7 +1051,7 @@ struct optab table[] = {
 		"	mr UL,UR\n", },
 
 /*
- * DIV/MOD/MUL 
+ * DIV/MOD/MUL
  */
 
 { DIV,	INAREG,

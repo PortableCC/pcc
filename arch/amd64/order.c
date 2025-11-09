@@ -123,7 +123,7 @@ offstar(NODE *p, int shape)
 		(void)geninsn(p->n_right, INAREG);
 		return; /* Generate (%rbx,%rax) */
 	}
-		
+
 	(void)geninsn(p, INAREG);
 }
 
@@ -171,8 +171,8 @@ myormake(NODE *q)
 	} else if (risreg(p)) {
 		r2 = regno(p);
 		mkconv = 1;
-	} //else
-	//	comperr("bad myormake tree");
+	} /* else */
+	/*	comperr("bad myormake tree"); */
 
 	if (mkconv == 0)
 		return;

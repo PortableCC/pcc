@@ -106,9 +106,9 @@ fun_enter(struct symtab *sp, struct symtab **spp, int nargs)
 	for (i = 0; i < cs->nargs; i++) {
 		rp = &cs->av[i];
 		sp = spp[i];
-		//sz = (int)tsize(rp->type, rp->df, rp->ss);
+		/* sz = (int)tsize(rp->type, rp->df, rp->ss); */
 		if (rp->flags & AV_STREG) {
-			// st = (int)tsize(off, 0, 0);
+			/* st = (int)tsize(off, 0, 0); */
 			cerror("AV_STREG");
 		} else if (rp->flags & AV_REG2) {
 			cerror("AV_REG2");
@@ -265,7 +265,7 @@ fun_call(P1ND *p)
 		q = np[i];
 
 		/*
-		 * The ABI may declare that a parameter shall end up in 
+		 * The ABI may declare that a parameter shall end up in
 		 * multiple locations.
 		 * XXX use COMOP.
 		 */
@@ -486,7 +486,7 @@ if (pdebug) printf("pr_hasell: dsym %d\n", dsym);
 }
 
 /*
- * Extract the important parts of arguments and put away them for 
+ * Extract the important parts of arguments and put away them for
  * prototype checking.
  * Return index pointer for this prototype argument list.
  */

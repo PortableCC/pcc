@@ -154,19 +154,20 @@ ffloat_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	return (sfp->fp[0] == 0xffff7fff ? SOFT_INFINITE : SOFT_NORMAL);
 }
 
-FPI fpi_ffloat = { 
-	.nbits = FFLOAT_MANT_DIG,  
-	.storage = 32,
-        .bias = 128,
-	.minexp = FFLOAT_MIN_EXP-1,
-	.maxexp = FFLOAT_MAX_EXP-1,
-	.min10exp = FFLOAT_MIN_10_EXP-1,
-	.max10exp = FFLOAT_MAX_10_EXP-1,
-	.dig = FFLOAT_DIG,
-	.expadj = 0,
+FPI fpi_ffloat = {
+	FFLOAT_MANT_DIG,        /* nbits */
+	32,                     /* storage */
+	128,                    /* bias */
+	FFLOAT_MIN_EXP-1,       /* minexp */
+	FFLOAT_MAX_EXP-1,       /* maxexp */
+	FFLOAT_MIN_10_EXP-1,    /* min10exp */
+	FFLOAT_MAX_10_EXP-1,    /* max10exp */
+	FFLOAT_DIG,             /* dig */
+	0,                      /* expadj */
 
-	.make = ffloat_make,
-	.unmake = ffloat_unmake,
+	ffloat_make,            /* make */
+	ffloat_unmake,          /* unmake */
+	0                       /* classify */
 };
 
 static int
@@ -215,7 +216,7 @@ dfloat_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 		break; /* no subnormal */
 	}
 	SD(("dfloat_make3: fp %08x %08x\n", sfp->fp[0], sfp->fp[1]));
-	
+
 }
 
 static int
@@ -236,20 +237,20 @@ dfloat_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	return t;
 }
 
-FPI fpi_dfloat = { 
-	.nbits = DFLOAT_MANT_DIG,  
-	.storage = 64,
-        .bias = 128,
-	.minexp = DFLOAT_MIN_EXP-1,
-	.maxexp = DFLOAT_MAX_EXP-1,
-	.min10exp = DFLOAT_MIN_10_EXP-1,
-	.max10exp = DFLOAT_MAX_10_EXP-1,
-	.dig = DFLOAT_DIG,
-	.expadj = 0,
+FPI fpi_dfloat = {
+	DFLOAT_MANT_DIG,        /* nbits */
+	64,                     /* storage */
+	128,                    /* bias */
+	DFLOAT_MIN_EXP-1,       /* minexp */
+	DFLOAT_MAX_EXP-1,       /* maxexp */
+	DFLOAT_MIN_10_EXP-1,    /* min10exp */
+	DFLOAT_MAX_10_EXP-1,    /* max10exp */
+	DFLOAT_DIG,             /* dig */
+	0,                      /* expadj */
 
-	.make = dfloat_make,
-	.unmake = dfloat_unmake,
-	.classify = dfloat_classify,
+	dfloat_make,            /* make */
+	dfloat_unmake,          /* unmake */
+	dfloat_classify         /* classify */
 };
 #endif
 
@@ -317,7 +318,7 @@ ieee32_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 		break;
 	}
 	SD(("ieee32_make3: fp %08x\n", sfp->fp[0]));
-	
+
 }
 
 static int
@@ -340,20 +341,20 @@ ieee32_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 	return v;
 }
 
-FPI fpi_binary32 = { 
-	.nbits = IEEEFP_32_MANT_DIG,  
-	.storage = 32,
-        .bias = 127,
-	.minexp = IEEEFP_32_MIN_EXP-1,
-	.maxexp = IEEEFP_32_MAX_EXP-1,
-	.min10exp = IEEEFP_32_MIN_10_EXP-1,
-	.max10exp = IEEEFP_32_MAX_10_EXP-1,
-	.dig = IEEEFP_32_DIG,
-	.expadj = 1,
+FPI fpi_binary32 = {
+	IEEEFP_32_MANT_DIG,     /* nbits */
+	32,                     /* storage */
+	127,                    /* bias */
+	IEEEFP_32_MIN_EXP-1,    /* minexp */
+	IEEEFP_32_MAX_EXP-1,    /* maxexp */
+	IEEEFP_32_MIN_10_EXP-1, /* min10exp */
+	IEEEFP_32_MAX_10_EXP-1, /* max10exp */
+	IEEEFP_32_DIG,          /* dig */
+	1,                      /* expadj */
 
-	.make = ieee32_make,
-	.unmake = ieee32_unmake,
-	.classify = ieee32_classify,
+	ieee32_make,            /* make */
+	ieee32_unmake,          /* unmake */
+	ieee32_classify         /* classify */
 };
 #endif
 
@@ -440,20 +441,20 @@ ieee64_make(SFP sfp, int typ, int sign, int exp, MINT *m)
 }
 
 FPI fpi_binary64 = {
-	.nbits = IEEEFP_64_MANT_DIG,
-	.storage = 64,
-	.bias = 1023,
-	.minexp = IEEEFP_64_MIN_EXP-1,
-	.maxexp = IEEEFP_64_MAX_EXP-1,
-	.min10exp = IEEEFP_64_MIN_10_EXP-1,
-	.max10exp = IEEEFP_64_MAX_10_EXP-1,
-	.dig = IEEEFP_64_DIG,
-	.expadj = 1,
+	IEEEFP_64_MANT_DIG,     /* nbits */
+	64,                     /* storage */
+	1023,                   /* bias */
+	IEEEFP_64_MIN_EXP-1,    /* minexp */
+	IEEEFP_64_MAX_EXP-1,    /* maxexp */
+	IEEEFP_64_MIN_10_EXP-1, /* min10exp */
+	IEEEFP_64_MAX_10_EXP-1, /* max10exp */
+	IEEEFP_64_DIG,          /* dig */
+	1,                      /* expadj */
 
-	.make = ieee64_make,
-	.unmake = ieee64_unmake,
-	.classify = ieee64_classify,
-};      
+	ieee64_make,            /* make */
+	ieee64_unmake,          /* unmake */
+	ieee64_classify         /* classify */
+};
 #endif
 
 #ifdef USE_IEEEFP_X80
@@ -528,7 +529,7 @@ ieeex80_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 {
 	int t, v = ieeex80_classify(sfp);
 
-	SD(("ieeex80_unmake: %s %04x %08x %08x\n", 
+	SD(("ieeex80_unmake: %s %04x %08x %08x\n",
 	    sftyp[v], sfp->fp[2], sfp->fp[1], sfp->fp[0]));
 	*sign = (sfp->fp[2] >> 15) & 1;
 	*exp = (sfp->fp[2] & 0x7fff) - fpi_binaryx80.bias;
@@ -550,20 +551,20 @@ ieeex80_unmake(SFP sfp, int *sign, int *exp, MINT *m)
 
 /* IEEE double extended in its usual form, for example Intel 387 */
 FPI fpi_binaryx80 = {
-	.nbits = IEEEFP_X80_MANT_DIG,
-	.storage = 80,
-	.bias = 16383,
-	.minexp = IEEEFP_X80_MIN_EXP-1,
-	.maxexp = IEEEFP_X80_MAX_EXP-1,
-	.min10exp = IEEEFP_X80_MIN_10_EXP-1,
-	.max10exp = IEEEFP_X80_MAX_10_EXP-1,
-	.dig = IEEEFP_X80_DIG,
-	.expadj = 1,
+	IEEEFP_X80_MANT_DIG,    /* nbits */
+	80,                     /* storage */
+	16383,                  /* bias */
+	IEEEFP_X80_MIN_EXP-1,   /* minexp */
+	IEEEFP_X80_MAX_EXP-1,   /* maxexp */
+	IEEEFP_X80_MIN_10_EXP-1,/* min10exp */
+	IEEEFP_X80_MAX_10_EXP-1,/* max10exp */
+	IEEEFP_X80_DIG,         /* dig */
+	1,                      /* expadj */
 
-	.make = ieeex80_make,
-	.unmake = ieeex80_unmake,
-	.classify = ieeex80_classify,
-};      
+	ieeex80_make,           /* make */
+	ieeex80_unmake,         /* unmake */
+	ieeex80_classify        /* classify */
+};
 #endif
 
 #ifdef USE_IEEEFP_X80
@@ -679,7 +680,7 @@ grsround(MINT *m, FPI *f)
 }
 
 /*
- * Return highest set bit in a.  
+ * Return highest set bit in a.
  * Bit numbering starts with 0.
  */
 static int
@@ -901,7 +902,7 @@ soft_plus(SFP x1p, SFP x2p, TWORD t)
 
 	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
 	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
-	SD(("soft_plus: c1 %s c2 %s s1 %d s2 %d e1 %d e2 %d\n", 
+	SD(("soft_plus: c1 %s c2 %s s1 %d s2 %d e1 %d e2 %d\n",
 	    sftyp[c1], sftyp[c2], s1, s2, e1, e2));
 
 	ediff = e1 - e2;
@@ -1031,7 +1032,7 @@ soft_div(SFP x1p, SFP x2p, TWORD t)
 	c1 = LDBLPTR->unmake(x1p, &s1, &e1, &m1);
 	c2 = LDBLPTR->unmake(x2p, &s2, &e2, &m2);
 
-	SD(("soft_div: c1 %s c2 %s s1 %d s2 %d e1 %d e2 %d\n", 
+	SD(("soft_div: c1 %s c2 %s s1 %d s2 %d e1 %d e2 %d\n",
 	    sftyp[c1], sftyp[c2], s1, s2, e1, e2));
 	if (c1 == SOFT_NAN || c2 == SOFT_NAN) {
 		c1 = SOFT_NAN, s1 = 1;
@@ -1107,8 +1108,8 @@ soft_isz(SFP sfp)
 	return r;
 }
 
-#define	SFLEFTLESS	1	
-#define	SFLEFTEQ	2	
+#define	SFLEFTLESS	1
+#define	SFLEFTEQ	2
 #define	SFLEFTGTR	3
 
 /*
@@ -1266,7 +1267,7 @@ decbig(char *str, MINT *mmant, MINT *mexp)
 			if (gotdot)
 				exp10--;
 			continue;
-	
+
 		case '.':
 			gotdot = 1;
 			continue;
@@ -1339,7 +1340,7 @@ hexbig(char *str, MINT *mmant, MINT *mexp)
 			if (gotdot)
 				e3 -= 4;
 			continue;
-	
+
 		case '.':
 			gotdot = 1;
 			continue;
@@ -1374,7 +1375,7 @@ str2num(char *str, int *exp, MINT *m, struct FPI *fpi)
 {
 	MINT d, mm, me;
 	int t, u, rv;
-	
+
 	*exp = 0;
 
 	MINTDECL(d);
@@ -1475,12 +1476,12 @@ strtosf(SFP sfp, char *str, TWORD tw)
 
 
 	LDBLPTR->make(sfp, rv, 0, e, &m);
-//	soft_fp2fp(sfp, tw);
+	/* soft_fp2fp(sfp, tw); */
 
 #ifdef DEBUGFP
 	{
 		long double ld = strtold(str, NULL);
-//		ld = tw == DOUBLE ? (double)ld : tw == FLOAT ? (float)ld : ld;
+		/* ld = tw == DOUBLE ? (double)ld : tw == FLOAT ? (float)ld : ld; */
 		if (ld != sfp2ld(sfp))
 			fpwarn("strtosf", sfp2ld(sfp), ld);
 	}

@@ -107,7 +107,7 @@ setseg(int seg, char *name)
 	case TLSUDATA: name = ".section .tbss,\"awT\",@nobits"; break;
 	case CTORS: name = ".section\t.ctors,\"aw\",@progbits"; break;
 	case DTORS: name = ".section\t.dtors,\"aw\",@progbits"; break;
-	case NMSEG: 
+	case NMSEG:
 		printf("\t.section %s,\"a%c\",@progbits\n", name,
 		    cftnsp ? 'x' : 'w');
 		return;
@@ -142,7 +142,7 @@ static void
 putintemp(struct symtab *sym)
 {
 	NODE *p;
-	//cerror("putintemps called, not supported");
+	/* cerror("putintemps called, not supported"); */
 	p = tempnode(0, sym->stype, sym->sdf, sym->sap);
 	p = buildtree(ASSIGN, p, nametree(sym));
 	sym->soffset = regno(p->n_left);
@@ -199,7 +199,7 @@ static void
 param_32bit(struct symtab *sym, int *argofsp, int dotemps)
 {
 	NODE *p, *q;
-	
+
 	q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
 	regno(q) = A0 + (*argofsp)++;
 	if (dotemps) {
@@ -207,7 +207,7 @@ param_32bit(struct symtab *sym, int *argofsp, int dotemps)
 		sym->soffset = regno(p);
 		sym->sflags |= STNODE;
 	} else {
-		//cerror("param32bit called without dotemps");
+		/* cerror("param32bit called without dotemps"); */
 		p = nametree(sym);
 	}
 	p = buildtree(ASSIGN, p, q);
@@ -231,7 +231,7 @@ param_double(struct symtab *sym, int *argofsp, int dotemps)
 				sym->soffset = regno(p);
 				sym->sflags |= STNODE;
 			} else {
-				//cerror("param64bit called without dotemps");
+				/* cerror("param64bit called without dotemps"); */
 				p = nametree(sym);
 			}
 			p = buildtree(ASSIGN, p, q);
@@ -330,7 +330,7 @@ param_struct(struct symtab *sym, int *argofsp)
 	num = sz > navail ? navail : sz;
 	if (sz > 2)
 		printf("passed as reference (%d)\n", sz);
-		
+
 	for (i = 0; i < num; i++) {
 		q = block(REG, NIL, NIL, INT, 0, 0);
 		regno(q) = A0 + argofs++;
@@ -383,7 +383,7 @@ bfcode(struct symtab **sp, int cnt)
 			break;
 
 		if (argofs >= NARGREGS) {
-			//cerror("too many arguments, do something intelligent");
+			/* cerror("too many arguments, do something intelligent"); */
 				putintemp(sp[i]);
 		} else if (sstype == STRTY || sstype == UNIONTY) {
 				param_struct(sp[i], &argofs);
@@ -391,23 +391,23 @@ bfcode(struct symtab **sp, int cnt)
 				param_64bit(sp[i], &argofs, dotemps);
 		} else if (sstype == DOUBLE || sstype == LDOUBLE ||  sstype == FLOAT) {
 				param_double(sp[i], &fargofs, dotemps);
-//		} else if (sstype == FLOAT) {
-//				param_float(sp[i], &argofs, dotemps);
+		/* } else if (sstype == FLOAT) { */
+		/* param_float(sp[i], &argofs, dotemps); */
 		} else {
 				param_32bit(sp[i], &argofs, dotemps);
 		}
-		
+
 	} /*  for (i = 0; i < cnt; i++) */
 
 	/* if saveallargs, save the rest of the args onto the stack */
 	if (saveallargs) {
 		off = NARGREGS*ARGINIT/SZINT;
-		off = (off+15) & ~15; /* 16-byte aligned */ 
+		off = (off+15) & ~15; /* 16-byte aligned */
 		p = block(REG, NIL, NIL, INT, 0, 0);
 		regno(p) = SP;
 		p = buildtree(MINUSEQ, p, bcon(off));
 		ecomp(p);
-		
+
 		while (argofs < NARGREGS ) {
 			/* int off = (ARGINIT+FIXEDSTACKSIZE*SZCHAR)/SZINT + argofs; */
 			off = ARGINIT/SZINT + argofs;
@@ -422,11 +422,11 @@ bfcode(struct symtab **sp, int cnt)
 		}
 
 	}
-	
+
 /* profiling */
 	if (pflag) {
 #if defined(ELFABI) || defined(AOUTABI)
-	
+
 		sp2 = lookup("_mcount", 0);
 		sp2->stype = EXTERN;
 		p = nametree(sp2);
@@ -435,7 +435,7 @@ bfcode(struct symtab **sp, int cnt)
 		p = buildtree(ADDROF, p, NIL);
 		p = block(UCALL, p, NIL, INT, 0, 0);
 		ecomp(funcode(p));
-	
+
 #endif
 	}
 }
@@ -502,11 +502,11 @@ bjobcode(void)
 {
 	DLIST_INIT(&stublist, link);
 	DLIST_INIT(&nlplist, link);
-	
+
 	/* riscv names for some asm constant printouts */
 	astypnames[INT] = astypnames[UNSIGNED] = "\t.long";
 
-}	
+}
 
 #ifdef notdef
 /*
@@ -536,7 +536,7 @@ bycode(int t, int i)
 		} else if (lastoctal && '0' <= t && t <= '9') {
 			lastoctal = 0;
 			printf("\"\n\t.ascii \"%c", t);
-		} else {	
+		} else {
 			lastoctal = 0;
 			putchar(t);
 		}
@@ -701,7 +701,7 @@ pusharg(P1ND *p, int *regp)
 	regno(q) = SP;
 
 	off = SZINT/SZCHAR * (*regp - (A7 + 1));
-//printf("pusharg: off = %d, regp = %d\n", off, *regp);
+	/* printf("pusharg: off = %d, regp = %d\n", off, *regp); */
 
 	if (off > 0)
 		q = block(PLUS, q, bcon(off), INT, 0, 0);
@@ -724,7 +724,7 @@ movearg_32bit(P1ND *p, int *regp)
 	q = buildtree(ASSIGN, q, p);
 
 	*regp = reg;
-  
+
   return q;
 
 }
@@ -743,7 +743,7 @@ movearg_64bit(NODE *p, int *regp)
 	reg &= ~1;
 #endif
 
-//printf("movearg_64bit: reg 0%o\n", reg);
+/* printf("movearg_64bit: reg 0%o\n", reg); */
 
 	if (reg > A7) {
 		*regp = reg;
@@ -807,41 +807,41 @@ movearg_struct(NODE *p, int *regp)
  * 2) aggregates of 2*XLEN passed in two registers
  * 3) aggregates greater than two registers passed by reference
  */
- 
+
 	sz = tsize(p->n_type, p->n_df, p->n_ap) / SZINT;
-	
+
 	printf("walking \n");
-	p1fwalk(p, eprint, 0); 
+	p1fwalk(p, eprint, 0);
 
 	/* remove STARG node */
 	l = p->n_left;
 	p1nfree(p);
 			printf("2 walking \n");
-			p1fwalk(l, eprint, 0); 
+			p1fwalk(l, eprint, 0);
 
 	switch (sz) {
 		case 2:
-			printf("case 2\n");		
+			printf("case 2\n");
 
 			q = block(UMUL, l, NIL, INT, 0, 0);
 			if ((*regp - A0) < NARGREGS)
 				q = movearg_32bit(q, regp);
-			else 
+			else
 				q = pusharg(q, regp);
-			
+
 			/* set-up second field */
 			r = block(REG, NIL, NIL, INT, 0, 0);
 			regno(r) = FP;
 			r = block(MINUS, r, bcon(4), INT, 0, 0);
-			
+
 			q = block(CM, q, r, INT, 0, 0);
 			printf("walking again\n");
 			p1fwalk(q, eprint, 0);
 
 			l = r;
-			
+
 			/* fallthrough */
-			
+
 		case 1:
 			printf("case 1 (%d)\n", (*regp - A0));
 			l = block(UMUL, l, NIL, INT, 0, 0);
@@ -852,16 +852,16 @@ movearg_struct(NODE *p, int *regp)
 			if (sz == 2)
 				q->n_right = l;
 			else
-				q = l;	
-				
+				q = l;
+
 			printf("2 walking again\n");
 			p1fwalk(l, eprint, 0);
-			
+
 			break;
-			
+
 		default:
 			r = l;
-			
+
 			off = ((sz*(SZINT/SZCHAR))+15) & ~15; /* 16-byte aligned */
 			l = block(REG, NIL, NIL, INT, 0, 0);
 			regno(l) = SP;
@@ -933,9 +933,9 @@ movearg_struct(NODE *p, int *regp)
 	}
 
 	q = reverse(q);
-	
+
 	*regp = reg;
-	
+
 #endif
 
 	return q;
@@ -949,7 +949,7 @@ moveargs(NODE *p, int *regp, int *fregp, int *llregp)
 	NODE *r, **rp;
 	int reg, freg, llreg, bottom = 0, top = 0;
 	int numregs;
-	
+
 	if (p->n_op == CM) {
 		recursion_level++;
 		p->n_left = moveargs(p->n_left, regp, fregp, llregp);
@@ -968,8 +968,8 @@ moveargs(NODE *p, int *regp, int *fregp, int *llregp)
 	freg = *fregp;
 	llreg = *llregp;
 	numregs = (A7 - reg) + (DA0 - llreg)*2;
-	
-//printf("movargs: reg = %d, recursion_level = %d, top  = %d, bottom  = %d\n", reg, recursion_level, top, bottom);
+
+/* printf("movargs: reg = %d, recursion_level = %d, top  = %d, bottom  = %d\n", reg, recursion_level, top, bottom); */
 printf("; movargs: reg = %d, numregs %d\n", reg, numregs);
 	if (freg > FA7)
 		cerror("max floating point args exceeded");
@@ -992,7 +992,7 @@ printf("; movargs: reg = %d, numregs %d\n", reg, numregs);
 	}
 
 	if (top) {
-		// clear out stuff if needed
+		/* clear out stuff if needed */
 	}
 
   return straighten(p);
@@ -1048,20 +1048,20 @@ p1arg_overflow(NODE* r)
 	if (! r->n_left)
 		last = 1;
 
-printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n", 
+printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n",
 					r, r->n_op, r->n_left, r->n_right, last);
-return 0;		
+return 0;
 	while (1)  {
-printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n", 
+printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n",
 					r, r->n_op, r->n_left, r->n_right, last);
 		if (q->n_op == STARG) {
-		//printf("STARG\n");
+		/* printf("STARG\n"); */
 			sz = tsize(q->n_type, q->n_df, q->n_ap) / SZINT;
 			switch (sz) {
 				case 1:
 					n_regs += 1;
 					break;
-				case 2: 
+				case 2:
 					n_regs += 2;
 					break;
 				default:
@@ -1070,19 +1070,19 @@ printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n",
 					off += sz * (SZINT/SZCHAR);
 			}
 		} else if (DEUNSIGN(q->n_type) == LONGLONG) {
-		//printf("LONGLONG\n");
+		/* printf("LONGLONG\n"); */
 						n_regs += 2;
 		} else if (q->n_type == DOUBLE || q->n_type == LDOUBLE) {
-		//printf("DOUBLE\n");
+		/* printf("DOUBLE\n"); */
 						n_fregs += 2;
 		} else if (q->n_type == FLOAT) {
-		//printf("FLOAT\n");
+		/* printf("FLOAT\n"); */
 						n_fregs += 1;
 		} else if (q->n_type > 0) {
-		//printf(">0\n");
+		/* printf(">0\n"); */
 						n_regs += 1;
 		}
-		
+
 #if 1
 		if (last)
 			break;
@@ -1094,19 +1094,19 @@ printf("; r: %p, op: %d, n_left: %p n_right: %p last = %d\n",
 			last = 1;
 		}
 #endif
-	} 
-	
-	if (n_fregs > NARGREGS) 
+	}
+
+	if (n_fregs > NARGREGS)
 		n_regs  += n_fregs - NARGREGS;
 
 	if (n_regs > NARGREGS) {
 			off += (n_regs - NARGREGS)*(SZINT/SZCHAR);
-	} 
+	}
 	if (n_fregs > NARGREGS) {
 			off += (n_fregs - NARGREGS)*(SZINT/SZCHAR);
-	}	
-	
-//printf("n_regs: %d, off: %d\n", n_regs, off);
+	}
+
+/* printf("n_regs: %d, off: %d\n", n_regs, off); */
 
 return off;
 
@@ -1124,7 +1124,7 @@ funcode(NODE *p)
 	int llregnum = DA0;
  	NODE *r, *q;
 	int off = 0;
-	
+
 	if (DECREF(p->n_left->n_type) == STRTY+FTN ||
 		DECREF(p->n_left->n_type) == UNIONTY+FTN)
 			p = retstruct(p);
@@ -1132,17 +1132,17 @@ funcode(NODE *p)
 	r = p->n_right;
 	off = p1arg_overflow(r);
 
-	//p1fwalk(r, eprint, 0);
+	/* p1fwalk(r, eprint, 0); */
 	if (off > 0) {
-		off = (off+15) & ~15; /* 16-byte aligned */ 
+		off = (off+15) & ~15; /* 16-byte aligned */
 		q = block(ICON, NIL, NIL, INT, 0, 0);
 		slval(q, off);
 		p->n_right = block(CM, p->n_right, q, INT, 0, 0);
 		p->n_qual = off;
 	}  else
 		p->n_qual = 0;
-	
-//printf("funcode %d, 0x%x\n", off, p->n_right);	
+
+/* printf("funcode %d, 0x%x\n", off, p->n_right); */
 
 	p->n_right = moveargs(p->n_right, &regnum, &fregnum, &llregnum);
 

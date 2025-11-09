@@ -54,13 +54,13 @@ prologue(struct interpass_prolog *ipp)
     if (p2env.p_regs > 0 && p2env.p_regs != MINRVAR)
 	comperr("fix prologue register savings", p2env.p_regs);
 #endif
-    
+
     printf("	RSEG CODE:CODE:REORDER:NOROOT(0)\n");
-    if (ipp->ipp_flags & IF_VISIBLE)	
+    if (ipp->ipp_flags & IF_VISIBLE)
 	printf("	PUBLIC %s\n", ipp->ipp_name);
     printf("%s:\n", ipp->ipp_name);
-    
-#if 0	
+
+#if 0
     if (xsaveip) {
 	/* Optimizer running, save space on stack */
 	addto = (p2maxautooff - AUTOINIT)/SZCHAR;
@@ -86,17 +86,17 @@ eoftn(struct interpass_prolog *ipp)
 		comperr("fix eoftn register savings %x", p2env.p_regs);
 #endif
 
-	//	if (xsaveip == 0)
+	/* if (xsaveip == 0) */
 	addto = (p2maxautooff - AUTOINIT)/SZCHAR;
 
 	/* return from function code */
-	//deflab(ipp->ipp_ip.ip_lbl);   //XXX - is this necessary?
-	
+	/* deflab(ipp->ipp_ip.ip_lbl);   XXX - is this necessary? */
+
 	/* If retval is a pointer and not a function pointer, put in A0 */
 	if (ISPTR(DECREF(ipp->ipp_type)) &&
 	    !ISFTN(DECREF(DECREF(ipp->ipp_type))))
 	    printf("	mov.w r0,a0\n");
-	
+
 	/* struct return needs special treatment */
 	if (ftype == STRTY || ftype == UNIONTY) {
 		comperr("fix struct return in eoftn");
@@ -104,11 +104,11 @@ eoftn(struct interpass_prolog *ipp)
 		printf("	exitd\n");
 
 	/* Prolog code */
-	//	if (xsaveip == 0) {
+	/* if (xsaveip == 0) { */
 		deflab(ftlab1);
 		printf("	enter #%d\n", addto);
 		printf("	jmp.w " LABFMT "\n", ftlab2);
-		//}
+	/* } */
 }
 
 /*
@@ -210,7 +210,7 @@ twollcomp(NODE *p)
 		cb1 = LT;
 		cb2 = GT;
 		break;
-	
+
 	default:
 		cb1 = cb2 = 0; /* XXX gcc */
 	}
@@ -528,7 +528,7 @@ special(NODE *p, int shape)
 	return SRNOPE;
 }
 
-void    
+void
 myreader(NODE *p)
 {
 	NODE *q, *r, *s, *right;
@@ -551,7 +551,7 @@ myreader(NODE *p)
 		q = mklnode(OREG, (freetemp(szty(right->n_type))),
 		    FPREG, right->n_type);
 		s = mkbinode(ASSIGN, q, right, right->n_type);
-		r = talloc(); 
+		r = talloc();
 		*r = *q;
 		p->n_right = r;
 		pass2_compile(ipnode(s));
@@ -606,10 +606,10 @@ gclass(TWORD t)
 {
 	if (t == CHAR || t == UCHAR)
 		return CLASSC;
-	
+
 	if(ISPTR(t))
 		return CLASSB;
-	
+
 	return CLASSA;
 }
 

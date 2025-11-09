@@ -29,7 +29,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -70,7 +70,7 @@ typedef unsigned int bittype; /* XXX - for basicblock */
 #define TYPEDEF		13
 /* #define FORTRAN		14 */
 #define ENAME		15
-//#define MOE		16
+/* #define MOE		16 */
 #define CCONST		16
 /* #define UFORTRAN 	17 */
 #define USTATIC		18
@@ -123,11 +123,11 @@ struct gcc_attr_pack;
  *	- The dimension/function pointer
  *	- The size/struct description table pointer.
  *
- * The dimfun pointer points into an array of "union dimfun", which is the 
+ * The dimfun pointer points into an array of "union dimfun", which is the
  * same size as the number of ARY/FTN in the type word.  See below.
  *
  * The size/struct description member is only used if needed, unless it is
- * a struct/union when it always is avaliable.  It has three initial 
+ * a struct/union when it always is avaliable.  It has three initial
  * elements, thereafter followed by parameters that are allocated if needed.
  *
  * Note that some type/variable attributes may be stored in this struct.
@@ -189,8 +189,8 @@ struct	symtab {
 /* compat */
 #define stype td->type
 #define squal td->qual
-#define sdf td->df    
-#define sss td->ss    
+#define sdf td->df
+#define sss td->ss
 
 /*
  * External definitions
@@ -266,7 +266,7 @@ void defalign(int al);
 void symdirec(struct symtab *sp);
 
 /*
- * Tree struct for pass1.  
+ * Tree struct for pass1.
  */
 struct flt;
 
@@ -386,7 +386,7 @@ void cbranch(P1ND *, P1ND *);
 void extdec(struct symtab *);
 void defzero(struct symtab *);
 int falloc(struct symtab *, int, P1ND *);
-TWORD ctype(TWORD);  
+TWORD ctype(TWORD);
 void inval(CONSZ, int, P1ND *);
 int ninval(CONSZ, int, P1ND *);
 void infld(CONSZ, int, CONSZ);
@@ -502,8 +502,8 @@ P1ND *p1tcopy(P1ND *);
 struct flt {
 	struct softfloat sf;
 	TWORD t;
-};	
-typedef struct flt FLT;	
+};
+typedef struct flt FLT;
 #define	sfallo()		stmtalloc(sizeof(struct softfloat))
 
 struct lexint {
@@ -628,7 +628,7 @@ enum {	ATTR_FIRST = ATTR_MI_MAX + 1,
  */
 #define amlist  aa[0].varg
 #define amsize  aa[1].iarg
-// #define	strattr(x)	(attr_find(x, ATTR_STRUCT))
+/* #define	strattr(x)	(attr_find(x, ATTR_STRUCT)) */
 #define	strattr(x)	((x)->ss)
 
 void gcc_init(void);
