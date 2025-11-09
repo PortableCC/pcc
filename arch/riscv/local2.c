@@ -1,6 +1,6 @@
 /*	$Id$	*/
 /*
- * Copyright (c) 2022, Tim Kelly/Dialectronics.com (gtkelly@). 
+ * Copyright (c) 2022, Tim Kelly/Dialectronics.com (gtkelly@).
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,7 +22,7 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */ 
+ */
 /*
  * Copyright (c) 2003 Anders Magnusson (ragge@ludd.luth.se).
  * All rights reserved.
@@ -97,11 +97,11 @@ char *rnames[] = {
 	REGPREFIX "s2", REGPREFIX "s3", REGPREFIX "s4", REGPREFIX "s5",
 	REGPREFIX "s6", REGPREFIX "s7", REGPREFIX "s8", REGPREFIX "s9",
 	REGPREFIX "s10", REGPREFIX "s11",
-	
+
 	/* temp registers */
-	REGPREFIX "t3", REGPREFIX "t4", REGPREFIX "t5", 
+	REGPREFIX "t3", REGPREFIX "t4", REGPREFIX "t5",
 #ifdef SAVE_RA_FOR_LAST
-	REGPREFIX "ra", 
+	REGPREFIX "ra",
 #else
 	REGPREFIX "t6",
 #endif
@@ -111,7 +111,7 @@ char *rnames[] = {
 	REGPREFIX "ft0", REGPREFIX "ft1", REGPREFIX "ft2", REGPREFIX "ft3",
 	REGPREFIX "ft4", REGPREFIX "ft5", REGPREFIX "ft6", REGPREFIX "ft7",
 	/* saved registers */
-	REGPREFIX "fs0", REGPREFIX "fs1", 
+	REGPREFIX "fs0", REGPREFIX "fs1",
 	/* argument registers */
 	REGPREFIX "fa0", REGPREFIX "fa1", REGPREFIX "fa2", REGPREFIX "fa3",
 	REGPREFIX "fa4", REGPREFIX "fa5", REGPREFIX "fa6", REGPREFIX "fa7",
@@ -121,16 +121,16 @@ char *rnames[] = {
 	REGPREFIX "fs10", REGPREFIX "fs11",
 	/* temp registers */
 	REGPREFIX "ft8", REGPREFIX "ft9", REGPREFIX "ft10", REGPREFIX "ft11",
-	
+
 	/* pseudo-registers for longlongs */
 	/* saved registers */
 	REGPREFIX "ds0", REGPREFIX "ds1", REGPREFIX "ds2",  REGPREFIX "ds3",
-	REGPREFIX "ds5", 
+	REGPREFIX "ds5",
 	/* argument registers */
 	REGPREFIX "da0", REGPREFIX "da1", REGPREFIX "da2", REGPREFIX "da3",
 	/* temp registers */
 #ifdef USE_T0_AS_TEMP
-	REGPREFIX "dt0", REGPREFIX "dt1", REGPREFIX "dt2", 
+	REGPREFIX "dt0", REGPREFIX "dt1", REGPREFIX "dt2",
 #else
 	REGPREFIX "xxx", REGPREFIX "dt1", REGPREFIX "dt2"
 #endif
@@ -184,7 +184,7 @@ prologue(struct interpass_prolog *ipp)
 				addto += SZLONG/SZCHAR;
 		}
 	}
-	
+
 	if ((addto == 0) && (p2calls == 0))
 		return; /* no need to create a stack frame */
 	printf(";" TAB "p2maxautooff: %d, addto: %d\n", p2maxautooff, addto);
@@ -194,28 +194,28 @@ prologue(struct interpass_prolog *ipp)
 
 	/* put current frame pointer into temp register */
 	printf(TAB "mv %s, %s\n", rnames[T1], rnames[FP]);
-	
+
 	/* save the stack pointer to the frame pointer */
 	printf(TAB "mv %s, %s\n", rnames[FP], rnames[SP]);
 
 	/* make space for ra */
 	if (p2calls > 0)
 		addto += SZLONG/SZCHAR;
-	
+
 	/* create the new stack frame */
 	addto = (addto+15) & ~15; /* 16-byte aligned */
 	if (addto < 1<<20) {
-		printf(TAB "subi %s, %s, %d\n", rnames[SP], rnames[SP], addto);	
+		printf(TAB "subi %s, %s, %d\n", rnames[SP], rnames[SP], addto);
 	} else {
 		printf(TAB "addi %s, %s, %d\n", rnames[T1], rnames[ZERO], (addto) >> 16);
 		printf(TAB "sll %s,%s,%d\n", rnames[T1], rnames[T1], 16);
 		printf(TAB "addi %s,%s,%d\n", rnames[T1], rnames[ZERO], (addto) & 0xffff);
 		printf(TAB "sub %s,%s,%s\n", rnames[SP], rnames[SP], rnames[T1]);
 	}
-	
+
 	/* stack pointer can grow downward
 	 * frame pointer points to top of the
-	 * stack-based arguments 
+	 * stack-based arguments
 	 */
 
 	/* save the original frame pointer to the bottom of the stack */
@@ -225,14 +225,14 @@ prologue(struct interpass_prolog *ipp)
 		printf(TAB "sw %s, 4(%s)\n", rnames[RA], rnames[SP]);
 		sz += (SZLONG/SZCHAR);
 	}
-		
+
 	/* save non-volatile registers from the bottom of stack up */
 	for (i = 0; i < MAXREGS; i++) {
 		if (TESTBIT(p2env.p_regs, i)) {
 			sz += (SZLONG/SZCHAR);
 			if (sz == addto)
 				cerror("collision between stack and frame");
-		
+
 			printf(TAB "sw %s, %d(%s)\n", rnames[i], sz, rnames[SP]);
 		}
 	}
@@ -260,33 +260,33 @@ int i, sz, idx = 0, addto = p2maxautooff;
 				addto += SZLONG/SZCHAR;
 		}
 	}
-	
+
 	if ((addto == 0) && (p2calls == 0)) {
-		printf(TAB "jr %s\n", rnames[RA]);   
+		printf(TAB "jr %s\n", rnames[RA]);
 		return; /* no stack frame was created */
 	}
 
 	/* struct return needs special treatment */
-	if (ftype == STRTY || ftype == UNIONTY) 
+	if (ftype == STRTY || ftype == UNIONTY)
 		cerror("eoftn");
-		
+
 	for (i = 0; i < MAXREGS; i++) {
 		if (TESTBIT(p2env.p_regs, i))
-			idx++; 
+			idx++;
 	}
-	
+
 	if (p2calls > 0)
 		idx++;
-		
+
 	/* unwind stack frame */
 	for (i = (MAXREGS-1); i >= 0; --i) {
 		if (TESTBIT(p2env.p_regs, i)) {
 			sz = idx*(SZLONG/SZCHAR);
 			if (sz == 0)
 				cerror("collision unwinding stack");
-		
+
 			printf(TAB "lw %s, %d(%s)\n", rnames[i], sz, rnames[SP]);
-			--idx; 
+			--idx;
 		}
 	}
 
@@ -296,14 +296,14 @@ int i, sz, idx = 0, addto = p2maxautooff;
 
 	/* move the original frame pointer to a temp */
 	printf(TAB "lw %s, 0(%s)\n", rnames[T1], rnames[SP]);
-	
+
 	/* restore the stack pointer */
 	printf(TAB "mv %s, %s\n", rnames[SP], rnames[FP]);
-	
+
 	/* restore the frame pointer */
 	printf(TAB "mv %s, %s\n", rnames[FP], rnames[T1]);
 
-	printf(TAB "jr %s\n", rnames[RA]);  
+	printf(TAB "jr %s\n", rnames[RA]);
 
 }
 
@@ -336,7 +336,7 @@ zzzcode(NODE *p, int c)
 	case 'D': /* long long comparision */
 		twollcomp(p);
 		break;
-		
+
 	case 'E': /* generate and error */
 		comperr("zzzcode received ZE macro");
 		break;
@@ -364,15 +364,15 @@ zzzcode(NODE *p, int c)
 			expand(p, 0, " A1, AL, AR");
 		}
 		break;
-		
+
 	case 'Q': /* emit struct assign */
 		printf("%d", attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0));
 		/* stasg(p); */
 		break;
 
 	case 'R':  /* remove from stack after subroutine call */
-		//printf("zzzcode R %d, 0x%x\n", p->n_qual, p);
-		//fwalk(p, e2print, 0);
+		/* printf("zzzcode R %d, 0x%x\n", p->n_qual, p); */
+		/* fwalk(p, e2print, 0); */
 		if (p->n_qual > 0)
 			printf("\taddi sp, sp, %d\n", p->n_qual);
 		break;
@@ -397,7 +397,7 @@ hopcode(int f, int o)
 	char opcode[20][7] = {"add", "sub", "and", "or", "xor",
 					  "addi", "subi", "andi", "ori", "xori",
 					  "fadd.s", "fsub.s", "andi", "ori", "xori",
-					  "fadd.d", "fsub.d", "andi", "ori", "xori"}; 
+					  "fadd.d", "fsub.d", "andi", "ori", "xori"};
 	int i = 5, j;
 	switch (o) {
 		case PLUS:
@@ -405,7 +405,7 @@ hopcode(int f, int o)
 			break;
 		case MINUS:
 			j = 1;
-			break;	
+			break;
 		case AND:
 			j = 2;
 			break;
@@ -415,7 +415,7 @@ hopcode(int f, int o)
 		case ER:
 			j = 4;
 			break;
-			
+
 	default:
 		comperr("hopcode2: %d", o);
 		return; /* XXX */
@@ -507,8 +507,8 @@ twollcomp(NODE *p)
 	int s = getlab2();
 	int e = p->n_label;
 	int cb1, cb2;
-	
-	o = op = p->n_op;	
+
+	o = op = p->n_op;
 	if (o >= ULE)
 		o -= (ULE-LE);
 	switch (o) {
@@ -530,7 +530,7 @@ twollcomp(NODE *p)
 		cb1 = LT; /* branch to s */
 		cb2 = GT; /* branch to e */
 		break;
-	
+
 	default:
 		cb1 = cb2 = 0; /* XXX gcc */
 	}
@@ -541,12 +541,12 @@ twollcomp(NODE *p)
 	if (cb2)
 		printf(LABFMT, e);
 	printf(COM "compare 64-bit values (upper)\n");
-	
+
 	printf( TAB "%s ", ccbranches[op-EQ]);
 	expand(p, 0, "AL, AR,");
 	printf(LABFMT, e);
 	printf(COM "(and lower)\n");
-	
+
 	deflab(s);
 }
 
@@ -665,10 +665,10 @@ ftoi(NODE *p)
 		if (n_type == FLOAT) { /* single precision */
 			expand(p, 0, TAB "fcvt.w.s A1, AL\n");
 		}
-		else { /* double precision */ 
+		else { /* double precision */
 			expand(p, 0, TAB "fcvt.l.d A1, AL\n");
-		}	
-	}	
+		}
+	}
 	else if (n_op == NAME) {
 		/* comes in as a memory address */
 		/* move the memory address to register A1 */
@@ -679,13 +679,13 @@ ftoi(NODE *p)
 			/* once in A2, operate */
 			expand(p, 0, TAB "fcvt.w.s A1, A2\n");
 		}
-		else{ /* double precision */ 
+		else{ /* double precision */
 			/* move the value into register A2 */
 			expand(p, 0, TAB "fld A2, 0(A1)\n");
 			/* once in A2, operate */
 			expand(p, 0, TAB "fcvt.w.d A1, A2\n");
 		}
-	}	
+	}
 	else if (n_op == OREG) {
 		/* comes in as an offset from the GPR specified in AL */
 		if (n_type == FLOAT) { /* single precision */
@@ -694,14 +694,14 @@ ftoi(NODE *p)
 			/* once in A2, operate */
 			expand(p, 0, TAB "fcvt.w.s A1, A2\n");
 		}
-		else{ /* double precision */ 
+		else{ /* double precision */
 			/* move the value into register A2 */
 			expand(p, 0, TAB "fmv.d.x A2, AL\n");
 			/* once in A2, operate */
 			expand(p, 0, TAB "fcvt.w.d A1, A2\n");
 		}
 	}
-	else 
+	else
 		cerror("unknown n_op in ftoi()\n");
 
 	printf(COM "end conversion\n");
@@ -878,8 +878,8 @@ conput(FILE *fp, NODE *p)
 
 	int val = getlval(p);
 
-//printf("conput %d \n", val);
-//fwalk(p, e2print, 0);
+	/* printf("conput %d \n", val); */
+	/* fwalk(p, e2print, 0); */
 
 	switch (p->n_op) {
 	case ICON:
@@ -919,8 +919,8 @@ reg64name(int reg, int hi)
 	if (hi == HIREG)
 		off = 1;
 
-	//printf("reg64name: %d %s ", reg, off == 1 ? "HIREG" : "LOREG");
-	
+	/* printf("reg64name: %d %s ", reg, off == 1 ? "HIREG" : "LOREG"); */
+
 	if (reg > MAXREGS) {
 		cerror("maxregs exceeded in reg64name");
 		return; /* XXX */
@@ -929,7 +929,7 @@ reg64name(int reg, int hi)
 		switch (reg) {
 			default:
 				idx = S2 + 2*(reg - DS1);
-		}		
+		}
 	}
 	else if (reg >= DT0) {
 		switch(reg) {
@@ -941,19 +941,19 @@ reg64name(int reg, int hi)
 				if (off == 1)
 					off = T3 - T2;
 				break;
-			default: 
+			default:
 				idx = T4;
-		} 
+		}
 	} else if (reg >= DA0) {
 		idx = A0 + 2*(reg-DA0);
 	} else if (off == 0) {
 		idx = reg;
 	} else {
 		printf("bad reg64name: (%d) \n", reg);
-	//	user_stacktrace();
+		/* user_stacktrace(); */
 		return;
 	}
-		
+
 	printf("%s" , rnames[idx + off]);
 }
 
@@ -966,10 +966,10 @@ upput(NODE *p, int size)
 {
 
 	size /= SZCHAR;
-//fwalk(p, e2print, 0);
-//printf("upput p->n_op: 0x%x size %d", p->n_op, size);
-//printf("X");
-//return;
+	/* fwalk(p, e2print, 0); */
+	/* printf("upput p->n_op: 0x%x size %d", p->n_op, size); */
+	/* printf("X"); */
+	/* return; */
 
 
 	switch (p->n_op) {
@@ -1014,19 +1014,19 @@ adrput(FILE *io, NODE *p)
 			} else
 				printf(CONFMT, getlval(p));
 			return;
-	
+
 		case OREG:
 			printf("%d", (int)getlval(p));
 			printf("(%s)", rnames[regno(p)]);
 			return;
-	
+
 		case FCON:
 		case ICON:
 	#ifdef PCC_DEBUG
 			/* Sanitycheck for PIC, to catch adressable constants */
 			if (kflag && p->n_name[0] && 0) {
 				static int foo;
-	
+
 				if (foo++ == 0) {
 					printf("\nfailing...\n");
 					fwalk(p, e2print, 0);
@@ -1037,7 +1037,7 @@ adrput(FILE *io, NODE *p)
 			/* addressable value of the constant */
 			conput(io, p);
 			return;
-	
+
 		case REG:
 			switch (p->n_type) {
 				case LONGLONG:
@@ -1049,9 +1049,9 @@ adrput(FILE *io, NODE *p)
 					printf("%s", rnames[regno(p)]);
 				}
 			return;
-	
+
 		default:
-	//		user_stacktrace();
+		/* user_stacktrace(); */
 			comperr("illegal address, op %d, node %p", p->n_op, p);
 			return;
 
@@ -1080,7 +1080,7 @@ static int
 calc_args_size(NODE *p)
 {
 	int n = 0;
-        
+
         if (p->n_op == CM) {
                 n += calc_args_size(p->n_left);
                 n += calc_args_size(p->n_right);
@@ -1351,37 +1351,37 @@ p2arg_overflow(NODE* r)
   NODE* q = r;
   int sz, off = 0, last = 0, n_regs = 0, n_fregs = 0;
 
-	if (!r->n_left) 
+	if (!r->n_left)
 		last = 1;
-			
+
 	while (1)  {
-//printf("r: 0x%x, op: %d, n_left: 0x%x n_right: 0x%x last = %d\n", 
-//				r, r->n_op, r->n_left, r->n_right, last);
+		/* printf("r: 0x%x, op: %d, n_left: 0x%x n_right: 0x%x last = %d\n", */
+		/* r, r->n_op, r->n_left, r->n_right, last); */
 
 		if (q->n_op == STARG) {
-		//printf("STARG\n");
+		/* printf("STARG\n"); */
 			sz = attr_find(q->n_ap, ATTR_P2STRUCT)->iarg(0);
 			switch (sz) {
 				case 1:
 					n_regs += 1;
 					break;
-				case 2: 
+				case 2:
 					n_regs += 2;
 					break;
 				default:
 					n_regs += 1;
 			}
 		} else if (DEUNSIGN(q->n_type) == LONGLONG) {
-		//printf("LONGLONG\n");
+		/* printf("LONGLONG\n"); */
 						n_regs += 2;
 		} else if (q->n_type == DOUBLE || q->n_type == LDOUBLE) {
-		//printf("DOUBLE\n");
+		/* printf("DOUBLE\n"); */
 						n_fregs += 2;
 		} else if (q->n_type == FLOAT) {
-		//printf("FLOAT\n");
+		/* printf("FLOAT\n"); */
 						n_fregs += 1;
 		} else if (q->n_type > 0) {
-		//printf(">0\n");
+		/* printf(">0\n"); */
 						n_regs += 1;
 		}
 
@@ -1395,19 +1395,19 @@ p2arg_overflow(NODE* r)
 			last = 1;
 		}
 
-	} 
-	
-	if (n_fregs > NARGREGS) 
+	}
+
+	if (n_fregs > NARGREGS)
 		n_regs  += n_fregs - NARGREGS;
 
 	if (n_regs > NARGREGS) {
 			off += (n_regs - NARGREGS)*(SZINT/SZCHAR);
-	} 
+	}
 	if (n_fregs > NARGREGS) {
 			off += (n_fregs - NARGREGS)*(SZINT/SZCHAR);
-	}	
-	
-//printf("n_regs: %d, off: %d\n", n_regs, off);
+	}
+
+/* printf("n_regs: %d, off: %d\n", n_regs, off); */
 
 return off;
 
@@ -1429,12 +1429,12 @@ lastcall(NODE *p)
 
 	if (p->n_right == 0)
 		return;
-		
+
 	off  = p2arg_overflow(p->n_right->n_left);
-	p->n_qual = (off+15) & ~15; 
-	
-//printf("lastcall %d, 0x%x\n", p->n_qual, p->n_right->n_left);
-//fwalk(p, e2print, 0);
+	p->n_qual = (off+15) & ~15;
+
+	/* printf("lastcall %d, 0x%x\n", p->n_qual, p->n_right->n_left); */
+	/* fwalk(p, e2print, 0); */
 
 }
 

@@ -53,7 +53,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -93,7 +93,7 @@ struct rstack {
 	int	rsou;
 	int	rstr;
 	struct	symtab *rsym;
-//	struct	symtab *rb;
+	/* struct	symtab *rb; */
 	struct	attr *ap;
 	int	flags;
 #define	LASTELM	1
@@ -429,7 +429,7 @@ defid(NODE *q, int class)
 		if (q->n_type != FARG)
 			oalloc(p, &argoff);
 		break;
-		
+
 	case STATIC:
 	case EXTDEF:
 	case EXTERN:
@@ -803,7 +803,7 @@ enumdcl(struct symtab *sp)
 		t = ctype(INT);
 #endif
 #endif
-	
+
 	if (sp)
 		sp->stype = t;
 	p = mkty(t, 0, 0);
@@ -891,7 +891,7 @@ bstruct(char *name, int soru, NODE *gp)
 	r = tmpcalloc(sizeof(struct rstack));
 	r->rsou = soru;
 	r->rsym = sp;
-//	r->rb = NULL;
+	/* r->rb = NULL; */
 	r->ap = gap;
 	r->rnext = rpole;
 	rpole = r;
@@ -915,7 +915,7 @@ dclstruct(struct rstack *r)
 
 	apb = attr_find(r->ap, ATTR_ALIGNED);
 	aps = attr_find(r->ap, ATTR_STRUCT);
-//	aps->amlist = r->rb;
+	/* aps->amlist = r->rb; */
 	aps->amlist = nscur->sup;
 
 #ifdef ALSTRUCT
@@ -989,10 +989,10 @@ soumemb(NODE *n, char *name, int class)
 	struct symtab *sp, *lsp;
 	int incomp, tsz, al;
 	TWORD t;
- 
+
 	if (rpole == NULL)
 		cerror("soumemb");
- 
+
 	/* check if tag name exists */
 	lsp = NULL;
 	for (sp = /* rpole->rb */ nscur->sup; sp != NULL; lsp = sp, sp = sp->snext)
@@ -1164,7 +1164,7 @@ talign(unsigned int ty, struct attr *apl)
 		if ((a = al->iarg(0)) == 0) {
 			uerror("no alignment");
 			a = ALINT;
-		} 
+		}
 		return a;
 	}
 
@@ -1439,7 +1439,7 @@ edelay(NODE *p)
 }
 
 /*
- * Traverse through the array args, evaluate them and put the 
+ * Traverse through the array args, evaluate them and put the
  * resulting temp numbers in the dim fields.
  */
 static void
@@ -2018,7 +2018,7 @@ arglist(NODE *n)
 		if (ty == UNIONTY &&
 		    attr_find(ap[j]->n_ap, GCC_ATYP_TRANSP_UNION)){
 			/* transparent unions must have compatible types
-			 * shortcut here: if pointers, set void *, 
+			 * shortcut here: if pointers, set void *,
 			 * otherwise btype.
 			 */
 			struct symtab *sp = strmemb(ap[j]->n_ap);
@@ -2173,7 +2173,7 @@ tymerge(NODE *typ, NODE *idp)
 	/* now idp is a single node: fix up type */
 	if ((t = ctype(idp->n_type)) != idp->n_type)
 		idp->n_type = t;
-	
+
 	if (idp->n_op != NAME) {
 		for (p = idp->n_left; p->n_op != NAME; p = p->n_left)
 			nfree(p);
@@ -3136,9 +3136,9 @@ cxop(int op, NODE *l, NODE *r)
 
 	case PLUS:
 	case MINUS:
-		p = comop(p, buildtree(ASSIGN, structref(ccopy(q), DOT, real), 
+		p = comop(p, buildtree(ASSIGN, structref(ccopy(q), DOT, real),
 		    buildtree(op, real_l, real_r)));
-		p = comop(p, buildtree(ASSIGN, structref(ccopy(q), DOT, imag), 
+		p = comop(p, buildtree(ASSIGN, structref(ccopy(q), DOT, imag),
 		    buildtree(op, imag_l, imag_r)));
 		break;
 
@@ -3310,15 +3310,15 @@ cxconj(NODE *p)
 NODE *
 cxret(NODE *p, NODE *q)
 {
-//printf("cxret\n");
-//fwalk(p, eprint, 0);
+/* printf("cxret\n"); */
+/* fwalk(p, eprint, 0); */
 	if (ANYCX(q)) { /* Return complex type */
 		p = mkcmplx(p, strmemb(q->n_ap)->stype);
 	} else if (ISFTY(q->n_type) || ISITY(q->n_type)) { /* real or imag */
 		p = structref(p, DOT, ISFTY(q->n_type) ? real : imag);
 		if (p->n_type != q->n_type)
 			p = cast(p, q->n_type, 0);
-	} else 
+	} else
 		cerror("cxred failing type");
 	return p;
 }

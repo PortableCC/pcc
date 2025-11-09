@@ -137,7 +137,7 @@ main(int argc, char *argv[])
 	int sdflag;
 #endif
 
-//kflag = 1;
+/* kflag = 1; */
 #ifdef TIMING
 	struct timeval t1, t2;
 

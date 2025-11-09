@@ -37,7 +37,7 @@
  * Peephole optimizer for Nova.
  * It is mandatory for this program to be run on the assembler file
  * after compilation, to cleanup short-distance jumps/loads/stores.
- * 
+ *
  */
 #define BEGFTN	"#BEGFTN"
 #define ENDFTN	"#ENDFTN"
@@ -295,7 +295,7 @@ movecon(void)
 	} else
 		mb = DLIST_PREV(&mpole, link);
 	mblow = mb;
-//printf("movecon1: mblow %p curaddr %d\n", mblow, curaddr);
+/* printf("movecon1: mblow %p curaddr %d\n", mblow, curaddr); */
 	/*
 	 * First handle constants at the beginning of the function.
 	 * iterate backwards to get constants in the correct order.
@@ -326,7 +326,7 @@ movecon(void)
 	}
 	if (curaddr <= 128)
 		return; /* <= 128 entries */
-//printf("movecon2: mblow %p curaddr %d\n", mblow, curaddr);
+/* printf("movecon2: mblow %p curaddr %d\n", mblow, curaddr); */
 	/*
 	 * Second; move constants at the end of the function.
 	 */
@@ -339,7 +339,7 @@ movecon(void)
 				break;
 	}
 	mbhigh = mb;
-//printf("movecon3: mbhigh %p curaddr %d\n", mbhigh, curaddr);
+/* printf("movecon3: mbhigh %p curaddr %d\n", mbhigh, curaddr); */
 	for (; mb != &mpole; mb = DLIST_NEXT(mb, link)) {
 		if ((b = strchr(mb->name, '['))) {
 			s = strdup(b+1);
@@ -364,10 +364,10 @@ movecon(void)
 		DLIST_REMOVE(mb, link);
 		DLIST_INSERT_BEFORE(&mpole, mb, link);
 	}
-//printf("movecon5: mb %p curaddr %d\n", mb, curaddr);
+/* printf("movecon5: mb %p curaddr %d\n", mb, curaddr); */
 	if (curaddr <= 255)
 		return;
-//printf("movecon6: mb %p curaddr %d\n", mb, curaddr);
+/* printf("movecon6: mb %p curaddr %d\n", mb, curaddr); */
 	/*
 	 * Here begins the tricky part.
 	 * - Start at mblow. At the first memref insn start counting.
@@ -381,12 +381,12 @@ movecon(void)
 	curcnt = 0;
 	mbpout = NULL;
 
-//printf("movecon7: mb %p curaddr %d\n", mb, curaddr);
+/* printf("movecon7: mb %p curaddr %d\n", mb, curaddr); */
 	for (mb = DLIST_NEXT(mblow, link); mb != mbhigh;
 	    mb = DLIST_NEXT(mb, link)) {
 		int ityp = itype(mb->name);
 
-//printf("movecon4: mb %p mbnum %d lnum %d line %s\n", mb, mb->off, curcnt, mb->name);
+/* printf("movecon4: mb %p mbnum %d lnum %d line %s\n", mb, mb->off, curcnt, mb->name); */
 		if (curcnt)
 			curcnt++;
 		if (ityp == IMREF && (b = strchr(mb->name, '['))) {
@@ -434,7 +434,7 @@ movecon(void)
 		} else
 			errx(1, "FIXME long distance");
 	}
-//printf("movecon8: mb %p mbnum %d\n", mb, mb->off);
+/* printf("movecon8: mb %p mbnum %d\n", mb, mb->off); */
 }
 
 /*

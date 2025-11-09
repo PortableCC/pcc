@@ -59,7 +59,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -1378,7 +1378,7 @@ preprocess_input(char *input, char *output, int dodep)
 	strlist_append_list(&args, &preprocessor_flags);
 	if (ascpp) {
 		strlist_append(&args, "-A");
-		strlist_append(&args, "-D__ASSEMBLER__"); 
+		strlist_append(&args, "-D__ASSEMBLER__");
 	}
 	STRLIST_FOREACH(s, &includes) {
 		strlist_append(&args, "-i");
@@ -1445,7 +1445,7 @@ static char *
 select_linker(char *name)
 {
 	static char ld_name[8];
- 
+
 	/* Short names first.  */
 	if (strcmp(name, "bfd") == 0 ||
 	    strcmp(name, "gold") == 0 ||
@@ -1453,11 +1453,11 @@ select_linker(char *name)
 		snprintf(ld_name, sizeof ld_name, "ld.%s", name);
 		return ld_name;
 	}
- 
+
 	/* Must be absolute path otherwise.  */
 	if (name[0] != '/')
 		return LINKER;
- 
+
 	return name;
 }
 
@@ -1543,14 +1543,14 @@ strlist_exec(struct strlist *l)
 	si.cb = sizeof(STARTUPINFO);
 	ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
 
-	ok = CreateProcess(NULL,  // the executable program
-		cmd,   // the command line arguments
-		NULL,       // ignored
-		NULL,       // ignored
-		TRUE,       // inherit handles
+	ok = CreateProcess(NULL,  /* the executable program */
+		cmd,   /* the command line arguments */
+		NULL,       /* ignored */
+		NULL,       /* ignored */
+		TRUE,       /* inherit handles */
 		HIGH_PRIORITY_CLASS,
-		NULL,       // ignored
-		NULL,       // ignored
+		NULL,       /* ignored */
+		NULL,       /* ignored */
 		&si,
 		&pi);
 
@@ -1924,7 +1924,7 @@ setup_cpp_flags(void)
 		char buf[100]; /* larger than needed */
 		time_t t = time(NULL);
 		char *n = ctime(&t);
-	
+
 		n[19] = 0;
 		snprintf(buf, sizeof buf, "-D__TIME__=\"%s\"", n+11);
 		strlist_prepend(&preprocessor_flags, xstrdup(buf));

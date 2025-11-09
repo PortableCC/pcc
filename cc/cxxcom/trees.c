@@ -56,7 +56,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /*
@@ -651,7 +651,7 @@ nametree(struct symtab *sp)
 #ifndef NO_C_BUILTINS
 	if (sp->sname[0] == '_' && strncmp(sp->sname, "__builtin_", 10) == 0)
 		return p;  /* do not touch builtins here */
-	
+
 #endif
 
 	if (sp->sflags & STNODE) {
@@ -709,7 +709,7 @@ ccast(NODE *p, TWORD t, TWORD u, union dimfun *df, struct attr *ap)
 {
 	NODE *q;
 
-	/* let buildtree do typechecking (and casting) */ 
+	/* let buildtree do typechecking (and casting) */
 	q = block(NAME, NIL, NIL, t, df, ap);
 	p = buildtree(ASSIGN, q, p);
 	nfree(p->n_left);
@@ -741,8 +741,8 @@ concast(NODE *p, TWORD t)
 	if ((p->n_type & TMASK) || (t & TMASK)) /* no cast of pointers */
 		return 0;
 
-//printf("concast till %d\n", t);
-//fwalk(p, eprint, 0);
+/* printf("concast till %d\n", t); */
+/* fwalk(p, eprint, 0); */
 
 #define	TYPMSK(y) ((((1LL << (y-1))-1) << 1) | 1)
 	if (p->n_op == ICON) {
@@ -777,7 +777,7 @@ concast(NODE *p, TWORD t)
 		}
 	}
 	p->n_type = t;
-//fwalk(p, eprint, 0);
+/* fwalk(p, eprint, 0); */
 	return 1;
 }
 
@@ -1605,18 +1605,18 @@ icons(NODE *p)
 	return(val);
 }
 
-/* 
+/*
  * the intent of this table is to examine the
  * operators, and to check them for
  * correctness.
- * 
+ *
  * The table is searched for the op and the
  * modified type (where this is one of the
  * types INT (includes char and short), LONG,
  * DOUBLE (includes FLOAT), and POINTER
- * 
+ *
  * The default action is to make the node type integer
- * 
+ *
  * The actions taken include:
  * 	PUN	  check for puns
  * 	CVTL	  convert the left operand
@@ -1630,7 +1630,7 @@ icons(NODE *p)
  * 	NCVT	  do not convert the operands
  * 	OTHER	  handled by code
  * 	NCVTR	  convert the left operand, not the right...
- * 
+ *
  */
 
 # define MINT 01	/* integer */
@@ -1883,7 +1883,7 @@ doszof(NODE *p)
 		df++;
 		ty = DECREF(ty);
 	}
-	rv = buildtree(MUL, rv, 
+	rv = buildtree(MUL, rv,
 	    xbcon(tsize(ty, p->n_df, p->n_ap)/SZCHAR, NULL, INTPTR));
 	tfree(p);
 	arrstkp = 0; /* XXX - may this fail? */
@@ -1924,7 +1924,7 @@ eprint(NODE *p, int down, int *a, int *b)
 # endif
 
 /*
- * Emit everything that should be emitted on the left side 
+ * Emit everything that should be emitted on the left side
  * of a comma operator, and remove the operator.
  * Do not traverse through QUEST, ANDAND and OROR.
  * Enable this for all targets when stable enough.
@@ -2030,13 +2030,13 @@ andorbr(NODE *p, int _true, int _false)
 	int o, lab;
 
 	lab = -1;
-	switch (o = p->n_op) { 
+	switch (o = p->n_op) {
 	case EQ:
 	case NE:
 		/*
 		 * Remove redundant EQ/NE nodes.
 		 */
-		while (((o = p->n_left->n_op) == EQ || o == NE) && 
+		while (((o = p->n_left->n_op) == EQ || o == NE) &&
 		    p->n_right->n_op == ICON) {
 			o = p->n_op;
 			q = p->n_left;
@@ -2060,7 +2060,7 @@ andorbr(NODE *p, int _true, int _false)
 #endif
 			} else
 				break; /* XXX - should always be false */
-			
+
 		}
 		/* FALLTHROUGH */
 	case LE:
@@ -2339,7 +2339,7 @@ delasgop(NODE *p)
 			/* Now the left side of node p has no side effects. */
 			/* side effects on the right side must be obeyed */
 			p = delasgop(p);
-			
+
 			r = buildtree(ASSIGN, r, ll);
 			r = delasgop(r);
 			ecode(r);
@@ -2355,7 +2355,7 @@ delasgop(NODE *p)
 			p->n_right = delasgop(p->n_right);
 			p->n_right = clocal(p->n_right);
 		}
-		
+
 	} else {
 		if (coptype(p->n_op) == LTYPE)
 			return p;
@@ -2439,7 +2439,7 @@ rdualfld(NODE *p, TWORD t, TWORD ct, int off, int fsz)
 }
 
 /*
- * Write val to a (unaligned) bitfield with length fsz positioned off bits  
+ * Write val to a (unaligned) bitfield with length fsz positioned off bits
  * from d. Bitfield type is t, and type to use when writing is ct.
  * neither f nor d should have any side effects if copied.
  * Multiples of ct are supposed to be written without problems.
@@ -2447,33 +2447,33 @@ rdualfld(NODE *p, TWORD t, TWORD ct, int off, int fsz)
  */
 static NODE *
 wrualfld(NODE *val, NODE *d, TWORD t, TWORD ct, int off, int fsz)
-{ 
+{
 	NODE *p, *q, *r, *rn, *s;
 	int ctsz, t2f, inbits;
- 
+
 	ctsz = (int)tsize(ct, 0, 0);
-  
+
 	ct = ENUNSIGN(ct);
 	d = makety(d, PTR|ct, 0, 0, 0);
 
 	for (t2f = 0; off > ctsz; t2f++, off -= ctsz)
 		;
- 
+
 	if (off + fsz <= ctsz) {
 		r = tempnode(0, ct, 0, 0);
 
 		/* only one operation needed */
-		d = buildtree(UMUL, buildtree(PLUS, d, bcon(t2f)), 0);	
-		p = ccopy(d); 
+		d = buildtree(UMUL, buildtree(PLUS, d, bcon(t2f)), 0);
+		p = ccopy(d);
 		p = TYPAND(p, xbcon(~(SZMASK(fsz) << off), 0, ct), ct);
 
 		val = makety(val, ct, 0, 0, 0);
 		q = TYPAND(val, xbcon(SZMASK(fsz), 0, ct), ct);
 		q = buildtree(ASSIGN, ccopy(r), q);
 
-		q = TYPLS(q, bcon(off), ct);   
+		q = TYPLS(q, bcon(off), ct);
 		p = TYPOR(p, q, ct);
-		p = makety(p, t, 0, 0, 0);     
+		p = makety(p, t, 0, 0, 0);
 		rn = buildtree(ASSIGN, d, p);
 		rn = buildtree(COMOP, rn, makety(r, t, 0, 0, 0));
 	} else {
@@ -2483,8 +2483,8 @@ wrualfld(NODE *val, NODE *d, TWORD t, TWORD ct, int off, int fsz)
 		r = buildtree(UMUL, buildtree(PLUS, ccopy(d), bcon(t2f)), 0);
 		p = ccopy(r);
 		p = TYPAND(p, xbcon(SZMASK(off), 0, ct), ct);
-		q = ccopy(val); 
-		q = TYPLS(q, bcon(off), t);  
+		q = ccopy(val);
+		q = TYPLS(q, bcon(off), t);
 		q = makety(q, ct, 0, 0, 0);
 		p = TYPOR(p, q, ct);
 		rn = buildtree(ASSIGN, r, p);
@@ -2586,7 +2586,7 @@ rmfldops(NODE *p)
 			q = q->n_left;
 			t1 = tempnode(0, q->n_left->n_type, 0, 0);
 			r = buildtree(ASSIGN, ccopy(t1), q->n_left);
-			
+
 			bt = bt ? block(COMOP, bt, r, INT, 0, 0) : r;
 			q->n_left = t1;
 		}
@@ -2627,7 +2627,7 @@ rmfldops(NODE *p)
 			q = buildtree(COMOP, q, r);
 			r = wrualfld(t4, t1, t, ct, foff, fsz);
 			q = buildtree(COMOP, q, r);
-		
+
 			if (bt)
 				q = block(COMOP, bt, q, t, 0, 0);
 			nfree(p->n_left);
@@ -2671,7 +2671,7 @@ ecomp(NODE *p)
 
 
 #if defined(MULTIPASS)
-void	
+void
 p2tree(NODE *p)
 {
 	struct symtab *q;
@@ -2861,7 +2861,7 @@ delvoid(NODE *p, void *arg)
 		} else
 			p->n_type = (p->n_type & ~BTMASK) | BOOL_TYPE;
 	}
-		
+
 }
 
 /*
@@ -2915,7 +2915,7 @@ pprop(NODE *p, TWORD t, struct attr *ap)
 		t2 = p->n_left->n_type;
 		if (p->n_left->n_op == TEMP) {
 			/* Will be converted to memory in pass2 */
-			if (!ISPTR(t2) && DECREF(t) != t2) 
+			if (!ISPTR(t2) && DECREF(t) != t2)
 				; /* XXX cannot convert this */
 			else
 				p->n_left->n_type = DECREF(t);
@@ -2946,7 +2946,7 @@ pprop(NODE *p, TWORD t, struct attr *ap)
 			if (ISPTR(p->n_right->n_type))
 				break; /* change both */
 			p->n_left = pprop(p->n_left, t, ap);
-		} else 
+		} else
 			p->n_right = pprop(p->n_right, t, ap);
 		return p;
 
@@ -3015,11 +3015,11 @@ rmpconv(NODE *p)
 #endif
 
 void
-ecode(NODE *p)	
+ecode(NODE *p)
 {
 	/* walk the tree and write out the nodes.. */
 
-	if (nerrors)	
+	if (nerrors)
 		return;
 
 #ifdef GCC_COMPAT
@@ -3042,8 +3042,8 @@ ecode(NODE *p)
 	walkf(p, delvoid, 0);
 #ifdef PCC_DEBUG
 	if (xdebug) {
-		printf("Fulltree:\n"); 
-		fwalk(p, eprint, 0); 
+		printf("Fulltree:\n");
+		fwalk(p, eprint, 0);
 	}
 #endif
 	p2tree(p);
@@ -3244,12 +3244,12 @@ cdope(int op)
 	return 0; /* XXX gcc */
 }
 
-/* 
+/*
  * make a fresh copy of p
  */
 NODE *
-ccopy(NODE *p) 
-{  
+ccopy(NODE *p)
+{
 	NODE *q;
 
 	q = talloc();
@@ -3258,7 +3258,7 @@ ccopy(NODE *p)
 	switch (coptype(q->n_op)) {
 	case BITYPE:
 		q->n_right = ccopy(p->n_right);
-	case UTYPE: 
+	case UTYPE:
 		q->n_left = ccopy(p->n_left);
 	}
 

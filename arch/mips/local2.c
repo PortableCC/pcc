@@ -328,7 +328,7 @@ static void
 starg(NODE *p)
 {
 	int sz = attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0);
-	//assert(p->n_rval == A1);
+	/* assert(p->n_rval == A1); */
 	printf("\tsubu %s,%s,%d\n", rnames[SP], rnames[SP], sz);
 	/* A0 = dest, A1 = src, A2 = len */
 	printf("\tmove %s,%s\n", rnames[A0], rnames[SP]);
@@ -561,7 +561,7 @@ emulop(NODE *p)
 	else if (p->n_op == RS && p->n_type == LONGLONG) ch = "ashrdi3";
 	else if (p->n_op == RS && (p->n_type == LONG || p->n_type == INT))
 		ch = "ashrsi3";
-	
+
 	else if (p->n_op == DIV && p->n_type == LONGLONG) ch = "divdi3";
 	else if (p->n_op == DIV && (p->n_type == LONG || p->n_type == INT))
 		ch = "divsi3";
@@ -626,7 +626,7 @@ twollcomp(NODE *p)
 		cb1 = LT;
 		cb2 = GT;
 		break;
-	
+
 	default:
 		cb1 = cb2 = 0; /* XXX gcc */
 	}
@@ -1130,7 +1130,7 @@ rmove(int s, int d, TWORD t)
 			print_reg64name(stdout, s, 0);
 			printf("\t# 64-bit rmove\n");
                         printf("\tmove ");
-			print_reg64name(stdout, d, 1); 
+			print_reg64name(stdout, d, 1);
 			printf(",");
 			print_reg64name(stdout, s, 1);
 			printf("\n");
@@ -1272,7 +1272,7 @@ argsiz(NODE *p)
 	if (sz == 8 && (size & 7) != 0)
 		sz += 4;
 
-//	printf("size=%d, sz=%d -> %d\n", size, sz, size + sz);
+	/* printf("size=%d, sz=%d -> %d\n", size, sz, size + sz); */
 	return (size + sz);
 }
 

@@ -211,7 +211,7 @@ struct optab table[] = {
 		"ZT	xor U1,U1\n", },
 
 /* convert char (in register) to double XXX - use NTEMP */
-/* FIXME : need NSPECIAL to force into AL 
+/* FIXME : need NSPECIAL to force into AL
 	check AX:DX right way around ! */
 { SCONV,	INFL,
 		SHCH|SOREG|SNAME,	TCHAR,
@@ -435,7 +435,7 @@ struct optab table[] = {
 		"	movl U1, 10[sp]\n"
 		"	fldcw 4[sp]\n"
 		"	add sp, #16\n", },
- 
+
 
 
 /* slut sconv */
@@ -456,11 +456,11 @@ struct optab table[] = {
 		0,	0,
 		"	call CL\nZC", },
 
-//{ UCALL,	FOREFF,
-//	SCON,	TANY,
-//	SAREG,	TP16,
-//		0,	0,
-//		"	call CL\nZC", },
+/* { UCALL,	FOREFF,
+	SCON,	TANY,
+	SAREG,	TP16,
+		0,	0,
+		"	call CL\nZC", }, */
 
 { CALL,	INAREG,
 		SCON,			TANY,
@@ -787,7 +787,7 @@ struct optab table[] = {
    shifts by 8 16 24 and 32 as moves between registers for
    the bigger types. (eg >> 16 on a long might be mov dx, ax,
    xor ax, ax) */
-   
+
 { LS,		INCREG,
 		SCREG,			T32,
 		SHCH,			T8,
@@ -799,11 +799,11 @@ struct optab table[] = {
    variant, especially including the cost of a) loading cl b) probably
    having to boot something out of cx in the first place. For memory
    its 15+EA v 20 + EA + 4/bit, so the other way.
-   
-   8,16,24 should of course be done by loads.. FIXME 
-   
+
+   8,16,24 should of course be done by loads.. FIXME
+
    Also the compiler keeps generating mov dh, #8, mov cl, dh.. FIXME
-   
+
    For 80186 onwards we have shl reg, immediate (other than 1), 186 shift
    is also much faster */
 
@@ -930,7 +930,7 @@ struct optab table[] = {
 /*
  * The next rules takes care of assignments. "=".
  */
- 
+
 { ASSIGN,	FORCC|FOREFF|INL,
 		SHL,			T32,
 		SMIXOR,			TANY,
@@ -1093,7 +1093,7 @@ struct optab table[] = {
 		"F	mov A1,si\nZQF	mov si,A1\n", },
 
 /*
- * DIV/MOD/MUL 
+ * DIV/MOD/MUL
  */
 /* long div is emulated */
 { DIV,	INCREG,
@@ -1105,14 +1105,14 @@ struct optab table[] = {
 /* REVIEW We can only do (i)divb ax/byte  and (i)divw (dx:ax)/word
    and the results are always in ah/al (remainer/mod)
    or dx:ax (dx = remainer, ax = mod)
-   
+
    Power of two needs to be done by shifts. For other cases of constants
    we need to implement two things
    1. Spotting add sequences for constants with few 1 bits on one side
    2. Spotting cases we can compute the magic constant to multiply with for
       the same result */
-   
-   
+
+
 { DIV,	INAREG,
 		SAREG,			TUNSIGNED|TPOINT,
 		SAREG|SNAME|SOREG,	TUNSIGNED|TPOINT,
@@ -1158,13 +1158,13 @@ struct optab table[] = {
 
 /* (u)long mul is emulated */
 /* On 8086 we can only do multiplies of al * value into ax (for 8bit)
-   or ax * value into dx:ax for 16bit 
-   
+   or ax * value into dx:ax for 16bit
+
    80186 allows us to do a signed multiply of a register with a constant
    into a second register
-   
+
    Same about shifts, and add optimisations applies here too */
-   
+
 /* 32bit mul is emulated (for now) */
 { MUL,		INCREG,
 		SCREG|SNAME|SOREG|SCON,		T32,
@@ -1299,8 +1299,8 @@ struct optab table[] = {
    		sum1 = (sum1 & 0xFFFF) + (sum1 >> 16);
 	writes a pile of crap code.
 */
-   	
-   	
+
+
 { AND,	INCREG|FOREFF,
 		SCREG,			T32,
 		SCREG|SOREG|SNAME,	T32,
@@ -1313,7 +1313,7 @@ struct optab table[] = {
 		0,			RLEFT,
 		"	and AR,AL\n", },
 
-{ AND,	INAREG|FOREFF,  
+{ AND,	INAREG|FOREFF,
 		SAREG|SOREG|SNAME,	T16,
 		SCON|SAREG,		T16,
 		0,			RLEFT,
@@ -1488,7 +1488,7 @@ struct optab table[] = {
  *
  * char has already been promoted to integer types
  */
- 
+
 /* Push immediate not 8086... Loading a register and pushing costs us
    4 + 11 clocks, loading memory would cost us 16 + EA */
 { FUNARG,	FOREFF,

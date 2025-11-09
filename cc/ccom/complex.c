@@ -280,17 +280,17 @@ cxop(int op, P1ND *l, P1ND *r)
 		return p;
 
 	case UMINUS:
-		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, real), 
+		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, real),
 		    buildtree(op, real_l, NULL)));
-		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, imag), 
+		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, imag),
 		    buildtree(op, imag_l, NULL)));
 		break;
 
 	case PLUS:
 	case MINUS:
-		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, real), 
+		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, real),
 		    buildtree(op, real_l, real_r)));
-		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, imag), 
+		p = comop(p, buildtree(ASSIGN, structref(p1tcopy(q), DOT, imag),
 		    buildtree(op, imag_l, imag_r)));
 		break;
 
@@ -470,7 +470,7 @@ imret(P1ND *p, P1ND *q)
 		} else
 			p = bcon(0);
 	}
-		
+
 	return p;
 }
 
@@ -511,7 +511,7 @@ cxcast(P1ND *p1, P1ND *p2)
 }
 
 void
-//cxargfixup(P1ND *a, TWORD dt, struct attr *ap)
+/* cxargfixup(P1ND *a, TWORD dt, struct attr *ap) - old signature */
 cxargfixup(P1ND *a, struct tdef *td)
 {
 	P1ND *p;

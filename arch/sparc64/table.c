@@ -2,11 +2,11 @@
 
 /*
  * Copyright (c) 2008 David Crawshaw <david@zentus.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -25,7 +25,7 @@
 #define XSL(c)  NEEDS(NREG(c, 1), NSL(c))
 #define NAREG   NEEDS(NREG(A, 1))
 #define NBREG   NEEDS(NREG(B, 1))
-#define NCREG   NEEDS(NREG(C, 1))   
+#define NCREG   NEEDS(NREG(C, 1))
 #define NARL    NEEDS(NREG(A, 1), NSL(A), NSR(A))
 #define NBRL    NEEDS(NREG(B, 1), NSL(B), NSR(B))
 #define NCRL    NEEDS(NREG(C, 1), NSL(C), NSR(C))
@@ -170,7 +170,7 @@ struct optab table[] = {
 	SBREG,	TFLOAT,
 		NBREG,	RESC1,
 		"	ld [AL],A1	\t\t! int32/16/8 -> float\n"
-		"	fitos A1,A1\n", }, // XXX need 'lds', 'ldh', etc
+		"	fitos A1,A1\n", }, /* XXX need 'lds', 'ldh', etc */
 
 { SCONV,	INCREG,
 	SOREG,	T64|TUNSIGNED,
@@ -184,7 +184,7 @@ struct optab table[] = {
 	SCREG,	TDOUBLE,
 		NCREG,	RESC1,
 		"	ld [AL],A1	\t\t! int32/16/8 -> double\n"
-		"	fitod A1,A1\n", }, // XXX need 'lds' 'ldh' 'ld', etc.
+		"	fitod A1,A1\n", }, /* XXX need 'lds' 'ldh' 'ld', etc. */
 
 { SCONV,	INBREG,
 	SCREG,	TDOUBLE,
@@ -391,14 +391,14 @@ struct optab table[] = {
 	SAREG,	TSHORT|TUSHORT,
 		0,	RDEST,
         	"	sth AR,[AL]		! store (u)int16\n"
-		"	nop\n", },	
+		"	nop\n", },
 
 { ASSIGN,	FOREFF|INAREG,
 	SOREG,	TCHAR|TUCHAR,
 	SAREG,	TCHAR|TUCHAR,
 		0,	RDEST,
         	"	stb AR,[AL]		! store (u)int8\n"
-		"	nop\n", },	
+		"	nop\n", },
 
 { ASSIGN,	FOREFF|INAREG,
 	SOREG,	T64,

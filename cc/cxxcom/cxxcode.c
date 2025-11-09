@@ -87,7 +87,7 @@ callftn(char *n, ...)
 				a = buildtree(CM, a, b);
 		} while (b != NULL);
 	}
-	
+
 	p = doacall(sp, nametree(sp), a, 0);
 	va_end(ap);
 	return p;
@@ -111,7 +111,7 @@ cxx_new(NODE *p)
 	}
 	if (p->n_op != TYPE)
 		uerror("new used illegally");
-	t1 = buildtree(MUL, t1, 
+	t1 = buildtree(MUL, t1,
 	    xbcon(tsize(p->n_type, p->n_df, p->n_ap)/SZCHAR, NULL, INTPTR));
 	tfree(q);
 	return callftn(decoratename(NULL, nw), t1, NULL);
@@ -127,58 +127,58 @@ cxx_delete(NODE *p, int del)
 }
 
 /*
-  <operator-name> ::= nw	# new           
+  <operator-name> ::= nw	# new
 		  ::= na	# new[]
-		  ::= dl	# delete        
-		  ::= da	# delete[]      
+		  ::= dl	# delete
+		  ::= da	# delete[]
 		  ::= ps        # + (unary)
-		  ::= ng	# - (unary)     
-		  ::= ad	# & (unary)     
-		  ::= de	# * (unary)     
-		  ::= co	# ~             
-		  ::= pl	# +             
-		  ::= mi	# -             
-		  ::= ml	# *             
-		  ::= dv	# /             
-		  ::= rm	# %             
-		  ::= an	# &             
-		  ::= or	# |             
-		  ::= eo	# ^             
-		  ::= aS	# =             
-		  ::= pL	# +=            
-		  ::= mI	# -=            
-		  ::= mL	# *=            
-		  ::= dV	# /=            
-		  ::= rM	# %=            
-		  ::= aN	# &=            
-		  ::= oR	# |=            
-		  ::= eO	# ^=            
-		  ::= ls	# <<            
-		  ::= rs	# >>            
-		  ::= lS	# <<=           
-		  ::= rS	# >>=           
-		  ::= eq	# ==            
-		  ::= ne	# !=            
-		  ::= lt	# <             
-		  ::= gt	# >             
-		  ::= le	# <=            
-		  ::= ge	# >=            
-		  ::= nt	# !             
-		  ::= aa	# &&            
-		  ::= oo	# ||            
+		  ::= ng	# - (unary)
+		  ::= ad	# & (unary)
+		  ::= de	# * (unary)
+		  ::= co	# ~
+		  ::= pl	# +
+		  ::= mi	# -
+		  ::= ml	# *
+		  ::= dv	# /
+		  ::= rm	# %
+		  ::= an	# &
+		  ::= or	# |
+		  ::= eo	# ^
+		  ::= aS	# =
+		  ::= pL	# +=
+		  ::= mI	# -=
+		  ::= mL	# *=
+		  ::= dV	# /=
+		  ::= rM	# %=
+		  ::= aN	# &=
+		  ::= oR	# |=
+		  ::= eO	# ^=
+		  ::= ls	# <<
+		  ::= rs	# >>
+		  ::= lS	# <<=
+		  ::= rS	# >>=
+		  ::= eq	# ==
+		  ::= ne	# !=
+		  ::= lt	# <
+		  ::= gt	# >
+		  ::= le	# <=
+		  ::= ge	# >=
+		  ::= nt	# !
+		  ::= aa	# &&
+		  ::= oo	# ||
 		  ::= pp	# ++ (postfix in <expression> context)
-		  ::= mm	# -- (postfix in <expression> context)           
-		  ::= cm	# ,             
-		  ::= pm	# ->*           
-		  ::= pt	# ->            
-		  ::= cl	# ()            
-		  ::= ix	# []            
-		  ::= qu	# ?             
+		  ::= mm	# -- (postfix in <expression> context)
+		  ::= cm	# ,
+		  ::= pm	# ->*
+		  ::= pt	# ->
+		  ::= cl	# ()
+		  ::= ix	# []
+		  ::= qu	# ?
 		  ::= st	# sizeof (a type)
 		  ::= sz	# sizeof (an expression)
                   ::= at        # alignof (a type)
                   ::= az        # alignof (an expression)
-		  ::= cv <type>	# (cast)        
+		  ::= cv <type>	# (cast)
 		  ::= v <digit> <source-name>	# vendor extended operator
 */
 
@@ -274,7 +274,7 @@ static void
 pshargs(union arglist *al)
 {
 	TWORD t;
-	
+
 
 	for (; al->type != TNULL; al++) {
 		t = al->type;
@@ -432,7 +432,7 @@ char *symclass[] = { "NORMAL", "CLASS", "LABEL", "MOS", "STRING" };
  * may not be correct.
  * If no symbol is found, return a new symtab entry.
  * p should be a NAME after this with n_sp filled in accordingly.
- * It's the responsibility of the declaration routine to add it to 
+ * It's the responsibility of the declaration routine to add it to
  * the symbol table.
  * nfree() will be called on p after this function.
  */
@@ -499,7 +499,7 @@ cxxlookup(NODE *p, int flags)
 			}
 		}
 	}
-	
+
 	/* make top node a NAME */
 	if (q->n_op != NAME) {
 		tfree(q->n_left);
@@ -554,10 +554,10 @@ cxxdclstr(char *n)
 		sp = sfind(n, sp->snext);
 	if (sp == 0)
 		sp = getsymtab(n, STAGNAME);
-//	else
-//		uerror("class/namespace redefined");
-//	INSSYM(sp);
-//	nscur = sp;
+	/* else
+		uerror("class/namespace redefined");
+	INSSYM(sp);
+	nscur = sp; */
 
 if (cppdebug)printf("declaring2 struct %s %p nscur %s\n", n, sp, nscur->sname);
 	return sp;
@@ -567,7 +567,7 @@ if (cppdebug)printf("declaring2 struct %s %p nscur %s\n", n, sp, nscur->sname);
 static void
 symwalk(struct symtab *sp, int indent)
 {
-	int i; 
+	int i;
 
 	while (sp) {
 		for (i = 0; i < indent; i++)
@@ -756,7 +756,7 @@ undecl:
 }
 
 /*
- * Search for correct matching function in a struct depending on 
+ * Search for correct matching function in a struct depending on
  * argument list a.  Return a call node for this function.
  * Do not touch neither f nor a.
  * return a name tree suitable for a function call.

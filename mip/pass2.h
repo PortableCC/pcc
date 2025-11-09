@@ -29,7 +29,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/types.h>
@@ -332,8 +332,8 @@ extern	int dope[];	/* a vector containing operator information */
 extern	char *opst[];	/* a vector containing names for ops */
 
 #ifdef PCC_DEBUG
-
-static inline int
+/* Debug versions - static functions for better error checking */
+static int
 optype(int o)
 {
 	if (o >= MAXOP+1)
@@ -341,7 +341,7 @@ optype(int o)
 	return (dope[o]&TYFLG);
 }
 
-static inline int
+static int
 asgop(int o)
 {
 	if (o >= MAXOP+1)
@@ -349,7 +349,7 @@ asgop(int o)
 	return (dope[o]&ASGFLG);
 }
 
-static inline int
+static int
 logop(int o)
 {
 	if (o >= MAXOP+1)
@@ -357,7 +357,7 @@ logop(int o)
 	return (dope[o]&LOGFLG);
 }
 
-static inline int
+static int
 callop(int o)
 {
 	if (o >= MAXOP+1)
@@ -366,9 +366,9 @@ callop(int o)
 }
 
 #else
-
+/* Production versions - macro definitions for performance */
 #define optype(o)	(dope[o]&TYFLG)
-#define asgop(o)	(dope[o]&ASGFLG) 
+#define asgop(o)	(dope[o]&ASGFLG)
 #define logop(o)	(dope[o]&LOGFLG)
 #define callop(o)	(dope[o]&CALLFLG)
 

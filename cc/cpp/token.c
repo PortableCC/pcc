@@ -226,7 +226,7 @@ packbuf(void)
 				;
 			if (--p >= pend)
 				return;
-	
+
 			switch (*p) {
 			case '?':
 				if (p[1] == '?'&& chktg2(p[2]))
@@ -261,7 +261,7 @@ psave:				if (pend-p < 3) {
 			p++;
 		}
 slow:		q = p;
-	} 
+	}
 
 /* need to pack, so we must write as well */
 
@@ -325,7 +325,7 @@ slow:		q = p;
 
 	}
 
-psave2:	
+psave2:
 	/* Save for future use */
 #ifdef PCC_DEBUG
 	if (pend-p > 9)
@@ -788,7 +788,7 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 					warning("unterminated literal");
 					p--;
 					break;
-				} else if (c2 == ch) 
+				} else if (c2 == ch)
 					break;
 				p++;
 			}
@@ -1010,11 +1010,11 @@ ident:		if (ISID0(t) == 0)
 		}
 		break;
 	}
-//fprintf(stderr, "uulex1: ch '%c' %d val=%lld '%s'\n", ch, ch, yynode.nd_val, inp);
+/* fprintf(stderr, "uulex1: ch '%c' %d val=%lld '%s'\n", ch, ch, yynode.nd_val, inp); */
 	return ch;
 
 pb:	*--inp = c2;
-//fprintf(stderr, "uulex2: ch '%c' %d val=%lld '%s'\n", ch, ch, yynode.nd_val, inp);
+/* fprintf(stderr, "uulex2: ch '%c' %d val=%lld '%s'\n", ch, ch, yynode.nd_val, inp); */
 	return ch;
 }
 

@@ -26,7 +26,7 @@ struct optab table[] = {
 	SANY,		TINT|TPOINT,
 		NAREG,	RESC1,
 		"	mov.b AL, A1\n", },
-    
+
 /* unsigned char -> long */
 { SCONV,	INAREG,
 	SCREG,		TUCHAR,
@@ -124,7 +124,7 @@ struct optab table[] = {
 	SAREG|SNAME|SOREG,	TL,
 		0,	RLEFT,
 		"	not.w AR,AL\n	not.w UR,UL\n", },
-	
+
 { OPSIMP,	INAREG|FOREFF,
 	SAREG,			TWORD|TPOINT,
 	SAREG|SNAME|SOREG|SCON,	TWORD|TPOINT,
@@ -133,26 +133,26 @@ struct optab table[] = {
 
 /* XXX - Is this rule really correct? Having a SAREG shape seems kind of
    strange. Doesn't work. Gives a areg as A1. */
-#if 0	
+#if 0
 { OPSIMP,	INBREG,
 	SAREG,			TWORD|TPOINT,
 	SAREG|SBREG|SNAME|SOREG|SCON,	TWORD|TPOINT,
 		NBREG,	RESC1,
 		"	++Ow AR,A1\n", },
 #endif
-	
+
 { OPSIMP,	INBREG,
 	SBREG,			TWORD|TPOINT,
 	SAREG|SBREG|SNAME|SOREG|SCON,	TWORD|TPOINT,
 		0,	RLEFT,
 		"	Ow AR,AL\n", },
-	
+
 { OPSIMP,	INCREG|FOREFF,
 	SCREG,			TCH,
 	SCREG|SNAME|SOREG|SCON,	TCH,
 		0,	RLEFT,
 		"	Ob AR,AL\n", },
-	
+
 /* XXX - Do these work? check nspecial in order.c */
 /* signed integer division */
 { DIV,		INAREG,
@@ -160,7 +160,7 @@ struct optab table[] = {
 	SAREG|SNAME|SOREG,	TWORD,
 	  /*2*NAREG|NASL|*/NSPECIAL,		RLEFT,
 		"	div.w AR\n	mov.w r0,AL\n", },
-      //		"	xor.w r2\n	div.w AR\n", },
+      /* "	xor.w r2\n	div.w AR\n", }, */
 
 
 /* signed integer/char division - separate entry for FOREFF */
@@ -177,9 +177,9 @@ struct optab table[] = {
 	SCREG|SNAME|SOREG,	TCH,
 		2*NCREG|NCSL|NSPECIAL,		RLEFT,
 		"	div.b AR\n\tmov.b r0l,AL\n", },
-      //		"	xor.w r2\n	div.w AR\n", },
+      /* "	xor.w r2\n	div.w AR\n", }, */
 #endif
-	
+
 /* signed integer modulus, equal to above */
 { MOD,		INAREG,
 	SAREG,			TINT,
@@ -313,13 +313,13 @@ struct optab table[] = {
 	SANY,	TANY,
 	SCON|SNAME|SOREG|SAREG|SBREG,	TWORD|TPOINT,
 		NAREG,	RESC1,
-		"	mov.w AR,A1\n", },	
+		"	mov.w AR,A1\n", },
 
 { OPLTYPE,	INBREG,
 	SANY,	TANY,
 	SBREG|SCON|SNAME|SOREG|SAREG,	TWORD|TPOINT,
 		NBREG,	RESC1,
-		"	mov.w AR,A1\n", },	
+		"	mov.w AR,A1\n", },
     /*
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
@@ -333,13 +333,13 @@ struct optab table[] = {
 		NBREG,	RESC1,
 		"	mov.b AR,A1\n", },
     */
-    
+
 { OPLTYPE,	INCREG,
 	SANY,			TANY,
 	SCON|SNAME|SOREG,	TCHAR|TUCHAR,
 		NCREG,	RESC1,
 		"	mov.b AR,A1\n", },
-    
+
 { COMPL,	INAREG,
 	SAREG,	TWORD,
 	SANY,		TANY,
@@ -351,7 +351,7 @@ struct optab table[] = {
 	SANY,		TANY,
 		0,	RLEFT,
 		"	not.b AL\n", },
-	
+
 /* Push function address */
 { FUNARG,	FOREFF,
 	SCON,	TFTN,
@@ -397,7 +397,7 @@ struct optab table[] = {
 	SCON,	TFTN,
 		0,	RLEFT,
 		"ZD", },
-    
+
 { ASSIGN,	INBREG,
 	SBREG,	TFTN,
 	SCON,	TFTN,
@@ -415,7 +415,7 @@ struct optab table[] = {
 	SBREG|SAREG|SOREG|SNAME,	TFTN,
 		0,	RLEFT,
 		"	mov.w AR,AL\n	mov.w UR,UL\n", },
-    
+
 { ASSIGN,	INAREG,
 	SBREG|SAREG|SOREG|SNAME,	TFTN,
 	SAREG,	TFTN,
@@ -446,7 +446,7 @@ struct optab table[] = {
 	SBREG,	TL,
 		0,	RRIGHT,
 		"	mov.w AR,AL\n	mov.w UR,UL\n", },
-    
+
 { ASSIGN,	FOREFF,
 	SBREG|SAREG|SOREG|SNAME,	TL,
 	SCON|SBREG|SAREG|SOREG|SNAME,	TL,
@@ -464,7 +464,7 @@ struct optab table[] = {
 	SCON,	TANY,
 		0,	RLEFT,
 		"	mov.w AR,AL\n", },
-    
+
 { ASSIGN,	FOREFF,
 	SNAME|SOREG,	TWORD|TPOINT,
 	SCON,		TANY,
@@ -490,7 +490,7 @@ struct optab table[] = {
 	SOREG|SNAME,	TWORD|TPOINT,
 		0,	RLEFT,
 		"	mov.w AR,AL\n", },
-    
+
 { ASSIGN,	FOREFF|INAREG,
 	SOREG|SNAME,	TWORD|TPOINT,
 	SAREG,	TWORD|TPOINT,
@@ -502,7 +502,7 @@ struct optab table[] = {
 	SBREG,	TWORD|TPOINT,
 		0,	RRIGHT,
 		"	mov.w AR,AL\n", },
-    
+
 { ASSIGN,	FOREFF|INCREG,
 	SOREG|SNAME,	TCHAR|TUCHAR,
 	SCREG,	TCHAR|TUCHAR,
@@ -520,7 +520,7 @@ struct optab table[] = {
         SBREG,  TWORD|TPOINT,
                 0,      RRIGHT,
                 "	mov.w AR,AL\n", },
-	
+
 { UMUL, 	INAREG,
 	SBREG,	TPOINT|TWORD,
 	SANY,  	TFTN,
@@ -544,13 +544,13 @@ struct optab table[] = {
 	SANY,	TCHAR|TUCHAR,
 		NAREG,	RESC1,
     		"	mov.b [AL], A1\n", },
-    
+
 { UCALL,	FOREFF,
 	SCON,	TANY,
 	SANY,	TANY,
 		0,	0,
 		"	jsr.w CL\nZB", },
-    
+
 { UCALL,	INAREG,
 	SCON,	TANY,
 	SANY,	TANY,
@@ -566,9 +566,9 @@ struct optab table[] = {
 { UCALL,        FOREFF,
 	SNAME|SOREG,	TANY,
 	SANY,		TANY,
-		0,     0,  
+		0,     0,
 		"	jsri.a AL\nZB", },
-    
+
 { UCALL,        INAREG,
 	SBREG,   TANY,
 	SANY,   TANY,
@@ -581,7 +581,7 @@ struct optab table[] = {
 		0,     0,
 		"	jsri.a [AL]\nZB", },
 
-    
+
 { FREE, FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	FREE,	"help; I'm in trouble\n" },
 };
 

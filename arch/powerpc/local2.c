@@ -107,7 +107,7 @@ static TWORD ftype;
 void
 prologue(struct interpass_prolog *ipp)
 {
-int i, sz, addto = p2framesize; //p2maxautooff;
+int i, sz, addto = p2framesize; /* p2maxautooff; */
 
 #ifdef PCC_DEBUG
 	if (x2debug)
@@ -121,13 +121,13 @@ int i, sz, addto = p2framesize; //p2maxautooff;
 			ipp->ip_tmpnum,
 			ipp->ip_lblnum);
 
-	printf("; p2framesize = %d, p2calls = %d, p2autooff = %d\n", 
+	printf("; p2framesize = %d, p2calls = %d, p2autooff = %d\n",
 			p2framesize, p2calls, p2autooff);
 #endif
 
 	if (p2framesize == 0)
 		return; /* no need to create a stack frame */
-				
+
 #if defined(ELFABI)
 
 	sz = p2autooff;
@@ -161,7 +161,7 @@ int i, sz, addto = p2framesize; //p2maxautooff;
 		/* get return address (not required for leaf function) */
 		printf("\tmflr %s\n", rnames[R0]);
 		printf("\tstw %s,4(%s)\n", rnames[R0], rnames[R1]);
-		
+
 		if (kflag) {
 		/* save registers R30 and R31 */
 			printf("\tstmw %s,-8(%s)	; save GOTREG\n", rnames[GOTREG], rnames[FPREG]);
@@ -170,9 +170,9 @@ int i, sz, addto = p2framesize; //p2maxautooff;
 		}
 	}
 
-	
+
 #elif defined(MACHOABI)
-	/* 
+	/*
 	 * Mach-O defines a "linkage area" where the LR, CR and SP are saved.
 	 * This area is used by the CALLEE but MUST be included in the stack
 	 * area of the CALLER.  Additionally, values are stored in slightly
@@ -192,21 +192,21 @@ int i, sz, addto = p2framesize; //p2maxautooff;
 	 */
 	char* scratch;
 	sz = 4;
-	
+
 	if (p2calls) {
-	 
+
 		printf("\tmflr  %s			; save the link register\n", rnames[R0]);
 		printf("\tstw   %s,8(%s)\n", rnames[R0],rnames[SPREG]);
 		printf("\tmfcr  %s			; save the condition register\n", rnames[R0]);
 		printf("\tstw   %s,4(%s)\n", rnames[R0],rnames[SPREG]);
-#if 0 //defined(FPREG)	 
+#if 0 /* defined(FPREG) */
 		/* Mach-O does not use a frame pointer, but pcc does. */
 		printf("\tmr %s,%s	; preserve FPREG\n", rnames[R0], rnames[FPREG]);
 		printf("\tmr %s,%s	; establish new frame pointer\n", rnames[FPREG], rnames[SPREG]);
 #endif
 
-		
-#if 0 // defined(FPREG)
+
+#if 0 /* defined(FPREG) */
 		printf("\tstw %s,-4(%s)		; save PICREG relative to frame pointer\n", rnames[PICREG], rnames[FPREG]);
 		printf("\tstw %s,-8(%s)		; save FPREG relative to frame pointer\n", rnames[R0], rnames[FPREG]);
 		scratch = rnames[FPREG];
@@ -224,7 +224,7 @@ int i, sz, addto = p2framesize; //p2maxautooff;
 #endif
 	}
 
-	/* save non-volatile registers from the frame/stack pointer down */	
+	/* save non-volatile registers from the frame/stack pointer down */
 	/* stmw is an option for saving off multiple registers but slower than stw */
 printf("; p2env.p_regs = 0x%x%x\n", p2env.p_regs[0], p2env.p_regs[1]);
 	for (i = 0; i < MAXREGS; i++) {
@@ -232,11 +232,11 @@ printf("; p2env.p_regs = 0x%x%x\n", p2env.p_regs[0], p2env.p_regs[1]);
 			sz += (SZLONG/SZCHAR);
 			if (sz == addto)
 				cerror("collision between stack and frame");
-		
+
 			printf("\tstw %s,-%d(%s)\n", rnames[i], sz, scratch);
 		}
 	}
-	
+
 	if (p2calls) {
 		/* create the new stack frame */
 		if (addto > 32767) {
@@ -249,7 +249,7 @@ printf("; p2env.p_regs = 0x%x%x\n", p2env.p_regs[0], p2env.p_regs[1]);
 			printf("\tstwu %s,-%d(%s)	; move the stack pointer\n", rnames[SPREG], addto, rnames[SPREG]);
 		}
 	}
-	
+
 	printf("\tbcl 20,31,\"L%s$pb\"\n", ipp->ipp_name + 1);
 	printf("\"L%s$pb\":\n", ipp->ipp_name + 1);
 	printf("\tmflr %s\n", rnames[PICREG]);
@@ -294,13 +294,13 @@ int idx = 1;
 		goto noframe; /* no need to create a stack frame */
 
 	/* struct return needs special treatment */
-	if (ftype == STRTY || ftype == UNIONTY) 
+	if (ftype == STRTY || ftype == UNIONTY)
 		cerror("eoftn");
-	
+
 
 #if defined(ELFABI)
 
-	sz =  = p2autooff;
+	sz = p2autooff;
 
 	/* calculate the frame space */
 	for (i = 0; i < MAXREGS; i++) {
@@ -308,8 +308,8 @@ int idx = 1;
 				addto += SZLONG/SZCHAR;
 		}
 	}
-	
-	/* unwind stack frame */	
+
+	/* unwind stack frame */
 	for (i = 0; i < MAXREGS; i++) {
 		if (TESTBIT(p2env.p_regs, i)) {
 			sz += (SZLONG/SZCHAR);
@@ -317,47 +317,47 @@ int idx = 1;
 				cerror("collision between stack and frame");
 			printf("\tlwz %s, -%d(%s)\n", rnames[i], sz, rnames[SPREG]);
 		}
-	}	
+	}
 	if (kflag) {
 		printf("\tlwz %s,-8(%s)	; restore GOTREG\n", rnames[GOTREG], rnames[FPREG]);
 	}
 #if defined(FPREG)
 	printf("\tlwz %s,-4(%s)	; restore FPREG\n", rnames[FPREG], rnames[FPREG]);
 #endif
-	
+
 	printf("\tlwz %s,4(%s)	; reload stack pointer\n", rnames[R0], rnames[SPREG]);
 	printf("\tmtlr %s		; restore link register\n", rnames[R0]);
 	printf("\tlwz %s,0(%s)	; restore stack pointer\n", rnames[SPREG], rnames[SPREG]);
-	
+
 	if (p2calls) {
-		
+
 		printf("\tlwz %s,4(%s)	; restore condition register\n", rnames[R0], rnames[SPREG]);
 		printf("\tmtcr %s\n", rnames[R0]);
 		printf("\tlwz %s,8(%s)	; reload link register\n", rnames[R0], rnames[SPREG]);
-	
+
 		printf("\tmtlr %s			; restore link register\n", rnames[R0]);
 	} else {
 		/* restore the R31 we might have used with PIC labels*/
-		//printf("\tlwz %s,-4(%s)\n", rnames[R31], rnames[SPREG]);
+		/* printf("\tlwz %s,-4(%s)\n", rnames[R31], rnames[SPREG]); */
 		printf("\tmr %s, %s\n", rnames[R31], rnames[R0]);
 	}
-	
+
 	printf("\tlwz %s,4(%s)	; reload stack pointer\n", rnames[R0], rnames[SPREG]);
 	printf("\tmtlr %s		; restore link register\n", rnames[R0]);
 	printf("\tlwz %s,0(%s)	; restore stack pointer\n", rnames[SPREG], rnames[SPREG]);
-	
-	
-	
-	
+
+
+
+
 #elif defined(MACHOABI)
 
 	sz = 4;
 
 	for (i = 0; i < MAXREGS; i++) {
 		if (TESTBIT(p2env.p_regs, i))
-			idx++; 
+			idx++;
 	}
-	
+
 	if (p2calls > 0)
 		idx++;
 
@@ -368,12 +368,12 @@ int idx = 1;
 				addto += SZLONG/SZCHAR;
 		}
 	}
-	
+
 	for (i = 0; i < MAXREGS; i++) {
 		if (TESTBIT(p2env.p_regs, i))
-			idx++; 
+			idx++;
 	}
-	
+
 	if (p2calls > 0)
 		idx++;
 
@@ -383,7 +383,7 @@ int idx = 1;
 		/* unwind stack frame */
 		printf("\tlwz %s,0(%s)	; restore stack pointer\n", rnames[SPREG], rnames[SPREG]);
 		printf("\tlwz %s,-4(%s)	; restore PICREG\n", rnames[PICREG], rnames[SPREG]);
-				
+
 		/* restore other registers */
 
 #if 1
@@ -403,7 +403,7 @@ int idx = 1;
 			if (sz == 0)
 				cerror("collision unwinding stack");
 			printf("\tlwz %s, -%d(%s)\n", rnames[i], sz, rnames[SPREG]);
-			--idx; 
+			--idx;
 		}
 	}
 #endif
@@ -411,11 +411,11 @@ int idx = 1;
 		printf("\tlwz %s,4(%s)	; restore condition register\n", rnames[R0], rnames[SPREG]);
 		printf("\tmtcr %s\n", rnames[R0]);
 		printf("\tlwz %s,8(%s)	; reload link register\n", rnames[R0], rnames[SPREG]);
-	
+
 		printf("\tmtlr %s			; restore link register\n", rnames[R0]);
 	} else {
 		/* restore the R31 we might have used with PIC labels*/
-		//printf("\tlwz %s,-4(%s)\n", rnames[R31], rnames[SPREG]);
+		/* printf("\tlwz %s,-4(%s)\n", rnames[R31], rnames[SPREG]); */
 		printf("\tmr %s, %s\n", rnames[R31], rnames[R0]);
 	}
 
@@ -430,7 +430,7 @@ int idx = 1;
 
 
 
-noframe:	
+noframe:
 	printf("\tblr\n");
 }
 
@@ -534,7 +534,7 @@ twollcomp(NODE *p)
 		cb1 = LT;
 		cb2 = GT;
 		break;
-	
+
 	default:
 		cb1 = cb2 = 0; /* XXX gcc */
 	}
@@ -639,7 +639,7 @@ stasg(NODE *p)
 	    printf("\tbl L%s$stub\n", EXPREFIX "memcpy");
 		addstub(&stublist, EXPREFIX "memcpy");
 #endif
-	
+
 }
 
 static void
@@ -785,7 +785,7 @@ emul(NODE *p)
         else if (p->n_op == RS && p->n_type == LONGLONG) ch = "ashrdi3";
         else if (p->n_op == RS && (p->n_type == LONG || p->n_type == INT))
                 ch = "ashrsi3";
-        
+
         else if (p->n_op == DIV && p->n_type == LONGLONG) ch = "divdi3";
         else if (p->n_op == DIV && (p->n_type == LONG || p->n_type == INT))
                 ch = "divsi3";
@@ -886,7 +886,7 @@ ftou(NODE *p)
 		else
 			expand(p, 0, "\tlfd A3,");
 		printf("-4(%s)\n", rnames[SPREG]);
-		
+
 	} else {
 		if (l->n_type == FLOAT)
 			expand(p, 0, "\tlfs A3,AL\n");
@@ -1250,7 +1250,7 @@ reg64name(int reg, int hi)
 	if ((hi == HIREG && !features(FEATURE_BIGENDIAN)) ||
 	    (hi == LOWREG && features(FEATURE_BIGENDIAN)))
 		off = 1;
-		
+
 	printf("%s" , rnames[idx + off]);
 }
 
@@ -1261,7 +1261,7 @@ reg64name(int reg, int hi)
 void
 upput(NODE *p, int size)
 {
-//	size /= SZCHAR;
+	/* size /= SZCHAR; */
 	switch (p->n_op) {
 	case REG:
 		reg64name(regno(p), HIREG);
@@ -1327,7 +1327,7 @@ adrput(FILE *io, NODE *p)
 		return;
 
 	case REG:
-	//printf("xxxxx reg %d\n", regno(p));
+	/* printf("xxxxx reg %d\n", regno(p)); */
 		if (GCLASS(regno(p)) == CLASSB)
 			reg64name(regno(p), LOWREG);
 		else
@@ -1398,7 +1398,7 @@ argsize(NODE *p, n_regs *nr)
 	if (t == FLOAT) {
 		nr->fpr += 1;
 		return 4;
-	}		
+	}
 	if (t < LONGLONG ||  t > BTMASK){
 		nr->gpr += 1;
 		return 4;
@@ -1423,9 +1423,9 @@ static int
 calc_args_size(NODE *p, n_regs *nr)
 {
 	int n = 0;
-        
+
         if (p->n_op == CM) {
-                //n += calc_args_size(p->n_left, nr);
+                /* n += calc_args_size(p->n_left, nr); */
                 n += calc_args_size(p->n_right, nr);
                 /* uncount the function call */
                 nr->gpr -= 1;
@@ -1479,7 +1479,7 @@ storefloat(struct interpass *ip, NODE *p)
 
 #define ISF(p) ((p)->n_type == FLOAT || (p)->n_type == DOUBLE || \
 (p)->n_type == LDOUBLE)
-	
+
 		if (ISF(p->n_left) && ISF(p->n_right) && l && r) {
 			/* must store one. store left */
 			struct interpass *nip;
@@ -1529,7 +1529,7 @@ myreader(struct interpass *ipole)
 #endif
 		if (( nr.gpr > max_gpr) || (nr.fpr > max_fpr )) {
 			/* have to sync max_fpr with max _gpr */
-			max_gpr = nr.gpr; 
+			max_gpr = nr.gpr;
 			max_fpr = nr.fpr;
 			if (max_fpr > NFPARGREGS)
 				comperr("too many floating point args\n");
@@ -1538,15 +1538,15 @@ myreader(struct interpass *ipole)
 		storefloat(ip, ip->ip_node);
 	}
 
-//	if (p2maxstacksize < NARGREGS*SZINT/SZCHAR)
-	//	p2maxstacksize = NARGREGS*SZINT/SZCHAR;
+	/* if (p2maxstacksize < NARGREGS*SZINT/SZCHAR) */
+	/* p2maxstacksize = NARGREGS*SZINT/SZCHAR; */
 
 
 #ifdef PCC_DEBUG
 	if (x2debug)
 		printf("max_gpr = %d, max_fpr = %d\n", max_gpr, max_fpr);
 #endif
-	
+
 #ifndef MACHOABI
 	/* calculate the frame space */
 	for (i = 0; i < MAXREGS; i++) {
@@ -1558,9 +1558,9 @@ myreader(struct interpass *ipole)
 	p2framesize = NARGREGS*(SZINT/SZCHAR);
 	p2framesize += NFPARGREGS*(SZDOUBLE/SZCHAR);
 #endif
-	
+
 	if (p2calls != 0) {
-#ifndef MACHOABI 
+#ifndef MACHOABI
 		p2framesize += 8;	/* stack ptr / return addr */
 #else
 		p2framesize += 12;	/* stack ptr / condition register/ return addr */
@@ -1572,18 +1572,18 @@ myreader(struct interpass *ipole)
 		p2framesize += 4;	/* GOTREG/R31 */
 #endif
 	}
-	
+
 	if (max_gpr > NARGREGS) {
-		p2framesize += (SZINT/SZCHAR)*(max_gpr - NARGREGS);		
+		p2framesize += (SZINT/SZCHAR)*(max_gpr - NARGREGS);
 	}
-	
+
 	p2framesize += p2maxautooff;		/* autos */
 	p2framesize += p2temps;			/* TEMPs that aren't autos */
-	
-	/* create the new stack frame */	
+
+	/* create the new stack frame */
 	p2framesize = (p2framesize+15) & ~15; /* 16-byte aligned */
-	//p2maxautooff = p2framesize;
-	
+	/* p2maxautooff = p2framesize; */
+
 #if 1
 	printf(";;; MYREADER\n");
 	printf(";;; p2maxautooff = %d\n", p2maxautooff);

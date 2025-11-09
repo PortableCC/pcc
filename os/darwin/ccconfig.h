@@ -47,9 +47,9 @@
 #if defined(mach_amd64)
 #define AS_ARCH_FLAG		strlist_append(&args, "x86_64");
 #define TARGET_GLOBALS	int amd64_i386;
-#define XCODE_PLATFORM		
+#define XCODE_PLATFORM
 #define XCODE_SELECT_LINK
-#define XCODE_PLATFORM_SDK	
+#define XCODE_PLATFORM_SDK
 #elif defined(mach_aarch64)
 #define AS_ARCH_FLAG		strlist_append(&args, "arm64");
 #define XCODE_PLATFORM		"MacOSX"
@@ -58,13 +58,13 @@
 #elif defined(mach_i386)
 #define AS_ARCH_FLAG		strlist_append(&args, "i386");
 #define TARGET_ASFLAGS
-#define XCODE_PLATFORM		
+#define XCODE_PLATFORM
 #define XCODE_SELECT_LINK
-#define XCODE_PLATFORM_SDK	
+#define XCODE_PLATFORM_SDK
 #endif
 
-#define DEFLIBS		{ "-lSystem", NULL } //"-lpcc", 
-#define DEFPROFLIBS	{ "-lSystem_profile",  NULL } //"-lpcc",
+#define DEFLIBS		{ "-lSystem", NULL } /* "-lpcc", */
+#define DEFPROFLIBS	{ "-lSystem_profile",  NULL } /* "-lpcc", */
 #define DEFLIBDIRS	{ XCODE_PLATFORM_SDK "/usr/lib", NULL }
 #ifndef STDINC
 #define STDINC		XCODE_PLATFORM_SDK "/usr/include"
@@ -82,8 +82,8 @@
 ld -arch ppc -weak_reference_mismatches non-weak -o a.out -lcrt1.o -lcrt2.o -L/usr/lib/gcc/powerpc-apple-darwin8/4.0.1 hello_ppc.o -lgcc -lSystemStubs -lSystem
 */
 
-#define DEFLIBS		{ "-lcrt1.o", "-lcrt2.o", "-lSystem", NULL } //"-lgcc", "-lmx",
-#define DEFPROFLIBS	{ "-lcrt1.o", "-lcrt2.o", "-lSystem_profile", NULL } // "-lgcc", "-lmx", 
+#define DEFLIBS		{ "-lcrt1.o", "-lcrt2.o", "-lSystem", NULL } /* "-lgcc", "-lmx", */
+#define DEFPROFLIBS	{ "-lcrt1.o", "-lcrt2.o", "-lSystem_profile", NULL } /* "-lgcc", "-lmx", */
 #define DEFLIBDIRS	{ "/usr/lib", "/usr/lib/gcc/powerpc-apple-darwin8/4.0.0", NULL }
 #undef PCCLIBDIR
 

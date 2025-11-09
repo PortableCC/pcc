@@ -588,7 +588,7 @@ struct optab table[] = {
 		"F	movl %esi,A1\nZQF	movl A1,%esi\n", },
 
 /*
- * DIV/MOD/MUL 
+ * DIV/MOD/MUL
  */
 /* long long div is emulated */
 { DIV,	INCREG,
@@ -606,9 +606,9 @@ struct optab table[] = {
 { DIV,		INAREG,
 	SAREG,		TWORD,
 	SNAME,		TWORD,
-		0,      RLEFT,		// XXX, how to rewrite to do the
-					// operands in reverse order?
-					// I tried RRIGHT and lac AL, no good
+		0,      RLEFT,		/* XXX, how to rewrite to do the */
+					/* operands in reverse order? */
+					/* I tried RRIGHT and lac AL, no good */
 		"	lmq\n"
 		"	lac AR\n"
 		"	dac .+4\n"
@@ -765,13 +765,13 @@ struct optab table[] = {
 		0,	RLEFT,
 		"	andl AR,AL\n", },
 
-{ AND,	INAREG|FOREFF,  
+{ AND,	INAREG|FOREFF,
 	SAREG|SOREG|SNAME,	TSHORT|TUSHORT,
 	SCON|SAREG,		TSHORT|TUSHORT,
 		0,	RLEFT,
 		"	andw AR,AL\n", },
 
-{ AND,	INAREG|FOREFF,  
+{ AND,	INAREG|FOREFF,
 	SAREG,			TSHORT|TUSHORT,
 	SAREG|SOREG|SNAME,	TSHORT|TUSHORT,
 		0,	RLEFT,

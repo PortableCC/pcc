@@ -29,7 +29,7 @@
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
  * HOWEVER CAUSED AND ON ANY THEORY OFLIABILITY, WHETHER IN CONTRACT,
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -85,9 +85,9 @@ fortarg(NODE *p)
 }
 
 	/* mapping relationals when the sides are reversed */
-// short revrel[] ={ EQ, NE, GE, GT, LE, LT, UGE, UGT, ULE, ULT };
+	/* short revrel[] ={ EQ, NE, GE, GT, LE, LT, UGE, UGT, ULE, ULT }; */
 
-/*
+	/*
  * local optimizations, most of which are probably
  * machine independent
  */
@@ -245,7 +245,7 @@ again:	o = p->n_op;
 			/* avoid larger shifts than type size */
 			if (RV(p) >= sz)
 				werror("shift larger than type");
-			if (RV(p) == 0)  
+			if (RV(p) == 0)
 				p = zapleft(p);
 		}
 		break;
@@ -400,12 +400,12 @@ again:	o = p->n_op;
 	case EQ:
 	case NE:
 	case LT:
-//	case LE:
-//	case GT:
+	/* case LE: */
+	/* case GT: */
 	case GE:
 	case ULT:
-//	case ULE:
-//	case UGT:
+	/* case ULE: */
+	/* case UGT: */
 	case UGE:
 		if (LCON(p) && RCON(p) &&
 		    !ISPTR(p->n_left->n_type) && !ISPTR(p->n_right->n_type)) {
@@ -443,7 +443,7 @@ again:	o = p->n_op;
 			}
 		}
 		break;
-				
+
 
 #ifdef notyet
 	case ASSIGN:

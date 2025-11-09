@@ -144,7 +144,7 @@ prologue(struct interpass_prolog *ipp)
 	printf("%s:\n", ipp->ipp_name);
 #endif
 	/*
-	 * We here know what register to save and how much to 
+	 * We here know what register to save and how much to
 	 * add to the stack.
 	 */
 	addto = offcalc(ipp);
@@ -258,18 +258,18 @@ tlen(NODE *p)
  * Compare two floating point numbers.
  */
 static void
-fcomp(NODE *p)	
+fcomp(NODE *p)
 {
 
 	int swap = ((p->n_su & DORIGHT) != 0);
 	int failjump = attr_find(p->n_ap, ATTR_FP_SWAPPED) != 0;
 
-//printf("fcomp: DOR %d op %s\n", swap, opst[p->n_op]);
+	/* printf("fcomp: DOR %d op %s\n", swap, opst[p->n_op]); */
 	if (p->n_op == GT || p->n_op == GE) {
 		swap ^= 1;
 		p->n_op = (p->n_op == GT ? LT : LE);
 	}
-//printf("fcomp2: DOR %d op %s\n", swap, opst[p->n_op]);
+	/* printf("fcomp2: DOR %d op %s\n", swap, opst[p->n_op]); */
 	if (swap)
 		expand(p, 0, "\tfxch\n");
 
@@ -346,9 +346,9 @@ ultofd(NODE *p)
 
 /*
  * Generate code to convert an SSE float/double to an unsigned long.
- */     
-static void     
-fdtoul(NODE *p) 
+ */
+static void
+fdtoul(NODE *p)
 {
 	if (p->n_left->n_type == FLOAT)
 		E("	movabsq $0x5f000000,A1\n");
@@ -676,7 +676,7 @@ adrput(FILE *io, NODE *p)
 			int r2 = R2UPK2(r);
 			int sh = R2UPK3(r);
 
-			fprintf(io, "(%s,%s,%d)", 
+			fprintf(io, "(%s,%s,%d)",
 			    r1 == MAXREGS ? "" : rnames[r1],
 			    r2 == MAXREGS ? "" : rnames[r2], sh);
 		} else
@@ -926,15 +926,15 @@ char *rnames[MAXREGS] = {
 /* register names for shorter sizes */
 char *rbyte[] = {
 	"%al", "%dl", "%cl", "%bl", "%sil", "%dil", "%bpl", "%spl",
-	"%r8b", "%r9b", "%r10b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b", 
+	"%r8b", "%r9b", "%r10b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b",
 };
 char *rshort[] = {
 	"%ax", "%dx", "%cx", "%bx", "%si", "%di", "%bp", "%sp",
-	"%r8w", "%r9w", "%r10w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w", 
+	"%r8w", "%r9w", "%r10w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w",
 };
 char *rlong[] = {
 	"%eax", "%edx", "%ecx", "%ebx", "%esi", "%edi", "%ebp", "%esp",
-	"%r8d", "%r9d", "%r10d", "%r11d", "%r12d", "%r13d", "%r14d", "%r15d", 
+	"%r8d", "%r9d", "%r10d", "%r11d", "%r12d", "%r13d", "%r14d", "%r15d",
 };
 
 
@@ -1070,7 +1070,7 @@ myxasm(struct interpass *ip, NODE *p)
 retry:	switch (c) {
 	case 'D': reg = RDI; break;
 	case 'S': reg = RSI; break;
-	case 'A': 
+	case 'A':
 	case 'a': reg = RAX; break;
 	case 'b': reg = RBX; break;
 	case 'c': reg = RCX; break;
