@@ -55,10 +55,8 @@ extern	int	escln;	/* escaped newlines, to be added */
 /* buffer used internally */
 #if SIZEOF_INT_P == 2 || LIBVMF
 #define CPPL2	7
-typedef	unsigned short mvtyp;
 #else
 #define CPPL2	14
-typedef	unsigned int mvtyp;
 #endif
 
 #define	CPPBUF		(1 << CPPL2)
@@ -149,7 +147,7 @@ struct includ {
 	const usch *fname;	/* current fn, changed if #line found */
 	const usch *orgfn;	/* current fn, not changed */
 	int lineno;
-	int infil;
+	FILE *ifp;		/* file to read from */
 	int opend, oinp;
 	usch *opbeg;
 	int idx;

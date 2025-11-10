@@ -119,7 +119,7 @@ usch *pbeg, *outp, *inp, *pend;
 /* used by yylex() buffer expansion */
 static struct iobuf *lb;
 static usch *lpbeg, *lpend, *linp;
-static int lif;
+static FILE *lifp;
 
 static usch *ucn(usch *p, usch *q);
 static void fastcmnt2(int);
@@ -354,7 +354,7 @@ inpbuf(void)
 	register usch *ninp, *oinp;
 	register int len;
 
-	if (ifiles->infil == -1)
+	if (ifiles->ifp == NULL)
 		return 0;
 
 	if (inp < pend)
@@ -367,8 +367,9 @@ inpbuf(void)
 	pend = pbeg + INFLIRD + PBMAX;
 	inp = pbeg+PBMAX+numnl;
 
-	if ((len = (int)read(ifiles->infil, ninp, pend - ninp)) < 0)
-		error("read error on file %s", ifiles->orgfn);
+	if ((len = (int)fread(ninp, 1, pend - ninp, ifiles->ifp)) == 0)
+		if (ferror(ifiles->ifp))
+			error("read error on file %s", ifiles->orgfn);
 
 	ninp += len;
 	pend = ninp;
@@ -440,7 +441,7 @@ newone:	if (ISCQ(ch = *inp++) == 0)
 		inp--;
 		if (lb) {
 			pend = lpend, pbeg = lpbeg, inp = linp;
-			ifiles->infil = lif;
+			ifiles->ifp = lifp;
 			bufree(lb);
 			lb = 0;
 			goto newone;
@@ -1000,7 +1001,7 @@ ident:		if (ISID0(t) == 0)
 				if ((ob = kfind(nl))) {
 					ob->buf[ob->cptr] = 0;
 					lpbeg = pbeg, lpend = pend, linp = inp;
-					lif = ifiles->infil, ifiles->infil = -1;
+					lifp = ifiles->ifp, ifiles->ifp = 0;
 					lb = ob;
 					inp = pbeg = ob->buf,
 					    pend = pbeg + ob->cptr;
@@ -1033,13 +1034,13 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 	ic->next = ifiles;
 
 	if (file != NULL) {
-		if ((ic->infil = open((const char *)file, O_RDONLY)) < 0)
+		if ((ic->ifp = fopen((const char *)file, "r")) == NULL)
 			error("pushfile: error open %s", file);
 		ic->orgfn = ic->fname = file;
 		if (++inclevel > MAX_INCLEVEL)
 			error("limit for nested includes exceeded");
 	} else {
-		ic->infil = 0;
+		ic->ifp = stdin;
 		ic->orgfn = ic->fname = (const usch *)"<stdin>";
 	}
 #if LIBVMF
@@ -1096,7 +1097,8 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 	pend = pbeg + ic->opend;
 	inp = pbeg + ic->oinp;
 #endif /* LIBVMF */
-	close(ic->infil);
+	if (ic->ifp)
+		fclose(ic->ifp);
 }
 
 /*

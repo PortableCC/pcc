@@ -98,15 +98,9 @@ char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows, readinc;
 
-static void macstr(const usch *s);
-
 struct symtab *symhsh[SYMHSZ];
 
-/*
- * macptr is an array of char pointers for stored macros.
- * macpos is the current encoded position.
- * nmacptr are # of allocated buffers so far.
- */
+/* macro file pointer */
 FILE *mfp;
 
 /* include dirs */
@@ -374,7 +368,7 @@ main(int argc, char **argv)
 	memset(&bic, 0, sizeof(bic));
 	bic.fname = bic.orgfn = (const usch *)"<command line>";
 	bic.lineno = 1;
-	bic.infil = -1;
+	bic.ifp = NULL;
 	fb->bsz = fb->cptr;
 	fb->cptr = 0;
 	pbeg = outp = inp = fb->buf;
@@ -534,15 +528,8 @@ macsav(int ch)
 	putc(ch, mfp);
 }
 
-static void                     
-macstr(register const usch *s)
-{
-	while (*s != 0)
-		macsav(*s++);
-}
-
 static int
-macget(register mvtyp a)
+macget(long a)
 {
 	long l = ftell(mfp);
 	int v;
@@ -862,7 +849,7 @@ include_next(void)
  * Compare two replacement lists, taking in account comments etc.
  */
 static int
-cmprepl(mvtyp oin, mvtyp nin)
+cmprepl(long oin, long nin)
 {
 	register int o, n;
 
@@ -1157,7 +1144,7 @@ back:					if (c == '*') {
 				macsav(' '), needws = 0;
 			dp = readid(c);
 			if (type == OBJCT) {
-				macstr(dp);
+				fprintf(mfp, "%s", dp);
 				break; /* keep on heap */
 			}
 			if (vararg && strcmp((char *)dp, (char *)vararg) == 0) {
@@ -1168,7 +1155,7 @@ back:					if (c == '*') {
 
 			/* check if its an argument */
 			if ((i = findarg(dp, ab, arg, narg)) < 0) {
-				macstr(dp);
+				fprintf(mfp, "%s", dp);
 				break;
 			}
 			macsav(WARN);
@@ -1834,8 +1821,9 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 {
 	usch *opbeg, *opend, *oinp;
 	register struct iobuf *ab;
-	register int c, infil, i, j, plev, narg, ellips = 0;
+	register int c, i, j, plev, narg, ellips = 0;
 	int argary[MAXARGS+1];
+	FILE *ifp;
 
 	DPRINT(("readargs: in %p\n", in));
 	narg = sp->narg;
@@ -1845,12 +1833,12 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	opbeg = opend = oinp = 0;
 #endif
 
-	infil = ifiles->infil;
+	ifp = ifiles->ifp;
 	if (in) {
 		oinp = inp;
 		opend = pend;
 		opbeg = pbeg;
-		ifiles->infil = -1;
+		ifiles->ifp = NULL;
 		pbeg = in->buf;
 		inp = pbeg + in->cptr;
 		pend = pbeg + in->bsz;
@@ -1987,7 +1975,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	for (j = 0; j < i; j++)
 		args[j] = ab->buf + argary[j];
 
-	ifiles->infil = infil;
+	ifiles->ifp = ifp;
 	if (in) {
 		in->cptr = inp - pbeg;
 		inp = oinp;
