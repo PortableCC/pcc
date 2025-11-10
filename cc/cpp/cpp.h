@@ -67,9 +67,6 @@ typedef	unsigned int mvtyp;
 #else
 #define	MINBUF	CPPBUF
 #endif
-#define	VALPTR(x)	((x) & (MINBUF-1))
-#define	VALBUF(x)	((x) / MINBUF)
-#define	MKVAL(b, c)	(((b) * MINBUF) + (c))
 
 #define	MAXARGS	128	/* Max # of args to a macro. Should be enough */
 #define	MAXIDSZ	63	/* Max length of C99 identifier; 5.2.4.1 */
@@ -173,7 +170,7 @@ extern usch *pbeg, *pend, *outp, *inp;
 struct symtab {
 	struct symtab *next;
 	const usch *namep;
-	mvtyp valoff;
+	long	macoff;		/* macro position in temp file */
 	const usch *file;
 	int line;
 	char type;	/* macro type */

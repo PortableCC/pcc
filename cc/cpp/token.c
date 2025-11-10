@@ -1436,7 +1436,7 @@ undefstmt(void)
 		error("bad #undef");
 	bp = readid(ch);
 	if ((np = lookup(bp, FIND)) != NULL)
-		np->valoff = 0;
+		np->macoff = 0;
 	chknl(0);
 }
 

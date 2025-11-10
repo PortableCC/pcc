@@ -84,7 +84,7 @@ int tflag;	/* traditional cpp syntax */
 #ifdef PCC_DEBUG
 int dflag;	/* debug printouts */
 static void prline(const usch *s);
-static void prrep(mvtyp);
+static void prrep(long);
 #define	DPRINT(x) if (dflag) printf x
 #else
 #define DPRINT(x)
@@ -99,11 +99,6 @@ char *Mxfile;
 int warnings, Mxlen, skpows, readinc;
 
 static void macstr(const usch *s);
-int lckmacbuf;
-#if LIBVMF
-struct vspace ibspc, macspc;
-struct vseg *macvseg;
-#endif
 
 struct symtab *symhsh[SYMHSZ];
 
@@ -112,11 +107,7 @@ struct symtab *symhsh[SYMHSZ];
  * macpos is the current encoded position.
  * nmacptr are # of allocated buffers so far.
  */
-#if LIBVMF == 0
-char **macptr;
-int nmacptr;
-#endif
-usch *mbeg, *minp, *mend;
+FILE *mfp;
 
 /* include dirs */
 struct incs {
@@ -205,9 +196,9 @@ main(int argc, char **argv)
 		error("vminit");
 	if (vmopen(&ibspc, NULL) < 0)
 		error("vmopen ibspc");
-	if (vmopen(&macspc, NULL) < 0)
-		error("vmopen macspc");
 #endif
+	if ((mfp = tmpfile()) == NULL)
+		error("macro file");
 
 	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tU:Vvx:")) != -1) {
 		switch (ch) {
@@ -323,19 +314,6 @@ main(int argc, char **argv)
 	defloc = lookup((const usch *)"defined", ENTER);
 	ctrloc = lookup((const usch *)"__COUNTER__", ENTER);
 
-#if LIBVMF
-	macvseg = vmmapseg(&macspc, 0);
-	vmlock(macvseg);
-	mbeg = minp = macvseg->s_cinfo;
-	mend = mbeg + BYTESPERSEG;
-#else
-	macptr = xmalloc((nmacptr = 10) * sizeof(char **));
-	memset(macptr, 0, nmacptr * sizeof(char **));
-	macptr[0] = xmalloc(CPPBUF);
-	mbeg = minp = macptr[0];
-	mend = mbeg + CPPBUF;
-#endif
-
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
 	bsheap(fb, "#define __BSD2_11__ 1\n");
@@ -348,11 +326,9 @@ main(int argc, char **argv)
 		bsheap(fb, "#define __STDC__ 1\n");
 #endif
 
-	macsav(0);
-	filloc->valoff = linloc->valoff = pragloc->valoff =
-	    ctrloc->valoff = defloc->valoff = 1;
-	macstr((const usch *)"defined");
-	macsav(0);
+	fprintf(mfp, "%cdefined%c", 0, 0);
+	filloc->macoff = linloc->macoff = pragloc->macoff =
+	    ctrloc->macoff = defloc->macoff = 1;
 
 	filloc->type = FILLOC;
 	linloc->type = LINLOC;
@@ -555,65 +531,26 @@ strtobuf(register const usch *str, register struct iobuf *iob)
 static void
 macsav(int ch)
 {
-#if LIBVMF
-	if (minp == mend) {
-		/* go to next buffer */
-		lckmacbuf++;
-		vmmodify(macvseg);
-		vmunlock(macvseg);
-		macvseg = vmmapseg(&macspc, lckmacbuf);
-		vmlock(macvseg);
-		minp = mbeg = macvseg->s_cinfo;
-		mend = mbeg + BYTESPERSEG;
-	}
-#else
-	if (minp == mend) {
-		if (++lckmacbuf == nmacptr) {
-			macptr = xrealloc(macptr, (nmacptr + 10) * sizeof(char **));
-			memset(macptr+nmacptr, 0, 10 * sizeof(char **));
-			nmacptr += 10;
-		}
-
-		if ((mbeg = macptr[lckmacbuf]) == NULL)
-			mbeg = macptr[lckmacbuf] = xmalloc(CPPBUF);
-		mend = mbeg + CPPBUF;
-		minp = mbeg;
-	}
-#endif
-	*minp++ = ch;
+	putc(ch, mfp);
 }
 
 static void                     
 macstr(register const usch *s)
 {
-	while (*s != 0) {
-		if (minp == mend)
-			macsav(*s++);
-		else
-			*minp++ = *s++;
-	}
+	while (*s != 0)
+		macsav(*s++);
 }
 
 static int
 macget(register mvtyp a)
 {
-#if LIBVMF
-	register struct vseg *vseg = vmmapseg(&macspc, VALBUF(a));
-	return vseg->s_cinfo[VALPTR(a)];
-#else
-	return macptr[VALBUF(a)][VALPTR(a)];
-#endif
-}
+	long l = ftell(mfp);
+	int v;
 
-static char *
-macmapin(int seg)
-{
-#if LIBVMF
-	struct vseg *vseg= vmmapseg(&macspc, seg);
-	return vseg->s_cinfo;
-#else
-	return macptr[seg];
-#endif
+	fseek(mfp, a, SEEK_SET);
+	v = getc(mfp);
+	fseek(mfp, l, SEEK_SET);
+	return v;
 }
 
 /*
@@ -624,35 +561,15 @@ macrepbuf(struct symtab *sp)
 {
 	register struct iobuf *ob;
 	int ch;
-	register usch *from, *to, *fend, *tend;
-	int cvoff = VALBUF(sp->valoff);
-
 
 	ob = getobuf(BNORMAL);
-	to = ob->buf;
-	tend = to + ob->bsz;
-
-	from = macmapin(cvoff++);
-	fend = from + MINBUF;
-	from += VALPTR(sp->valoff);
-
-	while ((ch = (*to++ = *from++)) != 0) {
-iloop:		if (from == fend) {
-			from = macmapin(cvoff++);
-			fend = from + MINBUF;
-		}
-		if (to == tend) {
-			ob->cptr = to - ob->buf;
-			putob(ob, 0);
-			ob->cptr--;
-			to = ob->buf + ob->cptr;
-			tend = ob->buf + ob->bsz;
-		}
-		if (ch == WARN) {
-			ch = (*to++ = *from++);
-			goto iloop;
-		}
+	fseek(mfp, sp->macoff, SEEK_SET);
+	while ((ch = fgetc(mfp)) != 0) {
+		putob(ob, ch);
+		if (ch == WARN)
+			putob(ob, fgetc(mfp));
 	}
+	putob(ob, 0);
 	ob->cptr = 0;
 	return ob;
 }
@@ -1029,7 +946,7 @@ define(void)
 
 	dp = readid(c);
 	np = lookup(dp, ENTER);
-	if (np->valoff) {
+	if (np->macoff) {
 		redef = 1;
 	} else {
 		np->namep = addname(dp);
@@ -1096,7 +1013,8 @@ define(void)
 	else
 		Cflag = 1; /* need comments if -t */
 
-	begpos = MKVAL(lckmacbuf, minp - mbeg);
+	fseek(mfp, 0, SEEK_END);
+	begpos = ftell(mfp);
 	if (ISWS(c))
 		c = skipwscmnt(0);
 
@@ -1282,14 +1200,14 @@ back:					if (c == '*') {
 		goto bad; /* 6.10.3.3 p1 */
 
 	if (redef && ifiles->idx != SYSINC) {
-		if (cmprepl(np->valoff, begpos) || 
+		if (cmprepl(np->macoff, begpos) ||
 		    np->type != type || np->narg != narg) { /* not equal */
-			np->valoff = begpos;
+			np->macoff = begpos;
 			warning("%s redefined (previously defined at \"%s\" line %d)",
 			    np->namep, np->file, np->line);
 		}
 	} else
-		np->valoff = begpos;
+		np->macoff = begpos;
 	np->type = type;
 	np->narg = narg;
 
@@ -1303,9 +1221,9 @@ back:					if (c == '*') {
 		else
 			printf("[%d]", narg);
 		putchar('\'');
-		prrep(np->valoff);
+		prrep(np->macoff);
 		printf("\'\n");
-		printf("%s: link %d off %d\n", np->namep, VALBUF(np->valoff), VALPTR(np->valoff));
+		printf("%s: macoff %ld\n", np->namep, np->macoff);
 	}
 #endif
 	bufree(ab);
@@ -1941,7 +1859,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 #ifdef PCC_DEBUG
 	if (dflag > 1) {
 		printf("narg %d varg %d: ", narg, ellips);
-		prrep(sp->valoff);
+		prrep(sp->macoff);
 		printf("\n");
 	}
 #endif
@@ -2134,7 +2052,7 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 #ifdef PCC_DEBUG
 	if (dflag>1) {
 		printf("%d:subarg ARGlist for %s: '", lvl, nl->namep);
-		prrep(nl->valoff);
+		prrep(nl->macoff);
 		printf("'\n");
 		prblocker("subarg", l);
 	}
@@ -2331,25 +2249,31 @@ blkprint(int l)
 }
 
 static void
-prrep(mvtyp ptr)
+prrep(long ptr)
 {
 	int s;
+	long op = ftell(mfp);
 
-	while ((s = macget(ptr++))) {
+	fseek(mfp, ptr, SEEK_SET);
+	while ((s = fgetc(mfp))) {
 		switch (s) {
 		case WARN:
-			s = macget(ptr++);
+			s = fgetc(mfp);
 			if (s == (usch)C99ARG) printf("<C99ARG>");
 			else if (s == (usch)GCCARG) printf("<GCCARG>");
 			else printf("<ARG(%d)>", s);
 			break;
 		case CONC: printf("<CONC>"); break;
 		case SNUFF: printf("<SNUFF>"); break;
-		case BLKID: blkprint(macget(ptr++)); break;
-		case BLKID2: blkprint(macget(ptr) << 8 | macget(ptr+1)); ptr += 2; break;
+		case BLKID: blkprint(fgetc(mfp)); break;
+		case BLKID2:
+			s = fgetc(mfp) << 8;
+			blkprint(s | fgetc(mfp));
+			break;
 		default: printf("%c", s); break;
 		}
 	}
+	fseek(mfp, op, SEEK_SET);
 }
 
 static void
@@ -2498,7 +2422,7 @@ getsymtab(const usch *str)
 	sp = addblock(sizeof(*sp));
 
 	sp->namep = str;
-	sp->valoff = 0;
+	sp->macoff = 0;
 	sp->file = ifiles ? ifiles->orgfn : (const usch *)"<initial>";
 	sp->line = ifiles ? ifiles->lineno : 0;
 	return sp;
@@ -2517,7 +2441,7 @@ lookup(const usch *key, int enterf)
 
 	/* Count full string length */
 	for (hsh = 0, k = key; ISID(*k); k++)
-		hsh += *k;
+		hsh += *(unsigned char *)k;
 	hsh %= SYMHSZ;
 	len = k - key;
 
@@ -2527,7 +2451,7 @@ lookup(const usch *key, int enterf)
 			break;
 
 	if (enterf == FIND) {
-		if (sp && sp->valoff)
+		if (sp && sp->macoff)
 			return sp;
 		return NULL;
 	}
