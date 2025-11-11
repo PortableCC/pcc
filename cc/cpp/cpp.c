@@ -701,19 +701,21 @@ fsrch_macos_framework(const usch *fn, const usch *dir)
  * Search for and include next file.
  * Return 1 on success.
  */
-static int
-fsrch(const usch *fn, int idx, register struct incs *w)
+static char *
+fsrch(const usch *fn, int *idx, struct incs **wa)
 {
+	register struct incs *w = *wa;
 	register usch *res;
 	register int i;
 
-	for (i = idx; i < 2; i++) {
-		if (i > idx)
+	for (i = *idx; i < 2; i++) {
+		if (i > *idx)
 			w = incdir[i];
 		for (; w; w = w->next) {
 			if ((res = chkfile(fn, w->dir)) != NULL) {
-				pushfile(res, fn, i, w->next);
-				return 1;
+				*idx = i;
+				*wa = w->next;
+				return res;
 			}
 		}
 	}
@@ -754,23 +756,23 @@ prem(void)
 }
 
 /*
- * concatenate n1 with n2 and see if the result is an accessible file.
+ * concatenate path with file and see if the result is an accessible file.
  * return a permanent version of the resulting name or NULL if nonexisting.
  */
 static usch *
-chkfile(register const usch *n1, register const usch *n2)
+chkfile(register const char *file, register const char *path)
 {
-	register struct iobuf *ob;
-	register usch *res = NULL;
+	static int maxp;
+	static char *buf;
+	int l = strlen(file) + strlen(path) + 2;
 
-	if (n2 != NULL) {
-		ob = bsheap(NULL, "%s/%s", n2, n1);
-	} else
-		ob = strtobuf(n1, NULL);
-	if (access((char *)ob->buf, R_OK) == 0)
-		res = addname(ob->buf);
-	bufree(ob);
-	return res;
+	while (l > maxp)
+		buf = realloc(buf, maxp += 64);
+
+	snprintf(buf, l, "%s%s%s", path, *path ? "/" : "", file);
+	if (access(buf, R_OK) == 0)
+		return addname(buf);
+	return NULL;
 }
 
 /*
@@ -781,44 +783,44 @@ chkfile(register const usch *n1, register const usch *n2)
 void
 include(void)
 {
+	int idx;
+	struct incs *inw;
 	register struct iobuf *ob;
 	register usch *fn, *nm = NULL;
+	char *fname;
+//	FILE *ifp;
 
 	if (flslvl)
 		return;
 
+	idx = 0;
+	inw = incdir[0];
 	readinc++;
 	if (yylex() != STRING)
 		error("bad #include");
 	readinc = 0;
 	ob = yynode.nd_ob;
 	ob->buf[ob->cptr-1] = 0; /* last \" */
+	fname = &ob->buf[1];
 
-	if (ob->buf[1] == '/') {
-		 if ((fn = chkfile(&ob->buf[1], 0)) != NULL)
-			goto okret;
-	}
+	/* absolute path? */
+	if (*fname == '/' && (fn = chkfile(fname, "")))
+		goto end;
 	if (ob->buf[0] == '\"') {
 		if ((nm = (usch *)strrchr((char *)ifiles->orgfn, '/'))) {
 			*nm = 0;
-		 	fn = chkfile(&ob->buf[1], ifiles->orgfn);
+		 	fn = chkfile(fname, ifiles->orgfn);
 			*nm = '/';
 		} else 
-			fn = chkfile(&ob->buf[1], 0);
+			fn = chkfile(fname, "");
 		if (fn != NULL)
-			goto okret;
+			goto end;
 	}
-	fn = addname(&ob->buf[1]);
-	bufree(ob);
-	if (fsrch(fn, 0, incdir[0]))
-		goto prt;
-
-	error("cannot find '%s'", fn);
-	/* error() do not return */
-
-okret:	bufree(ob);
-	pushfile(fn, fn, 0, NULL);
-prt:	prtline(1);
+	if ((fn = fsrch(fname, &idx, &inw)) == NULL)
+		error("cannot find '%s'", fn);
+end:	bufree(ob);
+	pushfile(fn, fn, idx, inw);
+	prtline(1);
 }
 
 void
@@ -826,6 +828,8 @@ include_next(void)
 {
 	register struct iobuf *ob;
 	register usch *fn;
+	int idx;
+	struct incs *inw;
 
 	if (flslvl)
 		return;
@@ -837,11 +841,13 @@ include_next(void)
 	ob = yynode.nd_ob;
 	ob->buf[ob->cptr-1] = 0; /* last \" */
 
-	fn = addname(&ob->buf[1]);
-	bufree(ob);
-	if (fsrch(fn, ifiles->idx, ifiles->incs) == 0)
-		error("cannot find '%s'", fn);
+	idx = ifiles->idx;
+	inw = ifiles->incs;
+	if ((fn = fsrch(&ob->buf[1], &idx, &inw)) == NULL)
+		error("cannot find '%s'", &ob->buf[1]);
 
+	bufree(ob);
+	pushfile(fn, fn, idx, inw);
 	prtline(1);
 }
 
