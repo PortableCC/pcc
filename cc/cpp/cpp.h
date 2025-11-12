@@ -64,8 +64,6 @@ extern	int	escln;	/* escaped newlines, to be added */
 #define	MAXARGS	128	/* Max # of args to a macro. Should be enough */
 #define	MAXIDSZ	63	/* Max length of C99 identifier; 5.2.4.1 */
 
-#define	PBMAX	10	/* min pushbackbuffer size */
-
 #define	FUNLIKE	0
 #define	CTRLOC	1	/* __COUNTER__ */
 #define	DEFLOC	2	/* defined */
@@ -125,13 +123,8 @@ struct iobuf *getobuf(int);
 void putob(struct iobuf *ob, int ch);
 void bufree(struct iobuf *iob);
 
-#define	curptr	ib->cptr
-#define	maxread	ib->bsz
-#define	buffer	ib->buf+PBMAX
-#define	bbuf	ib->buf
-
 #if LIBVMF
-extern struct vspace ibspc, macspc;
+extern struct vspace ibspc;
 #endif
 
 /*

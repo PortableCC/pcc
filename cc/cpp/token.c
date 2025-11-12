@@ -180,13 +180,7 @@ short spechr[256] = {
 
 #define	ENDFREE	4	/* space left at end of buffer */
 
-#if LIBVMF
-#define	INFLIRD	(BYTESPERSEG-PBMAX-ENDFREE)
-#else
-#define	INFLIRD	(CPPBUF-PBMAX-ENDFREE)
-#endif
-
-static int numnl;
+#define	INFLIRD	(CPPBUF-ENDFREE)
 
 /*
  * fill up the input buffer
@@ -196,7 +190,7 @@ static int numnl;
 int
 inpbuf(void)
 {
-	register usch *ninp, *oinp;
+	register usch *ninp;
 	register int len, ch;
 	int latelf = 0;
 
@@ -206,12 +200,8 @@ inpbuf(void)
 	if (inp < pend)
 		error("inp < pend");
 
-	ninp = pbeg + PBMAX + numnl;
-	oinp = inp;
-	while (oinp < pend)
-		*ninp++ = *oinp++;
-	pend = pbeg + INFLIRD + PBMAX;
-	inp = pbeg+PBMAX+numnl;
+	inp = ninp = pbeg;
+	pend = pbeg + INFLIRD;
 
 	for (len = 0;;) {
 		if ((ch = getc(ifiles->ifp)) < 0)
@@ -570,6 +560,8 @@ fastscan(void)
 			/* search for a # */
 run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 				putch(ch);
+			if (ch == 0)
+				return;
 			if (ch == '%') {
 				if ((c2 = qcchar()) != ':')
 					unch(c2);
@@ -889,11 +881,10 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	ic->ifp = ifp;
 	ic->orgfn = ic->fname = file;
 
-
 	ic->opend = pend - pbeg;
 	ic->oinp = inp - pbeg;
 	ic->opbeg = pbeg;
-	/* dump(); */
+
 	pend = inp = pbeg = xmalloc(CPPBUF);
 	*inp = 0;
 	ic->lineno = 1;
