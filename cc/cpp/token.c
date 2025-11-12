@@ -1024,7 +1024,7 @@ pb:	*--inp = c2;
  * If ifiles == NULL, this is the first file and already opened (stdin).
  */
 void
-pushfile(const usch *file, const usch *fn, int idx, void *incs)
+pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 {
 	struct includ ibuf;
 	register struct includ *ic;
@@ -1033,16 +1033,9 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 	ic = &ibuf;
 	ic->next = ifiles;
 
-	if (file != NULL) {
-		if ((ic->ifp = fopen((const char *)file, "r")) == NULL)
-			error("pushfile: error open %s", file);
-		ic->orgfn = ic->fname = file;
-		if (++inclevel > MAX_INCLEVEL)
-			error("limit for nested includes exceeded");
-	} else {
-		ic->ifp = stdin;
-		ic->orgfn = ic->fname = (const usch *)"<stdin>";
-	}
+	ic->ifp = ifp;
+	ic->orgfn = ic->fname = file;
+
 #if LIBVMF
 	if (ifiles) {
 		vmmodify(ifiles->vseg);
@@ -1068,7 +1061,6 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 	escln = 0;
 	ic->idx = idx;
 	ic->incs = incs;
-	ic->fn = fn;
 	prtline(1);
 	otrulvl = trulvl;
 
@@ -1097,8 +1089,6 @@ pushfile(const usch *file, const usch *fn, int idx, void *incs)
 	pend = pbeg + ic->opend;
 	inp = pbeg + ic->oinp;
 #endif /* LIBVMF */
-	if (ic->ifp)
-		fclose(ic->ifp);
 }
 
 /*

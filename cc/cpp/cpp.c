@@ -176,7 +176,8 @@ main(int argc, char **argv)
 	struct includ bic;
 	struct iobuf *fb = getobuf(BNORMAL);
 	register int ch;
-	register const usch *fn1, *fn2;
+	register const usch *fn2;
+	FILE *ifp;
 	char *a;
 
 #ifdef TIMING
@@ -355,10 +356,12 @@ main(int argc, char **argv)
 			error("Can't freopen %s", argv[1]);
 	}
 	if (argc && strcmp(argv[0], "-")) {
-		fn1 = fn2 = (usch *)argv[0];
+		if ((ifp = fopen(argv[0], "r")) == NULL)
+			error("error open %s", argv[0]);
+		fn2 = (usch *)argv[0];
 	} else {
-		fn1 = NULL;
-		fn2 = (const usch *)"";
+		ifp = stdin;
+		fn2 = (const usch *)"<stdin>";
 	}
 
 	/* initialization defines */
@@ -379,7 +382,7 @@ main(int argc, char **argv)
 	ifiles = NULL;
 	/* end initial defines */
 
-	pushfile(fn1, fn2, 0, NULL);
+	pushfile(ifp, fn2, 0, NULL);
 
 	if (Mflag == 0 && skpows)
 		fputc('\n', stdout);
@@ -788,7 +791,7 @@ include(void)
 	register struct iobuf *ob;
 	register usch *fn, *nm = NULL;
 	char *fname;
-//	FILE *ifp;
+	FILE *ifp;
 
 	if (flslvl)
 		return;
@@ -819,7 +822,9 @@ include(void)
 	if ((fn = fsrch(fname, &idx, &inw)) == NULL)
 		error("cannot find '%s'", fn);
 end:	bufree(ob);
-	pushfile(fn, fn, idx, inw);
+	if ((ifp = fopen(fn, "r")) == NULL)
+		error("pushfile: error open %s", fn);
+	pushfile(ifp, fn, idx, inw);
 	prtline(1);
 }
 
@@ -830,6 +835,7 @@ include_next(void)
 	register usch *fn;
 	int idx;
 	struct incs *inw;
+	FILE *ifp;
 
 	if (flslvl)
 		return;
@@ -847,7 +853,9 @@ include_next(void)
 		error("cannot find '%s'", &ob->buf[1]);
 
 	bufree(ob);
-	pushfile(fn, fn, idx, inw);
+	if ((ifp = fopen(fn, "r")) == NULL)
+		error("pushfile: error open %s", fn);
+	pushfile(ifp, fn, idx, inw);
 	prtline(1);
 }
 
