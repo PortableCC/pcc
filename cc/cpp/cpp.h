@@ -42,7 +42,7 @@ extern	int	flslvl;
 extern	int	elflvl;
 extern	int	elslvl;
 extern	int	dflag;
-extern	int	tflag, Aflag, Cflag, Pflag;
+extern	int	tflag, Aflag, Cflag, Pflag, Tflag;
 extern	int	Mflag, dMflag, MPflag, MMDflag;
 extern	char	*Mfile, *MPfile;
 extern	int	defining, inclevel;

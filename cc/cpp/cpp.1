@@ -23,7 +23,7 @@
 .Nd C preprocessor
 .Sh SYNOPSIS
 .Nm
-.Op Fl ACEMPtVv
+.Op Fl ACEMPTtVv
 .Op Fl D Ar macro Ns Oo = Ns Ar value Oc
 .Op Fl d Ar flags
 .Op Fl I Ar path
@@ -137,6 +137,9 @@ Do not define the
 and
 .Dv __STDC_VERSION__
 macros.
+.It Fl T
+Enable trigraphs conversion.  Trigraphs are disabled by default and are
+deprecated since C23.
 .It Fl U Ar macro
 Undefine a macro before processing any input, as if a
 .Lp

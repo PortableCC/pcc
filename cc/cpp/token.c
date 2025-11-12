@@ -34,7 +34,7 @@
  *
  *	Other functions of common use:
  *	- inpch() returns a raw character from the current input stream.
- *	- inch() is like inpch but \\n and trigraphs are expanded.
+ *	- inch() is like inpch but \\n are expanded.
  *	- unch() pushes back a character to the input stream.
  *
  * Input data can be read from either stdio or a buffer.
@@ -52,7 +52,6 @@
  * 5.1.1.2 Translation phases:
  *	1) Convert UCN to UTF-8 which is what pcc uses internally (chkucn).
  *	   Remove \r (unwanted)
- *	   Convert trigraphs (chktg)
  *	2) Remove \\\n.  Need extra care for identifiers and #line.
  *	3) Tokenize.
  *	   Remove comments (fastcmnt)
@@ -123,7 +122,7 @@ static FILE *lifp;
 
 static usch *ucn(usch *p, usch *q);
 static void fastcmnt2(int);
-static int chktg2(int ch);
+static int chktg(int ch);
 
 /* some common special combos for initialization */
 #define C_NL	(C_SPEC|C_WSNL|C_PACK|C_ESTR)
@@ -228,26 +227,22 @@ packbuf(void)
 				return;
 	
 			switch (*p) {
-			case '?':
-				if (p[1] == '?'&& chktg2(p[2]))
-					goto slow;
-psave:				if (pend-p < 3) {
-					/* Save for future use */
-					q = ifiles->pbb+10;
-					while (pend > p)
-						*--q = *--pend;
-					*--q = 0;
-					*pend = 0;
-					return;
-				}
-				break;
-
 			case '\r':
 				goto slow;
 
 			case '\\':
-				if (p[1] == 0)
-					goto psave;
+				if (p[1] == 0) {
+					if (pend-p < 3) {
+						/* Save for future use */
+						q = ifiles->pbb+10;
+						while (pend > p)
+							*--q = *--pend;
+						*--q = 0;
+						*pend = 0;
+						return;
+					}
+					break;
+				}
 				if (p[1] == '\n' || (p[1] | 040) == 'u')
 					goto slow;
 				/* avoid fake escape next loop */
@@ -303,17 +298,6 @@ slow:		q = p;
 			p++, q++;
 			while (numnl > 0)
 				*q++ = '\n', numnl--;
-			break;
-
-		case '?':
-			if (pend-p < 3)
-				goto psave2;
-			if (p[1] == '?' && (l = chktg2(p[2]))) {
-				/* found trigraph */
-				p += 2;
-				*p = l;
-			} else
-				p++, q++;
 			break;
 
 		case 0:
@@ -475,7 +459,7 @@ newone:	if (ISCQ(ch = *inp++) == 0)
  * Return trigraph mapping char or 0.
  */
 static int
-chktg2(register int ch)
+chktg(register int ch)
 {
 	switch (ch) {
 	case '=':  return '#';
@@ -679,7 +663,7 @@ readid(int ch)
  *	- keywords (if not flslvl)
  *	- comments
  *
- *	Handle strings, numbers and trigraphs with care.
+ *	Handle strings and numbers.
  *	Only data from pp files are scanned here, never any rescans.
  *	This loop is always at trulvl.
  */
@@ -1020,6 +1004,40 @@ pb:	*--inp = c2;
 }
 
 /*
+ * Scan over an input file and convert its trigraphs before doing
+ * anything else.  This is only called if -T (convert trigraphs) is given.
+ * Trigraphs is deprecated in C23.
+ */
+static FILE *
+trigraphs(FILE *ifd)
+{
+	register int ch, c2, c3;
+	FILE *ofd = tmpfile();
+
+	ch = fgetc(ifd);
+	c2 = fgetc(ifd);
+	c3 = fgetc(ifd);
+
+	while (c3 >= 0) {
+		if (ch == '?' && c2 == '?' && chktg(c3)) {
+			ch = chktg(c3);
+			c2 = fgetc(ifd);
+			c3 = fgetc(ifd);
+		}
+		fputc(ch, ofd);
+		ch = c2;
+		c2 = c3;
+		c3 = fgetc(ifd);
+	}
+	fputc(ch, ofd);
+	if (c2 >= 0)
+		fputc(c2, ofd);
+	fclose(ifd);
+	rewind(ofd);
+	return ofd;
+}
+
+/*
  * A new file included.
  * If ifiles == NULL, this is the first file and already opened (stdin).
  */
@@ -1035,6 +1053,9 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 
 	ic->ifp = ifp;
 	ic->orgfn = ic->fname = file;
+
+	if (Tflag)
+		ic->ifp = trigraphs(ic->ifp);
 
 #if LIBVMF
 	if (ifiles) {

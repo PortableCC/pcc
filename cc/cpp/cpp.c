@@ -93,7 +93,7 @@ static void prrep(long);
 	(putob(ob, ch), 1) : (ob->buf[ob->cptr++] = ch))
 #define	cunput(x)	*--inp = x
 
-int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
+int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag, Tflag;
 char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows, readinc;
@@ -195,7 +195,7 @@ main(int argc, char **argv)
 	if ((mfp = tmpfile()) == NULL)
 		error("macro file");
 
-	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tU:Vvx:")) != -1) {
+	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tTU:Vvx:")) != -1) {
 		switch (ch) {
 		case 'A': /* assembler input */
 			Aflag++;
@@ -253,6 +253,10 @@ main(int argc, char **argv)
 
 		case 't':
 			tflag = 1;
+			break;
+
+		case 'T':
+			Tflag = 1;
 			break;
 
 #ifdef PCC_DEBUG
