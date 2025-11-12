@@ -138,7 +138,7 @@ struct includ {
 	FILE *ifp;		/* file to read from */
 	int opend, oinp;
 	usch *opbeg;
-	char *maxend;
+	int maxend;
 	int idx;
 	void *incs;
 };

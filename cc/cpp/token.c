@@ -182,6 +182,18 @@ short spechr[256] = {
 
 #define	INFLIRD	(CPPBUF-ENDFREE)
 
+static usch *
+addch(int len)
+{
+	if (len == ifiles->maxend)
+		pbeg = realloc(pbeg, ifiles->maxend += 5);
+	return pbeg;
+}
+#define	ADDCH(ninp, len, ch)	{			\
+	if (len == ifiles->maxend) ninp = addch(len);	\
+	ninp[len++] = ch;				\
+}
+
 /*
  * fill up the input buffer
  * n tells how nany chars at least.  0 == standard.
@@ -200,14 +212,13 @@ inpbuf(void)
 	if (inp < pend)
 		error("inp < pend");
 
-	inp = ninp = pbeg;
-	pend = pbeg + INFLIRD;
+	ninp = pbeg;
 
 	for (len = 0;;) {
 		if ((ch = getc(ifiles->ifp)) < 0)
 			break;
 		if (ch == '\\') {
-			ninp[len++] = ch;
+			ADDCH(ninp, len, ch);
 			ch = fgetc(ifiles->ifp);
 			if (ch == '\n') {
 				/* \\n */
@@ -219,19 +230,19 @@ inpbuf(void)
 				ungetc(ch, ifiles->ifp);
 			continue;
 		}
-		ninp[len++] = ch;
+		ADDCH(ninp, len, ch);
 		if (ch == '\n')
 			break;
 	}
 	while (latelf) {
-		ninp[len++] = '\n';
+		ADDCH(ninp, len, '\n');
 		latelf--;
 	}
 
-	ninp += len;
-	pend = ninp;
-	*pend = 0;
-	return pend-inp;
+	ADDCH(ninp, len, 0);
+	inp = pbeg;
+	pend = ninp + len - 1;
+	return len-1;
 }
 
 /*
@@ -383,8 +394,9 @@ ucn(register int ch, register usch *buf, register int len)
 		m >>= (n++ ? 1 : 2);
 	}
 	*p++ = (((m << 1) ^ 0xfe) | cp);
-	while (p > bs)
-		buf[len++] = *--p;
+	while (p > bs) {
+		ADDCH(buf, len, *--p);
+	}
 	return len;
 }
 
@@ -885,7 +897,8 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	ic->oinp = inp - pbeg;
 	ic->opbeg = pbeg;
 
-	pend = inp = pbeg = xmalloc(CPPBUF);
+	pend = inp = pbeg = xmalloc(5);
+	ic->maxend = 5;
 	*inp = 0;
 	ic->lineno = 1;
 	escln = 0;
