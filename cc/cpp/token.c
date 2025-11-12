@@ -120,7 +120,7 @@ static struct iobuf *lb;
 static usch *lpbeg, *lpend, *linp;
 static FILE *lifp;
 
-static usch *ucn(usch *p, usch *q);
+static int ucn(int ch, usch *p, int len);
 static void fastcmnt2(int);
 static int chktg(int ch);
 
@@ -175,11 +175,7 @@ static int chktg(int ch);
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,
 
 short spechr[256] = {
-#ifdef CHAR_UNSIGNED
 	FIRST_128 LAST_128
-#else
-	LAST_128 FIRST_128
-#endif
 };
 
 #define	ENDFREE	4	/* space left at end of buffer */
@@ -193,141 +189,6 @@ short spechr[256] = {
 static int numnl;
 
 /*
- * Convert trigraphs and remove \\n from input stream.
- */
-static void
-packbuf(void)
-{
-	register usch *p, *q;
-	register int l;
-	usch *rq, *r;
-
-#ifdef PCC_DEBUG
-	if (*inp == 0 && pend > inp)
-		error("*inp == 0");
-#endif
-
-	q = pbeg + PBMAX;
-	/* if we found potential trigraph */
-	if (ifiles->pbb[9]) {
-		p = ifiles->pbb+10;
-		while ((*--inp = *--p))
-			q--;
-		inp++;
-		ifiles->pbb[9] = 0;
-	}
-
-	p = inp;
-	rq = q;
-	if (numnl == 0) {
-		for (;;) {
-			while (ISPACK(*p++) == 0)
-				;
-			if (--p >= pend)
-				return;
-	
-			switch (*p) {
-			case '\r':
-				goto slow;
-
-			case '\\':
-				if (p[1] == 0) {
-					if (pend-p < 3) {
-						/* Save for future use */
-						q = ifiles->pbb+10;
-						while (pend > p)
-							*--q = *--pend;
-						*--q = 0;
-						*pend = 0;
-						return;
-					}
-					break;
-				}
-				if (p[1] == '\n' || (p[1] | 040) == 'u')
-					goto slow;
-				/* avoid fake escape next loop */
-				if (p[1] == '\\')
-					p++;
-				break;
-
-			default:
-				break;
-			}
-			p++;
-		}
-slow:		q = p;
-	} 
-
-/* need to pack, so we must write as well */
-
-	for (;;) {
-		while (ISPACK(*q++ = *p++) == 0)
-			;
-		if (--p >= pend) {
-			*--q = 0;
-			pend = q;
-			inp = rq;
-			return;
-		}
-		q--;
-
-		switch (*p) {
-		case '\\':
-			if ((l = p[1]) == 0)
-				goto psave2;
-			if (l == '\n') {
-				p += 2;
-				numnl++;
-			} else if (l == 'u' || l == 'U') {
-				if (pend-p < 10) /* max len of UCN */
-					goto psave2;
-				if ((r = ucn(p, q)) != q) {
-					p += (l == 'u' ? 6 : 10);
-					q = r;
-				} else
-					p++, q++;
-			} else
-				p++, q++;
-			break;
-
-		case '\r':
-			p++;
-			break;
-
-		case '\n':
-			p++, q++;
-			while (numnl > 0)
-				*q++ = '\n', numnl--;
-			break;
-
-		case 0:
-			error("stray 0");
-		default:
-			p++, q++;
-			break;
-		}
-
-	}
-
-psave2:	
-	/* Save for future use */
-#ifdef PCC_DEBUG
-	if (pend-p > 9)
-		error("pend-p > 9");
-#endif
-
-	inp = rq;
-	rq = pend;
-	pend = q;
-	*q = 0;
-	q = ifiles->pbb+10;
-	while (rq > p)
-		*--q = *--rq;
-	*--q = 0;
-	return;
-}
-
-/*
  * fill up the input buffer
  * n tells how nany chars at least.  0 == standard.
  * 0 if EOF, != 0 if something could fill up buf.
@@ -336,7 +197,8 @@ int
 inpbuf(void)
 {
 	register usch *ninp, *oinp;
-	register int len;
+	register int len, ch;
+	int latelf = 0;
 
 	if (ifiles->ifp == NULL)
 		return 0;
@@ -351,62 +213,36 @@ inpbuf(void)
 	pend = pbeg + INFLIRD + PBMAX;
 	inp = pbeg+PBMAX+numnl;
 
-	if ((len = (int)fread(ninp, 1, pend - ninp, ifiles->ifp)) == 0)
-		if (ferror(ifiles->ifp))
-			error("read error on file %s", ifiles->orgfn);
+	for (len = 0;;) {
+		if ((ch = getc(ifiles->ifp)) < 0)
+			break;
+		if (ch == '\\') {
+			ninp[len++] = ch;
+			ch = fgetc(ifiles->ifp);
+			if (ch == '\n') {
+				/* \\n */
+				len--;
+				latelf++;
+			} else if (ch == 'u' || ch == 'U') {
+				len = ucn(ch, ninp, len-1);
+			} else
+				ungetc(ch, ifiles->ifp);
+			continue;
+		}
+		ninp[len++] = ch;
+		if (ch == '\n')
+			break;
+	}
+	while (latelf) {
+		ninp[len++] = '\n';
+		latelf--;
+	}
 
 	ninp += len;
 	pend = ninp;
 	*pend = 0;
-
-#if 0
-{ usch *w = inp; while (w < pend) { if (*w == 0) error("*w == 0"); w++; } }
-#endif
-	packbuf();
-#if 0
-{ usch *w = inp; while (w < pend) { if (*w == 0) error("*w == 0-2"); w++; } }
-#endif
 	return pend-inp;
 }
-
-#ifdef notyet
-/*
- * moves data from inp to p to beginning of buffer.
- * fill up the input buffer from p to INFLIRD-numnl
- * update pointers (pend, inp, outp, p)
- */
-static usch *
-refill(usch *p)
-{
-	register usch *ninp, *oinp;
-	register int len;
-
-	/* dump(); */
-	ninp = pbeg+PBMAX;
-	oinp = inp;
-	while (oinp < pend)
-		*ninp++ = *oinp++;
-	p -= (oinp - ninp);
-	pend -= (oinp - ninp);
-	outp = inp = pbeg+PBMAX;
-
-	if (ifiles->infil == -1)
-		return 0;
-
-	ninp = pbeg + PBMAX + INFLIRD - numnl;
-	do {
-		if ((len = (int)read(ifiles->infil, pend, ninp-pend)) < 0)
-			error("read error on file %s", ifiles->orgfn);
-		if (len == 0)
-			break;
-		pend += len;
-	} while (pend < ninp);
-
-	*pend = 0;
-	packbuf();
-	return p;
-}
-#endif
 
 /*
  * Return a quick-cooked character.
@@ -451,7 +287,7 @@ newone:	if (ISCQ(ch = *inp++) == 0)
 		}
 		goto newone;
 	}
-	error("ch error");
+	error("ch error: %d", ch);
 	return 0; /* XXX */
 }
 
@@ -517,24 +353,22 @@ fastcmnt2(register int ch)
  * check for universal-character-name on input, and
  * unput to the pushback buffer encoded as UTF-8.
  */
-static usch *
-ucn(register usch *p, register usch *q)
+static int
+ucn(register int ch, register usch *buf, register int len)
 {
 	unsigned long cp, m;
-	register int ch;
-	usch bs[6];
+	usch bs[6], *p;
 	int n;
 
-	p++;
-	n = *p++ == 'u' ? 4 : 8;
+	n = ch == 'u' ? 4 : 8;
 	cp = 0;
 	while (n-- > 0) {
-		if ((ch = (unsigned char)*p++) == 0 ||
+		if ((ch = fgetc(ifiles->ifp)) < 0 ||
 		    (ISDIGIT(ch) || ((ch|040) >= 'a' && (ch|040) <= 'f')) == 0) {
 #if 0 			/* leave untouched */
 			warning("invalid universal character name");
 #endif
-			return q;
+			return len;
 		}
 		cp = cp * 16 + dig2num(ch);
 	}
@@ -549,7 +383,7 @@ ucn(register usch *p, register usch *q)
 #endif
 
 	if (cp == 0)
-		return q; /* ignore zeroes */
+		return len; /* ignore zeroes */
 	n = 0;
 	m = 0x7f;
 	p = bs;
@@ -560,8 +394,8 @@ ucn(register usch *p, register usch *q)
 	}
 	*p++ = (((m << 1) ^ 0xfe) | cp);
 	while (p > bs)
-		*q++ = *--p;
-	return q;
+		buf[len++] = *--p;
+	return len;
 }
 
 /*
@@ -995,11 +829,9 @@ ident:		if (ISID0(t) == 0)
 		}
 		break;
 	}
-//fprintf(stderr, "uulex1: ch '%c' %d val=%lld '%s'\n", ch, ch, yynode.nd_val, inp);
 	return ch;
 
 pb:	*--inp = c2;
-//fprintf(stderr, "uulex2: ch '%c' %d val=%lld '%s'\n", ch, ch, yynode.nd_val, inp);
 	return ch;
 }
 
@@ -1039,7 +871,6 @@ trigraphs(FILE *ifd)
 
 /*
  * A new file included.
- * If ifiles == NULL, this is the first file and already opened (stdin).
  */
 void
 pushfile(FILE *ifp, const usch *file, int idx, void *incs)
@@ -1048,36 +879,23 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	register struct includ *ic;
 	register int otrulvl;
 
+	if (Tflag)
+		ifp = trigraphs(ifp);
+
 	ic = &ibuf;
 	ic->next = ifiles;
+	ifiles = ic;
 
 	ic->ifp = ifp;
 	ic->orgfn = ic->fname = file;
 
-	if (Tflag)
-		ic->ifp = trigraphs(ic->ifp);
 
-#if LIBVMF
-	if (ifiles) {
-		vmmodify(ifiles->vseg);
-		vmunlock(ifiles->vseg);
-	}
-	ic->vseg = vmmapseg(&ibspc, inclevel);
-	vmlock(ic->vseg);
-#endif
-	ifiles = ic;
-
-	ic->pbb[9] = 0;
 	ic->opend = pend - pbeg;
 	ic->oinp = inp - pbeg;
 	ic->opbeg = pbeg;
 	/* dump(); */
-#if LIBVMF
-	pend = inp = pbeg = (usch *)ifiles->vseg->s_cinfo;
-#else
 	pend = inp = pbeg = xmalloc(CPPBUF);
 	*inp = 0;
-#endif
 	ic->lineno = 1;
 	escln = 0;
 	ic->idx = idx;
@@ -1092,24 +910,10 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 
 	ifiles = ic->next;
 	inclevel--;
-#if LIBVMF
-	vmmodify(ic->vseg);
-	vmunlock(ic->vseg);
-	if (ifiles) {
-		ifiles->vseg = vmmapseg(&ibspc, inclevel);
-		vmlock(ifiles->vseg);
-
-		pbeg = (usch *)ifiles->vseg->s_cinfo;
-		pend = pbeg + ic->opend;
-		inp = pbeg + ic->oinp;
-		/* XXX adjust offsets */
-	}
-#else /* LIBVMF */
 	free(pbeg);
 	pbeg = ic->opbeg;
 	pend = pbeg + ic->opend;
 	inp = pbeg + ic->oinp;
-#endif /* LIBVMF */
 }
 
 /*

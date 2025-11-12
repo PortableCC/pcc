@@ -166,7 +166,7 @@ static int skipws(struct iobuf *ib);
 static int getyp(usch *s);
 static void macsav(int ch);
 static void fstrstr(struct iobuf *ib, struct iobuf *ob);
-static usch *chkfile(const usch *n1, const usch *n2);
+static usch *chkfile(const char *n1, const char *n2);
 static usch *addname(const usch *str);
 static void *addblock(int sz);
 
@@ -719,10 +719,10 @@ fsrch(const usch *fn, int *idx, struct incs **wa)
 		if (i > *idx)
 			w = incdir[i];
 		for (; w; w = w->next) {
-			if ((res = chkfile(fn, w->dir)) != NULL) {
+			if ((res = chkfile((char *)fn, (char *)w->dir)) != NULL) {
 				*idx = i;
 				*wa = w->next;
-				return res;
+				return (char *)res;
 			}
 		}
 	}
@@ -778,7 +778,7 @@ chkfile(register const char *file, register const char *path)
 
 	snprintf(buf, l, "%s%s%s", path, *path ? "/" : "", file);
 	if (access(buf, R_OK) == 0)
-		return addname(buf);
+		return addname((usch *)buf);
 	return NULL;
 }
 
@@ -808,7 +808,7 @@ include(void)
 	readinc = 0;
 	ob = yynode.nd_ob;
 	ob->buf[ob->cptr-1] = 0; /* last \" */
-	fname = &ob->buf[1];
+	fname = (char *)&ob->buf[1];
 
 	/* absolute path? */
 	if (*fname == '/' && (fn = chkfile(fname, "")))
@@ -816,17 +816,17 @@ include(void)
 	if (ob->buf[0] == '\"') {
 		if ((nm = (usch *)strrchr((char *)ifiles->orgfn, '/'))) {
 			*nm = 0;
-		 	fn = chkfile(fname, ifiles->orgfn);
+		 	fn = chkfile(fname, (char *)ifiles->orgfn);
 			*nm = '/';
 		} else 
 			fn = chkfile(fname, "");
 		if (fn != NULL)
 			goto end;
 	}
-	if ((fn = fsrch(fname, &idx, &inw)) == NULL)
+	if ((fn = (usch *)fsrch((usch *)fname, &idx, &inw)) == NULL)
 		error("cannot find '%s'", fn);
 end:	bufree(ob);
-	if ((ifp = fopen(fn, "r")) == NULL)
+	if ((ifp = fopen((char *)fn, "r")) == NULL)
 		error("pushfile: error open %s", fn);
 	pushfile(ifp, fn, idx, inw);
 	prtline(1);
@@ -853,11 +853,11 @@ include_next(void)
 
 	idx = ifiles->idx;
 	inw = ifiles->incs;
-	if ((fn = fsrch(&ob->buf[1], &idx, &inw)) == NULL)
+	if ((fn = (usch *)fsrch(&ob->buf[1], &idx, &inw)) == NULL)
 		error("cannot find '%s'", &ob->buf[1]);
 
 	bufree(ob);
-	if ((ifp = fopen(fn, "r")) == NULL)
+	if ((ifp = fopen((char *)fn, "r")) == NULL)
 		error("pushfile: error open %s", fn);
 	pushfile(ifp, fn, idx, inw);
 	prtline(1);
@@ -2453,7 +2453,7 @@ lookup(const usch *key, int enterf)
 
 	for (sp = symhsh[hsh]; sp; sp = sp->next)
 		if (*sp->namep == *key && sp->namep[len] == 0 &&
-		    strncmp(sp->namep, key, len) == 0)
+		    strncmp((char *)sp->namep, (char *)key, len) == 0)
 			break;
 
 	if (enterf == FIND) {

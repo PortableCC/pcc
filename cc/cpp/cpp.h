@@ -30,12 +30,7 @@
 #include <vmf.h>
 #endif
 
-typedef char usch;
-#ifdef CHAR_UNSIGNED
-#define SPECADD	0
-#else
-#define SPECADD	128
-#endif
+typedef unsigned char usch;
 
 extern	int	trulvl;
 extern	int	flslvl;
@@ -106,16 +101,16 @@ extern	int	escln;	/* escaped newlines, to be added */
 
 extern short spechr[];
 
-#define ISSPEC(x)	((SPECADD+spechr)[(int)(x)] & (C_SPEC))
-#define ISC2(x)		((SPECADD+spechr)[(int)(x)] & (C_2))
-#define ISWSNL(x)	((SPECADD+spechr)[(int)(x)] & (C_WSNL))
+#define ISSPEC(x)	(spechr[(int)(x)] & (C_SPEC))
+#define ISC2(x)		(spechr[(int)(x)] & (C_2))
+#define ISWSNL(x)	(spechr[(int)(x)] & (C_WSNL))
 #define ISWS(x)		((x) == '\t' || (x) == ' ')
-#define ISPACK(x)	((SPECADD+spechr)[(int)(x)] & C_PACK)
-#define ISID(x)		((SPECADD+spechr)[(int)(x)] & C_ID)
-#define ISID0(x)	((SPECADD+spechr)[(int)(x)] & C_ID0)
-#define	ISDIGIT(x)	((SPECADD+spechr)[(int)(x)] & C_DIGIT)
-#define	ISCQ(x)		((SPECADD+spechr)[(int)(x)] & C_Q)
-#define	ISESTR(x)	((SPECADD+spechr)[(int)(x)] & C_ESTR)
+#define ISPACK(x)	(spechr[(int)(x)] & C_PACK)
+#define ISID(x)		(spechr[(int)(x)] & C_ID)
+#define ISID0(x)	(spechr[(int)(x)] & C_ID0)
+#define	ISDIGIT(x)	(spechr[(int)(x)] & C_DIGIT)
+#define	ISCQ(x)		(spechr[(int)(x)] & C_Q)
+#define	ISESTR(x)	(spechr[(int)(x)] & C_ESTR)
 
 /* buffer definition */
 #define	BNORMAL	0	/* standard buffer */
@@ -150,12 +145,9 @@ struct includ {
 	FILE *ifp;		/* file to read from */
 	int opend, oinp;
 	usch *opbeg;
+	char *maxend;
 	int idx;
 	void *incs;
-	usch pbb[10];
-#if LIBVMF
-	struct vseg *vseg;
-#endif
 };
 #define INCINC 0
 #define SYSINC 1
