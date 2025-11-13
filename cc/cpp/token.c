@@ -113,7 +113,7 @@ extern int skpows;
 int escln;
 
 struct includ *ifiles;
-usch *pbeg, *outp, *inp, *pend;
+usch *pbeg, *inp, *pend;
 
 /* used by yylex() buffer expansion */
 static struct iobuf *lb;
@@ -865,7 +865,8 @@ trigraphs(FILE *ifd)
 		c2 = c3;
 		c3 = fgetc(ifd);
 	}
-	fputc(ch, ofd);
+	if (ch >= 0)
+		fputc(ch, ofd);
 	if (c2 >= 0)
 		fputc(c2, ofd);
 	fclose(ifd);
@@ -897,8 +898,8 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	ic->oinp = inp - pbeg;
 	ic->opbeg = pbeg;
 
-	pend = inp = pbeg = xmalloc(5);
-	ic->maxend = 5;
+	pend = inp = pbeg = xmalloc(ic->maxend = 5);
+
 	*inp = 0;
 	ic->lineno = 1;
 	escln = 0;

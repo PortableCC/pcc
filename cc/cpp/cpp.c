@@ -101,7 +101,7 @@ int warnings, Mxlen, skpows, readinc;
 struct symtab *symhsh[SYMHSZ];
 
 /* macro file pointer */
-FILE *mfp;
+FILE *mfp, *tfp;
 
 /* include dirs */
 struct incs {
@@ -173,8 +173,6 @@ static void *addblock(int sz);
 int
 main(int argc, char **argv)
 {
-	struct includ bic;
-	struct iobuf *fb = getobuf(BNORMAL);
 	register int ch;
 	register const usch *fn2;
 	FILE *ifp;
@@ -194,6 +192,8 @@ main(int argc, char **argv)
 #endif
 	if ((mfp = tmpfile()) == NULL)
 		error("macro file");
+	if ((tfp = tmpfile()) == NULL)
+		error("temp file");
 
 	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tTU:Vvx:")) != -1) {
 		switch (ch) {
@@ -212,15 +212,15 @@ main(int argc, char **argv)
 		case 'D': /* define something */
 			if ((a = strchr(optarg, '=')) != NULL)
 				*a = ' ';
-			bsheap(fb, "#define %s%s", optarg, a ? "\n" : " 1\n");
+			fprintf(tfp, "#define %s%s", optarg, a ? "\n" : " 1\n");
 			break;
 
 		case 'i': /* include */
-			bsheap(fb, "#include \"%s\"\n", optarg);
+			fprintf(tfp, "#include \"%s\"\n", optarg);
 			break;
 
 		case 'U': /* undef */
-			bsheap(fb, "#undef %s\n", optarg);
+			fprintf(tfp, "#undef %s\n", optarg);
 			break;
 
 		case 'd':
@@ -315,14 +315,14 @@ main(int argc, char **argv)
 
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
-	bsheap(fb, "#define __BSD2_11__ 1\n");
-	bsheap(fb, "#define BSD2_11 1\n");
-	bsheap(fb, "#define __pdp11__ 1\n");
-	bsheap(fb, "#define pdp11 1\n");
-	bsheap(fb, "#define unix 1\n"); /* XXX go away */
+	fprintf(tfp, "#define __BSD2_11__ 1\n");
+	fprintf(tfp, "#define BSD2_11 1\n");
+	fprintf(tfp, "#define __pdp11__ 1\n");
+	fprintf(tfp, "#define pdp11 1\n");
+	fprintf(tfp, "#define unix 1\n"); /* XXX go away */
 	addidir("/usr/include", &incdir[SYSINC]);
 	if (tflag == 0)
-		bsheap(fb, "#define __STDC__ 1\n");
+		fprintf(tfp, "#define __STDC__ 1\n");
 #endif
 
 	fprintf(mfp, "%cdefined%c", 0, 0);
@@ -368,23 +368,16 @@ main(int argc, char **argv)
 		fn2 = (const usch *)"<stdin>";
 	}
 
-	/* initialization defines */
-	if (dMflag)
-		fwrite(fb->buf, fb->cptr, 1, stdout);
-	fb->buf[fb->cptr] = 0;
-	memset(&bic, 0, sizeof(bic));
-	bic.fname = bic.orgfn = (const usch *)"<command line>";
-	bic.lineno = 1;
-	bic.ifp = NULL;
-	fb->bsz = fb->cptr;
-	fb->cptr = 0;
-	pbeg = outp = inp = fb->buf;
-	pend = pbeg + fb->bsz;
-	ifiles = &bic;
-	fastscan();
-	bufree(fb);
-	ifiles = NULL;
-	/* end initial defines */
+        /* initialization defines */
+        if (dMflag) {
+                char buf[50];
+
+                rewind(tfp);
+                while ((ch = fread(buf, 1, sizeof buf, tfp)) > 0)
+                        fwrite(buf, ch, 1, stdout);
+        }
+	rewind(tfp);
+	pushfile(tfp, (usch *)"<command line>", 0, 0);
 
 	pushfile(ifp, fn2, 0, NULL);
 

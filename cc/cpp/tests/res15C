@@ -1,4 +1,6 @@
 
+# 1 "<command line>"
+
 # 1 "<stdin>"
 
 do { _foo_X (); } while (/* CONSTCOND */0);
