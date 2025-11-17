@@ -93,7 +93,7 @@ static void prrep(long);
 	(putob(ob, ch), 1) : (ob->buf[ob->cptr++] = ch))
 #define	cunput(x)	*--inp = x
 
-int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag;
+int Aflag, Cflag, Eflag, Mflag, dMflag, Pflag, MPflag, MMDflag, Tflag;
 char *Mfile, *MPfile;
 char *Mxfile;
 int warnings, Mxlen, skpows, readinc;
@@ -101,7 +101,7 @@ int warnings, Mxlen, skpows, readinc;
 struct symtab *symhsh[SYMHSZ];
 
 /* macro file pointer */
-FILE *mfp;
+FILE *mfp, *tfp;
 
 /* include dirs */
 struct incs {
@@ -166,15 +166,13 @@ static int skipws(struct iobuf *ib);
 static int getyp(usch *s);
 static void macsav(int ch);
 static void fstrstr(struct iobuf *ib, struct iobuf *ob);
-static usch *chkfile(const usch *n1, const usch *n2);
+static usch *chkfile(const char *n1, const char *n2);
 static usch *addname(const usch *str);
 static void *addblock(int sz);
 
 int
 main(int argc, char **argv)
 {
-	struct includ bic;
-	struct iobuf *fb = getobuf(BNORMAL);
 	register int ch;
 	register const usch *fn2;
 	FILE *ifp;
@@ -194,8 +192,10 @@ main(int argc, char **argv)
 #endif
 	if ((mfp = tmpfile()) == NULL)
 		error("macro file");
+	if ((tfp = tmpfile()) == NULL)
+		error("temp file");
 
-	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tU:Vvx:")) != -1) {
+	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tTU:Vvx:")) != -1) {
 		switch (ch) {
 		case 'A': /* assembler input */
 			Aflag++;
@@ -212,15 +212,15 @@ main(int argc, char **argv)
 		case 'D': /* define something */
 			if ((a = strchr(optarg, '=')) != NULL)
 				*a = ' ';
-			bsheap(fb, "#define %s%s", optarg, a ? "\n" : " 1\n");
+			fprintf(tfp, "#define %s%s", optarg, a ? "\n" : " 1\n");
 			break;
 
 		case 'i': /* include */
-			bsheap(fb, "#include \"%s\"\n", optarg);
+			fprintf(tfp, "#include \"%s\"\n", optarg);
 			break;
 
 		case 'U': /* undef */
-			bsheap(fb, "#undef %s\n", optarg);
+			fprintf(tfp, "#undef %s\n", optarg);
 			break;
 
 		case 'd':
@@ -253,6 +253,10 @@ main(int argc, char **argv)
 
 		case 't':
 			tflag = 1;
+			break;
+
+		case 'T':
+			Tflag = 1;
 			break;
 
 #ifdef PCC_DEBUG
@@ -311,14 +315,14 @@ main(int argc, char **argv)
 
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
-	bsheap(fb, "#define __BSD2_11__ 1\n");
-	bsheap(fb, "#define BSD2_11 1\n");
-	bsheap(fb, "#define __pdp11__ 1\n");
-	bsheap(fb, "#define pdp11 1\n");
-	bsheap(fb, "#define unix 1\n"); /* XXX go away */
+	fprintf(tfp, "#define __BSD2_11__ 1\n");
+	fprintf(tfp, "#define BSD2_11 1\n");
+	fprintf(tfp, "#define __pdp11__ 1\n");
+	fprintf(tfp, "#define pdp11 1\n");
+	fprintf(tfp, "#define unix 1\n"); /* XXX go away */
 	addidir("/usr/include", &incdir[SYSINC]);
 	if (tflag == 0)
-		bsheap(fb, "#define __STDC__ 1\n");
+		fprintf(tfp, "#define __STDC__ 1\n");
 #endif
 
 	fprintf(mfp, "%cdefined%c", 0, 0);
@@ -364,23 +368,16 @@ main(int argc, char **argv)
 		fn2 = (const usch *)"<stdin>";
 	}
 
-	/* initialization defines */
-	if (dMflag)
-		fwrite(fb->buf, fb->cptr, 1, stdout);
-	fb->buf[fb->cptr] = 0;
-	memset(&bic, 0, sizeof(bic));
-	bic.fname = bic.orgfn = (const usch *)"<command line>";
-	bic.lineno = 1;
-	bic.ifp = NULL;
-	fb->bsz = fb->cptr;
-	fb->cptr = 0;
-	pbeg = outp = inp = fb->buf;
-	pend = pbeg + fb->bsz;
-	ifiles = &bic;
-	fastscan();
-	bufree(fb);
-	ifiles = NULL;
-	/* end initial defines */
+        /* initialization defines */
+        if (dMflag) {
+                char buf[50];
+
+                rewind(tfp);
+                while ((ch = fread(buf, 1, sizeof buf, tfp)) > 0)
+                        fwrite(buf, ch, 1, stdout);
+        }
+	rewind(tfp);
+	pushfile(tfp, (usch *)"<command line>", 0, 0);
 
 	pushfile(ifp, fn2, 0, NULL);
 
@@ -715,10 +712,10 @@ fsrch(const usch *fn, int *idx, struct incs **wa)
 		if (i > *idx)
 			w = incdir[i];
 		for (; w; w = w->next) {
-			if ((res = chkfile(fn, w->dir)) != NULL) {
+			if ((res = chkfile((char *)fn, (char *)w->dir)) != NULL) {
 				*idx = i;
 				*wa = w->next;
-				return res;
+				return (char *)res;
 			}
 		}
 	}
@@ -774,7 +771,7 @@ chkfile(register const char *file, register const char *path)
 
 	snprintf(buf, l, "%s%s%s", path, *path ? "/" : "", file);
 	if (access(buf, R_OK) == 0)
-		return addname(buf);
+		return addname((usch *)buf);
 	return NULL;
 }
 
@@ -804,7 +801,7 @@ include(void)
 	readinc = 0;
 	ob = yynode.nd_ob;
 	ob->buf[ob->cptr-1] = 0; /* last \" */
-	fname = &ob->buf[1];
+	fname = (char *)&ob->buf[1];
 
 	/* absolute path? */
 	if (*fname == '/' && (fn = chkfile(fname, "")))
@@ -812,17 +809,17 @@ include(void)
 	if (ob->buf[0] == '\"') {
 		if ((nm = (usch *)strrchr((char *)ifiles->orgfn, '/'))) {
 			*nm = 0;
-		 	fn = chkfile(fname, ifiles->orgfn);
+		 	fn = chkfile(fname, (char *)ifiles->orgfn);
 			*nm = '/';
 		} else 
 			fn = chkfile(fname, "");
 		if (fn != NULL)
 			goto end;
 	}
-	if ((fn = fsrch(fname, &idx, &inw)) == NULL)
+	if ((fn = (usch *)fsrch((usch *)fname, &idx, &inw)) == NULL)
 		error("cannot find '%s'", fn);
 end:	bufree(ob);
-	if ((ifp = fopen(fn, "r")) == NULL)
+	if ((ifp = fopen((char *)fn, "r")) == NULL)
 		error("pushfile: error open %s", fn);
 	pushfile(ifp, fn, idx, inw);
 	prtline(1);
@@ -849,11 +846,11 @@ include_next(void)
 
 	idx = ifiles->idx;
 	inw = ifiles->incs;
-	if ((fn = fsrch(&ob->buf[1], &idx, &inw)) == NULL)
+	if ((fn = (usch *)fsrch(&ob->buf[1], &idx, &inw)) == NULL)
 		error("cannot find '%s'", &ob->buf[1]);
 
 	bufree(ob);
-	if ((ifp = fopen(fn, "r")) == NULL)
+	if ((ifp = fopen((char *)fn, "r")) == NULL)
 		error("pushfile: error open %s", fn);
 	pushfile(ifp, fn, idx, inw);
 	prtline(1);
@@ -2449,7 +2446,7 @@ lookup(const usch *key, int enterf)
 
 	for (sp = symhsh[hsh]; sp; sp = sp->next)
 		if (*sp->namep == *key && sp->namep[len] == 0 &&
-		    strncmp(sp->namep, key, len) == 0)
+		    strncmp((char *)sp->namep, (char *)key, len) == 0)
 			break;
 
 	if (enterf == FIND) {

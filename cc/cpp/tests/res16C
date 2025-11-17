@@ -1,4 +1,6 @@
 
+# 1 "<command line>"
+
 # 1 "<stdin>"
 This file is testing line counting in various scenarios involving
 escaped newlines, including using the trigraph escape sequence

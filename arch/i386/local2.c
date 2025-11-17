@@ -112,6 +112,7 @@ prologue(struct interpass_prolog *ipp)
 	 * add to the stack.
 	 */
 	addto = offcalc(ipp);
+	addto = (addto + 3) & ~3;
 #if defined(MACHOABI)
 	addto = (addto + 15) & ~15;	/* stack alignment */
 #endif
