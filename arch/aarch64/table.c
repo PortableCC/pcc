@@ -28,8 +28,8 @@
 
 #include "pass2.h"
 
-#define TUWORD	TUNSIGNED|TULONG
-#define TSWORD	TINT|TLONG
+#define TUWORD	TUNSIGNED
+#define TSWORD	TINT
 #define TWORD	TUWORD|TSWORD
 
 #define XSL(c)  NEEDS(NREG(c, 1), NSL(c))
@@ -43,8 +43,8 @@ struct optab table[] = {
 
 /* PCONVs are not necessary */
 { PCONV,	INAREG,
-	SAREG,	TWORD|TPOINT,
-	SAREG,	TWORD|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
 		0,	RLEFT,
 		COM "pointer conversion\n", },
 
@@ -73,9 +73,21 @@ struct optab table[] = {
 
 { SCONV,	INAREG,
 	SAREG,	TCHAR,
-	SAREG,	TUWORD|TUSHORT|TUCHAR,
+	SAREG,  TUCHAR,
 		XSL(A),	RESC1,
-		"	and A1,AL,#255" COM "convert char to uchar/ushort/uint\n", },
+		"	and A1,AL,#255" COM "convert char to uchar\n", },
+
+{ SCONV,	INAREG,
+	SAREG,	TCHAR,
+	SAREG,	TUSHORT,
+		XSL(A),	RESC1,
+		"	and A1,AL,#65535" COM "convert char to ushort\n", },
+
+{ SCONV,	INAREG,
+	SAREG,	TCHAR,
+	SAREG,	TUWORD,
+		XSL(A),	RESC1,
+		"	mov A1,AL" COM "convert char to uint\n", },
 
 { SCONV,	INAREG | FEATURE_EXTEND,
 	SAREG,	TUCHAR,
@@ -87,8 +99,8 @@ struct optab table[] = {
 	SAREG,	TUCHAR,
 	SAREG,	TCHAR,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl #24" COM "convert uchar to char\n"
-		"	mov A1,A1,lsr #24\n", },
+		"	lsl A1,AL,#24" COM "convert uchar to char\n"
+		"	asr A1,A1,#24\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TUCHAR,
@@ -102,18 +114,17 @@ struct optab table[] = {
 		0,	RLEFT,
 		COM "convert short to int\n", },
 
-{ SCONV,	INAREG | FEATURE_EXTEND,
+{ SCONV,	INAREG,
 	SAREG,	TSHORT,
-	SAREG,	TUWORD|TUSHORT,
+	SAREG,	TUSHORT,
 		XSL(A),	RESC1,
-		"	uxth A1,AL" COM "convert short to uint\n", },
+		"	and A1,AL,#65535" COM "convert short to ushort\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TSHORT,
-	SAREG,	TUWORD|TUSHORT,
+	SAREG,	TUWORD,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl #16" COM "convert short to uint\n"
-		"	mov A1,AL,lsr #16\n", },
+		"	mov A1,AL" COM "convert short to uint\n", },
 
 { SCONV,	INAREG | FEATURE_EXTEND,
 	SAREG,	TUSHORT,
@@ -125,8 +136,8 @@ struct optab table[] = {
 	SAREG,	TUSHORT,
 	SAREG,	TSHORT,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl #16" COM "convert ushort to short\n"
-		"	mov A1,A1,lsr #16\n", },
+		"	lsl A1,AL,#16" COM "convert ushort to short\n"
+		"	asr A1,A1,#16\n", },
 
 { SCONV,	INAREG | FEATURE_EXTEND,
 	SAREG,	TSHORT|TUSHORT,
@@ -138,14 +149,8 @@ struct optab table[] = {
 	SAREG,	TSHORT|TUSHORT,
 	SAREG,	TCHAR,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl #24" COM "convert (u)short to char\n"
-		"	mov A1,A1,lsr #24\n", },
-
-{ SCONV,	INAREG,
-	SAREG,	TSHORT|TUSHORT,
-	SAREG,	TCHAR,
-		XSL(A),	RESC1,
-		"	sxtb A1,AL" COM "convert (u)short to char\n", },
+		"	lsl A1,AL,#24" COM "convert (u)short to char\n"
+		"	asr A1,A1,#24\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TSHORT|TUSHORT,
@@ -169,8 +174,8 @@ struct optab table[] = {
 	SAREG,	TWORD,
 	SAREG,	TCHAR,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl #24" COM "convert (u)int to char\n"
-		"	mov A1,A1,lsr #24\n", },
+		"	lsl A1,AL,#24" COM "convert (u)int to char\n"
+		"	asr A1,A1,#24\n", },
 
 { SCONV,	INAREG | FEATURE_EXTEND,
 	SAREG,	TWORD,
@@ -182,94 +187,87 @@ struct optab table[] = {
 	SAREG,	TWORD,
 	SAREG,	TSHORT,
 		XSL(A),	RESC1,
-		"	and A1,AL,65535" COM "convert (u)int to short\n", },
+		"	lsl A1,AL,#16" COM "convert (u)int to short\n"
+		"	asr A1,A1,#16\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TWORD,
 	SAREG,	TUCHAR,
 		XSL(A),	RESC1,
-		"	and A1,AL,#255" COM "convert uchar to char\n", },
-
-{ SCONV,	INAREG | FEATURE_EXTEND,
-	SAREG,	TWORD,
-	SAREG,	TUSHORT,
-		XSL(A),	RESC1,
-		"	uxth A1,AL" COM "convert int to ushort\n", },
+		"	and A1,AL,#255" COM "convert (u)int to uchar\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TWORD,
 	SAREG,	TUSHORT,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl #16" COM "convert int to ushort\n"
-		"	mov A1,AL,lsr #16\n", },
+		"	and A1,AL,#65535" COM "convert (u)int to ushort\n", },
 
 { SCONV,	INAREG,
-	SAREG,	TPOINT|TWORD,
-	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD,
+	SAREG,	TWORD,
 		0,	RLEFT,
-		COM "convert between pointers and words\n", },
+		COM "convert between words\n", },
 
-{ SCONV,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
+{ SCONV,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
 		0,	RLEFT,
 		COM "convert (u)longlong to (u)longlong\n", },
 
-/* convert (u)char/(u)short/(u)int to longlong */
-{ SCONV,	INBREG,
-	SAREG,	TCHAR|TUCHAR|TSHORT|TUSHORT|TWORD,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),		RESC1,
-		"	sxtw A1,AL" COM "convert (u)char/(u)short/(u)int to (u)longlong\n", },
+{ SCONV,	INAREG | FEATURE_EXTEND,
+	SAREG,	TCHAR|TSHORT|TSWORD,
+	SAREG,	TLONGLONG,
+		XSL(A),		RESC1,
+		"	sxtw A1,AL" COM "convert char/short/int to longlong\n", },
+
+{ SCONV,	INAREG,
+	SAREG,	TCHAR|TSHORT|TSWORD,
+	SAREG,	TLONGLONG,
+		XSL(A),		RESC1,
+		"	lsl A1,ZXAL,#32" COM "convert char/short/int to longlong\n"
+		"	asr A1,A1,#32\n", },
 
 { SCONV,	INAREG | FEATURE_EXTEND,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TCHAR,
-		NAREG,		RESC1,
-		"	sxtb A1,AL" COM "convert (u)longlong to char\n", },
+	SAREG,	TCHAR|TSHORT|TSWORD,
+	SAREG,	TULONGLONG,
+		XSL(A),		RESC1,
+		"	sxtw A1,AL" COM "convert char to ulonglong\n", },
+{ SCONV,	INAREG,
+	SAREG,	TCHAR|TSHORT|TSWORD,
+	SAREG,	TULONGLONG,
+		XSL(A),	RESC1,
+		"	lsl A1,ZXAL,#32" COM "convert char/short/int to ulonglong\n"
+		"	asr A1,A1,#32\n", },
 
 { SCONV,	INAREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TCHAR,
-		NAREG,		RESC1,
-		"ZD\n", },
-
-{ SCONV,	INAREG | FEATURE_EXTEND,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TSHORT,
-		NAREG,		RESC1,
-		"	sxth A1,AL" COM "convert (u)longlong to short\n", },
+	SAREG,	TUCHAR|TUSHORT|TUWORD,
+	SAREG,	TLONGLONG|TULONGLONG,
+		0,		RLEFT,
+	        COM "convert uchar/ushort/uint to (u)longlong\n", },
 
 { SCONV,	INAREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TSHORT,
-		NAREG,		RESC1,
-		"ZD", },
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TCHAR|TSHORT|TSWORD,
+		XSL(A),		RESC1,
+	        "	mov A1,ZWAL" COM "convert (u)longlong to char/short/int\n", },
 
 { SCONV,	INAREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TWORD,
-		NAREG,		RESC1,
-		"ZD\n", },
-
-{ SCONV,	INAREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
 	SAREG,	TUCHAR,
-		NAREG,		RESC1,
-		COM "ZD\n", },
-
-{ SCONV,	INAREG | FEATURE_EXTEND,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TUSHORT,
-		NAREG,		RESC1,
-		"	uxth A1,AL" COM "convert (u)longlong to ushort\n", },
+		XSL(A),		RESC1,
+		"       and ZXA1,AL,#255" COM "convert (u)longlong to uchar\n", },
 
 { SCONV,	INAREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
 	SAREG,	TUSHORT,
-		NAREG,		RESC1,
-		"ZD\n", },
+		XSL(A),		RESC1,
+		"       and ZXA1,AL,#65535" COM "convert (u)longlong to ushort\n", },
 
+{ SCONV,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TUWORD,
+		XSL(A),		RESC1,
+		"       mov A1,ZWAL" COM "convert (u)longlong to uint\n", },
 
 /* conversions on load from memory */
 
@@ -288,25 +286,18 @@ struct optab table[] = {
 		"	ldrb A1,AL" COM "convert uchar to int/long\n", },
  
 /* short */
-{ SCONV,	INAREG | FEATURE_HALFWORDS,
+{ SCONV,	INAREG,
 	SOREG,	TSHORT,
 	SAREG,	TWORD,
 		XSL(A),	RESC1,
 		"	ldrsh A1,AL" COM "convert short to int/long\n", },
 
 /* ushort */
-{ SCONV,	INAREG | FEATURE_HALFWORDS,
-	SOREG,	TSHORT,
+{ SCONV,	INAREG,
+	SOREG,	TUSHORT,
 	SAREG,	TWORD,
 		XSL(A),	RESC1,
 		"	ldrh A1,AL" COM "convert ushort to int/long\n", },
-
-/* short */
-{ SCONV,	INAREG,
-	SOREG,	TSHORT|TUSHORT,
-	SAREG,	TWORD,
-		NEEDS(NREG(A, 2), NSL(A)), RESC1,
-		"ZH", },
 
 { SCONV,	INAREG | FEATURE_FPA,
 	SCREG,	TFLOAT,
@@ -332,6 +323,7 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)), RESC1,
 		"ZF", },
 
+/* XXX - investigate */
 { SCONV,	INBREG | FEATURE_FPA,
 	SCREG,	TFLOAT,
 	SBREG,	TULONGLONG|TLONGLONG,
@@ -344,6 +336,7 @@ struct optab table[] = {
 		NBREG,		RESC1,
 		COM "unimplemented\n", },
 
+/* XXX - investigate */
 { SCONV,	INBREG,
 	SAREG,	TFLOAT,
 	SBREG,	TULONGLONG|TLONGLONG,
@@ -374,6 +367,7 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R16), NRES(R0)),		RESC1,
 		"ZF", },
 
+/* XXX - investiagte */
 { SCONV,	INBREG | FEATURE_FPA,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SBREG,	TLONGLONG|TULONGLONG,
@@ -416,6 +410,7 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)),	RESC1,
 		"ZF", },
 
+/* XXX - investigate */
 { SCONV,	INCREG | FEATURE_FPA,
 	SBREG,	TULONGLONG|TLONGLONG,
 	SCREG,	TFLOAT,
@@ -458,6 +453,7 @@ struct optab table[] = {
 		NEEDS(NREG(B, 1), NLEFT(R0), NRES(R16)),	RESC1,
 		"ZF", },
 
+/* XXX - investigate */
 { SCONV,	INCREG | FEATURE_FPA,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SCREG,	TDOUBLE,
@@ -500,6 +496,7 @@ struct optab table[] = {
 		NEEDS(NREG(B, 1), NLEFT(R0), NRES(R16)), RESC1,
 		"ZF", },
 
+/* XXX - investigate */
 { SCONV,	INCREG | FEATURE_FPA,
 	SBREG,	TLONGLONG|TULONGLONG,
 	SCREG,	TLDOUBLE,
@@ -591,16 +588,16 @@ struct optab table[] = {
 
 { CALL,		INAREG,
 	SCON|SNAME,	TANY,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 		XSL(A),	RESC1,	/* should be 0 */
 		"	bl CL" COM "call (args, result in r0) to scon/sname (CL)\n"
 		"ZC", },
 
-{ CALL,		INBREG,
+{ CALL,		INAREG,
 	SCON|SNAME,	TANY,
-	SBREG,		TLONGLONG|TULONGLONG,
-		XSL(B), RESC1,	/* should be 0 */
-		"	bl CL" COM "call (args, result in r0:r1) to scon/sname (CL)\n"
+	SAREG,		TLONGLONG|TULONGLONG|TPOINT,
+		XSL(A), RESC1,	/* should be 0 */
+		"	bl CL" COM "call (args, result in r0) to scon/sname (CL)\n"
 		"ZC", },
 
 { CALL,		INCREG | FEATURE_FPA,
@@ -633,15 +630,15 @@ struct optab table[] = {
 
 { UCALL,	INAREG,
 	SCON|SNAME,	TANY,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 		XSL(A),	RESC1,	/* should be 0 */
 		"	bl CL" COM "call (no args, result in r0) to scon/sname (CL)\n", },
 
-{ UCALL,	INBREG,
+{ UCALL,	INAREG,
 	SCON|SNAME,	TANY,
-	SBREG,		TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1,	/* should be 0 */
-		"	bl CL" COM "call (no args, result in r0:r1) to scon/sname (CL)\n", },
+	SAREG,		TLONGLONG|TULONGLONG|TPOINT,
+		XSL(A),	RESC1,	/* should be 0 */
+		"	bl CL" COM "call (no args, result in r0) to scon/sname (CL)\n", },
 
 { UCALL,	INCREG | FEATURE_FPA,
 	SCON|SNAME,	TANY,
@@ -682,21 +679,6 @@ struct optab table[] = {
 	SAREG,	TANY,
 	SANY,	TANY,
 		NAREG,	RESC1,
-		"	mov lr,pc\n"
-		"	mov pc,AL\n", },
-
-{ CALL,		INBREG,
-	SAREG,	TANY,
-	SANY,	TANY,
-		NBREG,	RESC1,
-		"	mov lr,pc\n"
-		"	mov pc,AL\n"
-		"ZC", },
-
-{ UCALL,	INBREG,
-	SAREG,	TANY,
-	SANY,	TANY,
-		NBREG,	RESC1,
 		"	mov lr,pc\n"
 		"	mov pc,AL\n", },
 
@@ -747,27 +729,27 @@ struct optab table[] = {
  */
 
 { PLUS,		INAREG,
-	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD,
 	SCCON,	TANY,
 		NAREG,	RESC1,
 		"	add A1,AL,AR" COM "addition of constant\n", },
 
-{ PLUS,		INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SSCON,	TANY,
-		XSL(B),	RESC1,
+{ PLUS,		INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SCCON,	TANY,
+		XSL(A),	RESC1,
 		"	adds A1,AL,AR" COM "64-bit addition of constant\n", },
 
 { PLUS,		INAREG,
-	SAREG,	TWORD|TPOINT,
-	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD,
+	SAREG,	TWORD,
 		XSL(A),	RESC1,
 		"	add A1,AL,AR" COM "addition\n", },
 
-{ PLUS,		INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1,
+{ PLUS,		INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+		XSL(A),	RESC1,
 		"	adds A1,AL,AR" COM "64-bit addition\n", },
 
 { PLUS,		INCREG | FEATURE_FPA,
@@ -825,27 +807,27 @@ struct optab table[] = {
 		"ZF", },
 
 { MINUS,	INAREG,
-	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD,
 	SCCON,	TANY,
 		XSL(A),	RESC1,
 		"	sub A1,AL,AR" COM "subtraction of constant\n", },
 
 { MINUS,	INAREG,
-	SAREG,	TWORD|TPOINT,
-	SAREG,	TWORD|TPOINT,
+	SAREG,	TWORD,
+	SAREG,	TWORD,
 		XSL(A),	RESC1,
 		"	sub A1,AL,AR" COM "subtraction\n", },
 
-{ MINUS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+{ MINUS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
 	SCCON,	TANY,
-		XSL(B),	RESC1,
+		XSL(A),	RESC1,
 		"	subs A1,AL,AR" COM "64-bit subtraction of constant\n", },
 
-{ MINUS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1,
+{ MINUS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+		XSL(A),	RESC1,
 		"	subs A1,AL,AR" COM "64-bit subtraction\n", },
 
 { MINUS,	INCREG | FEATURE_FPA,
@@ -910,112 +892,120 @@ struct optab table[] = {
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SAREG,	TANY,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl AR" COM "left shift\n", },
+		"	lsl A1,AL,AR" COM "left shift\n", },
 
 { LS,	INAREG,
 	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 	SCCON,	TANY,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsl AR" COM "left shift by constant\n", },
+		"	lsl A1,AL,AR" COM "left shift by constant\n", },
 
-{ LS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+{ LS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
 	SCON,	TANY,
-		NBREG,	RESC1,
-		"	mov A1,AL,lsl AR" COM "left shift by constant\n", },
+		NAREG,	RESC1,
+		"	lsl A1,AL,AR" COM "left shift by constant\n", },
 
-{ LS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+{ LS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
 	SAREG,	TANY,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R2), NRES(R16)),	RESC1,
-		"ZE" },
+		XSL(A),	RESC1,
+		"	lsl A1,AL,ZXAR" COM "left shift\n", },
 
 { RS,	INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SAREG,	TANY,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsr AR" COM "right shift\n", },
+		"	lsr A1,AL,AR" COM "right shift\n", },
 
 { RS,	INAREG,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
 	SAREG,	TANY,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsr AR" COM "right shift\n", },
+		"	lsr A1,AL,AR" COM "right shift\n", },
 
 { RS,	INAREG,
 	SAREG,	TSWORD|TSHORT|TCHAR,
 	SCCON,	TANY,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsr AR" COM "right shift by constant\n", },
+		"	lsr A1,AL,AR" COM "right shift by constant\n", },
 
 { RS,	INAREG,
 	SAREG,	TUWORD|TUSHORT|TUCHAR,
 	SCCON,	TANY,
 		XSL(A),	RESC1,
-		"	mov A1,AL,lsr AR" COM "right shift by constant\n", },
+		"	lsr A1,AL,AR" COM "right shift by constant\n", },
 
-{ RS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+{ RS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
 	SCON,	TANY,
-		NBREG,	RESC1,
-		"	mov A1,AL,lsr AR" COM "right shift by constant\n", },
-{ RS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SAREG,	TANY,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R2), NRES(R16)),	RESC1,
-		"ZE" },
+		NAREG,	RESC1,
+		"	lsr A1,AL,AR" COM "right shift by constant\n", },
 
+{ RS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TANY,
+		XSL(A),	RESC1,
+		"	lsr A1,AL,ZXAR" COM "right shift\n", },
 
 /*
  * The next rules takes care of assignments. "=".
  */
 
 { ASSIGN,	FOREFF|INAREG,
-	SOREG,	TWORD|TPOINT,
-	SAREG,		TWORD|TPOINT,
+	SOREG,	TWORD,
+	SAREG,		TWORD,
 		0,	RDEST,
 		"	str AR,AL" COM "assign word\n", },
 
 { ASSIGN,       FOREFF|INAREG,
-        SNAME,    TWORD|TPOINT,
-        SAREG,          TWORD|TPOINT,
-                0,      RDEST,
-                "  	adrp x0, AL\n"
-		"       add x0, x0, :lo12:AL\n"
-        	"	str AR, [x0]" COM "assign global word\n", },
+        SNAME,    TWORD,
+        SAREG,          TWORD,
+                NAREG,      RDEST,
+                "ZA"
+        	"	str AR, [ZXA1]" COM "assign global word\n", },
 
 
-{ ASSIGN,	FOREFF|INBREG,
-	SOREG|SNAME,	TLONGLONG|TULONGLONG,
-	SBREG,		TLONGLONG|TULONGLONG,
+{ ASSIGN,	FOREFF|INAREG,
+	SOREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,		TLONGLONG|TULONGLONG|TPOINT,
 		0,	RDEST,
 		"	str AR,AL" COM "assign 64-bit value\n", },
 
-/* XXX don't know if this works */
-{ ASSIGN,	FOREFF|INBREG,
-	SAREG,		TPTRTO|TLONGLONG|TULONGLONG,
-	SBREG,		TLONGLONG|TULONGLONG,
-		0,	RDEST,
-		"	stmdb AL,{AR-UR}" COM "assign 64-bit value\n", },
+{ ASSIGN,	FOREFF|INAREG,
+        SNAME,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,		TLONGLONG|TULONGLONG|TPOINT,
+		NAREG,	RDEST,
+                "ZA"
+		"	str AR, [ZXA1]" COM "assign 64-bit global value\n", },
 
 { ASSIGN,	FOREFF|INAREG,
-	SOREG|SNAME,	TCHAR|TUCHAR,
+	SOREG,	TCHAR|TUCHAR,
 	SAREG,		TCHAR|TUCHAR,
 		0,	RDEST,
 		"	strb AR,AL" COM "assign (u)char\n", },
 
-{ ASSIGN,	FOREFF|INAREG | FEATURE_HALFWORDS,
-	SOREG|SNAME,	TSHORT|TUSHORT,
+{ ASSIGN,	FOREFF|INAREG,
+	SNAME,	TCHAR|TUCHAR,
+	SAREG,		TCHAR|TUCHAR,
+		NAREG,	RDEST,
+		"ZA"
+		"	strb AR, [ZXA1]" COM "assign (u)char global\n", },
+
+{ ASSIGN,	FOREFF|INAREG,
+	SOREG,	TSHORT|TUSHORT,
 	SAREG,		TSHORT|TUSHORT,
 		0,	RDEST,
 		"	strh AR,AL" COM "assign (u)short\n", },
 
 { ASSIGN,	FOREFF|INAREG,
-	SOREG|SNAME,	TSHORT|TUSHORT,
+	SNAME,	TSHORT|TUSHORT,
 	SAREG,		TSHORT|TUSHORT,
-		XSL(A),	RDEST,
-		"ZH", },
+		NAREG,	RDEST,
+		"ZA"
+		"	strh AR, [ZXA1]" COM "assign (u)short global\n", },
 
+/* XXX - investigate */
 { ASSIGN, 	FOREFF|INCREG | FEATURE_FPA,
 	SOREG|SNAME,	TFLOAT,
 	SCREG,		TFLOAT,
@@ -1028,12 +1018,14 @@ struct optab table[] = {
 		0,	RDEST,
 		COM "unimplemented\n", },
 
+/* XXX - investigate */
 { ASSIGN, 	FOREFF|INAREG,
 	SOREG|SNAME,	TFLOAT,
 	SAREG,		TFLOAT,
 		0,	RDEST,
 		"	str AR,AL" COM "assign float (soft-float)\n", },
 
+/* XXX - investigate */
 { ASSIGN, 	FOREFF|INCREG | FEATURE_FPA,
 	SOREG|SNAME,	TDOUBLE,
 	SCREG,		TDOUBLE,
@@ -1046,6 +1038,7 @@ struct optab table[] = {
 		0,	RDEST,
 		COM "unimplemented\n", },
 
+/* XXX - investigate */
 { ASSIGN, 	FOREFF|INBREG,
 	SOREG|SNAME,	TDOUBLE,
 	SBREG,		TDOUBLE,
@@ -1053,6 +1046,7 @@ struct optab table[] = {
 		"	str AR,AL" COM "assign double (soft-float)\n"
 		"	str UR,UL\n", },
 
+/* XXX - investigate */
 { ASSIGN, 	FOREFF|INCREG | FEATURE_FPA,
 	SOREG|SNAME,	TLDOUBLE,
 	SCREG,		TLDOUBLE,
@@ -1065,6 +1059,7 @@ struct optab table[] = {
 		0,	RDEST,
 		COM "not implemented", },
 
+/* XXX - investigate */
 { ASSIGN, 	FOREFF|INBREG,
 	SOREG|SNAME,	TLDOUBLE,
 	SBREG,		TLDOUBLE,
@@ -1074,14 +1069,14 @@ struct optab table[] = {
 
 /* assign register to register */
 { ASSIGN,	FOREFF|INAREG,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 		0,	RDEST,
 		"	mov AL,AR" COM "assign AR to AL\n", },
 
-{ ASSIGN,      FOREFF|INBREG,
-        SBREG,  TLONGLONG|TULONGLONG,
-        SBREG,  TLONGLONG|TULONGLONG,
+{ ASSIGN,      FOREFF|INAREG,
+        SAREG,  TLONGLONG|TULONGLONG|TPOINT,
+        SAREG,  TLONGLONG|TULONGLONG|TPOINT,
                 0,      RDEST,
                 "	mov AL,AR" COM "assign AR to AL\n", },
 
@@ -1164,27 +1159,27 @@ struct optab table[] = {
 { DIV,	INAREG,
 	SAREG,	TSWORD,
 	SAREG,	TSWORD,
-		NEEDS(NREG(A, 1), NSL(A), NLEFT(R0), NRIGHT(R1), NRES(R0)),
+		NAREG,
 		RESC1,
 		"	sdiv A1,AL,AR" COM "divide\n",},
 
 { DIV,  INAREG,
         SAREG,  TUWORD,
         SAREG,  TUWORD,
-                NEEDS(NREG(A, 1), NSL(A), NLEFT(R0), NRIGHT(R1), NRES(R0)),    RESC1,
+                NAREG,    RESC1,
                 "	udiv A1,AL,AR" COM "unsigned divide\n",},
 
-{ DIV,	INBREG,
-	SBREG,	TLONGLONG,
-	SBREG,	TLONGLONG,
-                NEEDS(NREG(B, 1), NSL(B), NLEFT(R16), NRIGHT(R18), NRES(R16)),    RESC1,
-		"	sdiv x0,AL,AR" COM "long/longlong divide\n",},
+{ DIV,	INAREG,
+	SAREG,	TLONGLONG,
+	SAREG,	TLONGLONG,
+                NAREG,    RESC1,
+		"	sdiv A1,AL,AR" COM "long/longlong divide\n",},
 
-{ DIV,  INBREG,
-        SBREG,  TULONGLONG,
-        SBREG,  TULONGLONG,
-                NEEDS(NREG(B, 1), NSL(B), NLEFT(R16), NRIGHT(R18), NRES(R16)),    RESC1,
-                "	udiv x0,AL,AR" COM "long/longlong unsigned divide\n",},
+{ DIV,  INAREG,
+        SAREG,  TULONGLONG,
+        SAREG,  TULONGLONG,
+                NAREG,    RESC1,
+                "	udiv A1,AL,AR" COM "long/longlong unsigned divide\n",},
 
 
 { DIV,	INCREG | FEATURE_FPA,
@@ -1244,104 +1239,42 @@ struct optab table[] = {
 { MOD,	INAREG,
 	SAREG,	TSWORD,
 	SAREG,	TSWORD,
-		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
+		NAREG, RESC1,
                 "	sdiv A1, AL, AR" COM "mod\n"
-                "	mul AR, A1, AR\n"
-                "	sub AL, AL, AR\n", },
+                "       msub A1, A1, AR, AL\n", },
 
 { MOD,  INAREG,
         SAREG,  TUWORD,
         SAREG,  TUWORD,
-		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
+		NAREG, RESC1,
                 "	udiv A1, AL, AR" COM "unsigned mod\n"
-                "	mul AR, A1, AR\n"
-                "	sub AL, AL, AR\n", },
+                "       msub A1, A1, AR, AL\n", },
 
-
-{ MOD,	INBREG,
-	SBREG,	TLONGLONG,
-	SBREG,	TLONGLONG,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
+{ MOD,	INAREG,
+	SAREG,	TLONGLONG,
+	SAREG,	TLONGLONG,
+		NAREG, RESC1,
 		"	sdiv A1, AL, AR" COM "long/longlong mod\n"
-		"	mul AR, A1, AR\n"
-		"	sub AL, AL, AR\n", },
+		"	msub A1, A1, AR, AL\n", },
 
-{ MOD,  INBREG,
-        SBREG,  TULONGLONG,
-        SBREG,  TULONGLONG,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
+{ MOD,  INAREG,
+        SAREG,  TULONGLONG,
+        SAREG,  TULONGLONG,
+		NAREG, RESC1,
                 "	udiv A1, AL, AR" COM "long/longlong unsigned mod\n"
-                "	mul AR, A1, AR\n"
-                "	sub AL, AL, AR\n", },
+                "       msub A1, A1, AR, AL\n", },
 
-{ MUL,	INAREG | FEATURE_MUL,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+{ MUL,	INAREG,
+	SAREG,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,		TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 		NAREG,	RESC1,
 		"	mul A1,AL,AR\n", },
 
 { MUL,	INAREG,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-	SAREG,		TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
-		"ZE", },
-
-{ MUL,	INBREG | FEATURE_MULL,
-	SAREG,		TUWORD|TPOINT|TUSHORT|TUCHAR,
-	SAREG,		TUWORD|TPOINT|TUSHORT|TUCHAR,
-		NBREG,	RESC1,
-		"	smull U1,A1,AL,AR\n", },
-
-{ MUL,	INBREG | FEATURE_MUL,
-	SAREG,		TUWORD|TPOINT|TUSHORT|TUCHAR,
-	SAREG,		TUWORD|TPOINT|TUSHORT|TUCHAR,
-		NBREG,	RESC1,
-		"	mul A1,AL,AR\n"
-		"	mov U1,A1,lsr #31\n", },
-
-{ MUL,	INBREG,
-	SAREG,		TUWORD|TPOINT|TUSHORT|TUCHAR,
-	SAREG,		TUWORD|TPOINT|TUSHORT|TUCHAR,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
-		"ZE", },
-
-{ MUL,	INBREG | FEATURE_MULL,
-	SAREG,		TSWORD|TSHORT|TCHAR,
-	SAREG,		TSWORD|TSHORT|TCHAR,
-		NBREG,	RESC1,
-		"	umull U1,A1,AL,AR\n", },
-
-{ MUL,	INBREG | FEATURE_MUL,
-	SAREG,		TSWORD|TSHORT|TCHAR,
-	SAREG,		TSWORD|TSHORT|TCHAR,
-		NBREG,	RESC1,
-		"	mul A1,AL,AR\n"
-		"	mov U1,#0\n", },
-
-{ MUL,	INBREG,
-	SAREG,		TSWORD|TSHORT|TCHAR,
-	SAREG,		TSWORD|TSHORT|TCHAR,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
-		"ZE", },
-
-{ MUL,	INBREG | FEATURE_MULL,
-	SBREG,		TLONGLONG|TULONGLONG,
-	SBREG,		TLONGLONG|TULONGLONG,
-		NBREG,	RESC1,
-		"	umull U1,A1,AL,AR\n", },
-
-{ MUL,	INBREG | FEATURE_MUL,
-	SBREG,		TLONGLONG|TULONGLONG,
-	SBREG,		TLONGLONG|TULONGLONG,
-		NBREG,	RESC1,
-		"	mul A1,AL,AR\n"
-		"	mov U1,A1,lsr #31\n", },
-
-{ MUL,	INBREG,
-	SBREG,		TLONGLONG|TULONGLONG,
-	SBREG,		TLONGLONG|TULONGLONG,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
-		"ZE", },
+	SAREG,		TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,		TLONGLONG|TULONGLONG|TPOINT,
+		NAREG,	RESC1,
+		"	mul A1,AL,AR\n", },
 
 { MUL,	INCREG | FEATURE_FPA,
 	SCREG,		TFLOAT,
@@ -1385,7 +1318,7 @@ struct optab table[] = {
 
 { UMUL,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TWORD|TPOINT,
+	SOREG|SNAME,	TWORD,
 		NAREG,	RESC1,
 		"	ldr A1,AL" COM "word load\n", },
 
@@ -1401,28 +1334,22 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"	ldrb A1,AL" COM "uchar load\n", },
 
-{ UMUL,	INAREG | FEATURE_HALFWORDS,
+{ UMUL,	INAREG,
 	SANY,		TANY,
 	SOREG|SNAME,	TUSHORT,
 		NAREG,	RESC1,
 		"	ldrh A1,AL" COM "short load\n", },
 
-{ UMUL,	INAREG | FEATURE_HALFWORDS,
+{ UMUL,	INAREG,
 	SANY,		TANY,
 	SOREG|SNAME,	TSHORT,
 		NAREG,	RESC1,
 		"	ldrsh A1,AL" COM "short load\n", },
 
-{ UMUL,	INAREG,
+{ UMUL, INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TSHORT|TUSHORT,
-		NEEDS(NREG(A, 2), NSL(A)),	RESC1,
-		"ZH", },
-
-{ UMUL, INBREG,
-	SANY,		TANY,
-	SOREG|SNAME,	TLONGLONG|TULONGLONG,
-		NBREG,	RESC1,
+	SOREG|SNAME,	TLONGLONG|TULONGLONG|TPOINT,
+		NAREG,	RESC1,
 		"	ldr A1,AL" COM "64-bit load\n", },
 
 { UMUL, INCREG | FEATURE_FPA,
@@ -1494,15 +1421,15 @@ struct optab table[] = {
 
 /* compare with register */
 { OPLOG,	FORCC,
-	SAREG,	TUWORD|TPOINT|TUSHORT|TUCHAR,
-	SAREG,	TUWORD|TPOINT|TUSHORT|TUCHAR,
+	SAREG,	TUWORD|TUSHORT|TUCHAR,
+	SAREG,	TUWORD|TUSHORT|TUCHAR,
 		0, 	RESCC,
 		"	cmp AL,AR" COM "AR-AL (sets flags)\n", },
 
 /* compare with register */
 { OPLOG,	FORCC,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
 		0, 	RESCC,
 		"	cmp AL,AR" COM "AR-AL (sets flags)\n", },
 
@@ -1561,22 +1488,22 @@ struct optab table[] = {
 		"ZF", },
 
 /* AND/OR/ER */
-{ AND,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1|RESCC,
+{ AND,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TLONGLONG|TULONGLONG,
+		XSL(A),	RESC1|RESCC,
 		"	and A1,AL,AR" COM "64-bit and\n", },
 
-{ OR,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1,
+{ OR,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TLONGLONG|TULONGLONG,
+		XSL(A),	RESC1,
 		"	orr A1,AL,AR" COM "64-bit or\n", },
 
-{ ER,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1,
+{ ER,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
+	SAREG,	TLONGLONG|TULONGLONG,
+		XSL(A),	RESC1,
 		"	eor A1,AL,AR" COM "64-bit xor\n", },
 
 { OPSIMP,	INAREG,
@@ -1607,57 +1534,96 @@ struct optab table[] = {
 
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TWORD|TPOINT,
+	SOREG,	TWORD,
 		NAREG,	RESC1,
 		"	ldr A1,AL" COM "load word from memory\n" , },
 
-{ OPLTYPE,      INBREG,
+{ OPLTYPE,	INAREG,
+	SANY,		TANY,
+	SNAME,	TWORD,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldr A1,[ZXA1]" COM "load word from memory\n" , },
+
+{ OPLTYPE,      INAREG,
         SANY,   	TANY,
-        SOREG|SNAME,	TLONGLONG|TULONGLONG,
-                NBREG,  RESC1,
+        SOREG,	TLONGLONG|TULONGLONG|TPOINT,
+                NAREG,  RESC1,
                 "	ldr A1,AL" COM "load long long from memory\n" , },
+
+{ OPLTYPE,      INAREG,
+        SANY,   	TANY,
+        SNAME,	TLONGLONG|TULONGLONG|TPOINT,
+                NAREG,  RESC1,
+		"ZA"
+                "	ldr A1,[ZXA1]" COM "load long long from memory\n" , },
 
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TCHAR,
+	SOREG,	TCHAR,
 		NAREG,	RESC1,
 		"	ldrsb A1,AL" COM "load char from memory\n" },
 
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TUCHAR,
+	SNAME,	TCHAR,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldrsb A1,[ZXA1]" COM "load char from memory\n" },
+
+{ OPLTYPE,	INAREG,
+	SANY,		TANY,
+	SOREG,	TUCHAR,
 		NAREG,	RESC1,
 		"	ldrb A1,AL" COM "load uchar from memory\n", },
 
-{ OPLTYPE,	INAREG | FEATURE_HALFWORDS,
+{ OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TSHORT,
+	SNAME,	TUCHAR,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldrb A1,[ZXA1]" COM "load uchar from memory\n", },
+
+{ OPLTYPE,	INAREG,
+	SANY,		TANY,
+	SOREG,	TSHORT,
 		NAREG,	RESC1,
 		"	ldrsh A1,AL" COM "load short from memory\n", },
 
-{ OPLTYPE,	INAREG | FEATURE_HALFWORDS,
+{ OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TUSHORT,
+	SNAME,	TSHORT,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldrsh A1,[ZXA1]" COM "load short from memory\n", },
+
+
+{ OPLTYPE,	INAREG,
+	SANY,		TANY,
+	SOREG,	TUSHORT,
 		NAREG,	RESC1,
 		"	ldrh A1,AL" COM "load ushort from memory\n", },
 
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TSHORT|TUSHORT,
-		NEEDS(NREG(A, 2)),	RESC1,
-		"ZH", },
+	SNAME,	TUSHORT,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldrh A1,[ZXA1]" COM "load ushort from memory\n", },
 
+/* longlong constant initialization */
+{ OPLTYPE,	INAREG,
+	SANY,	TLONGLONG|TULONGLONG,
+	SCON,	TLONGLONG|TULONGLONG,
+		NAREG,	RESC1,
+		"ZJ", },
+
+/* integer constant initialization */
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
 	SCON,		TANY,
 		NAREG,	RESC1,
 		"ZI", },
-
-{ OPLTYPE,	INBREG,
-	SANY,	TANY,
-	SCON,	TANY,
-		NBREG,	RESC1,
-		"ZJ", },
 
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
@@ -1665,12 +1631,13 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"	mov A1,AL" COM "load AL into A1\n" },
 
-{ OPLTYPE,      INBREG,
+{ OPLTYPE,      INAREG,
         SANY,   TANY,
-        SBREG,	TLONGLONG|TULONGLONG,
-                NBREG,  RESC1,
+        SAREG,	TLONGLONG|TULONGLONG,
+                NAREG,  RESC1,
 		"	mov A1,AL" COM "load AL into A1\n", },
 
+/* XXX - investigate */
 { OPLTYPE,	INCREG | FEATURE_FPA,
 	SANY,		TANY,
 	SOREG|SNAME,	TFLOAT,
@@ -1683,12 +1650,14 @@ struct optab table[] = {
 		NCREG,	RESC1,
 		COM "not implemented\n", },
 
+/* XXX - investigate */
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
 	SOREG|SNAME,	TFLOAT,
 		NAREG,	RESC1,
 		"	ldr A1,AL" COM "load float (soft-float)\n", },
 
+/* XXX - investigate */
 { OPLTYPE,	INCREG | FEATURE_FPA,
 	SANY,		TANY,
 	SOREG|SNAME,	TDOUBLE,
@@ -1701,6 +1670,7 @@ struct optab table[] = {
 		NCREG,	RESC1,
 		COM "not implemented\n" },
 
+/* XXX - investigate */
 { OPLTYPE,	INBREG,
 	SANY,		TANY,
 	SOREG|SNAME,	TDOUBLE,
@@ -1708,6 +1678,7 @@ struct optab table[] = {
 		"	ldr A1,AL" COM "load double (soft-float)\n"
 		"	ldr U1,UL\n", },
 
+/* XXX - investigate */
 { OPLTYPE,	INCREG | FEATURE_FPA,
 	SANY,		TANY,
 	SOREG|SNAME,	TLDOUBLE,
@@ -1720,6 +1691,7 @@ struct optab table[] = {
 		NCREG,	RESC1,
 		COM "not implemented\n", },
 
+/* XXX - investigate */
 { OPLTYPE,	INBREG,
 	SANY,		TANY,
 	SOREG|SNAME,	TLDOUBLE,
@@ -1732,15 +1704,15 @@ struct optab table[] = {
  */
 
 { UMINUS,	INAREG,
-	SAREG,	TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-	SAREG,	TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
+	SAREG,	TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
 		XSL(A),	RESC1,
 		"	neg A1,AL" COM "negation\n", },
 
-{ UMINUS,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLONGLONG|TULONGLONG,
-		XSL(B),	RESC1,
+{ UMINUS,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+	SAREG,	TLONGLONG|TULONGLONG|TPOINT,
+		XSL(A),	RESC1,
 		"	neg A1,AL" COM "64-bit negation\n", },
 
 { UMINUS,	INCREG | FEATURE_FPA,
@@ -1803,10 +1775,10 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	mvn A1,AL" COM "complement\n", },
 
-{ COMPL,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
+{ COMPL,	INAREG,
+	SAREG,	TLONGLONG|TULONGLONG,
 	SANY,	TANY,
-		XSL(B),	RESC1,
+		XSL(A),	RESC1,
 		"	mvn A1,AL" COM "64-bit complement\n", },
 
 /*
@@ -1814,14 +1786,14 @@ struct optab table[] = {
  */
 
 { FUNARG,       FOREFF,
-        SAREG,  TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
-        SANY,   TWORD|TPOINT|TSHORT|TUSHORT|TCHAR|TUCHAR,
+        SAREG,  TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
+        SANY,   TWORD|TSHORT|TUSHORT|TCHAR|TUCHAR,
                 0,      0,
 		"	stmfd sp!,{AL}" COM "save function arg to stack\n", },
 
 { FUNARG,       FOREFF,
-        SBREG,  TLONGLONG|TULONGLONG,
-        SANY,	TLONGLONG|TULONGLONG,
+        SAREG,  TLONGLONG|TULONGLONG|TPOINT,
+        SANY,	TLONGLONG|TULONGLONG|TPOINT,
                 0,      0,
 		"	stmfd sp!,{AL,UL}" COM "save function arg to stack (endianness problem here?)\n", },
 

@@ -69,6 +69,23 @@ clocal(NODE *p)
 	int tmpnr, isptrvoid = 0;
 	char *n;
 
+	/*
+	 * Canonicalize LONG to LONGLONG as a safety net.
+	 *
+	 * The frontend normally normalizes target types via ctype(), mapping
+	 * LONG/ULONG to LONGLONG/ULONGLONG for backends that do not support C long
+	 * natively. However, some IR nodes (notably ICONs and SCONVs originating
+	 * from INTPTR handling on trees.c) are constructed without passing their types
+	 * through ctype(), allowing raw LONG to leak into pass2.
+	 *
+	 * This backend mandates that all integer types are already canonicalized
+	 * (i.e. no LONG survives past pass1), so we defensively rewrite LONG here
+	 * to avoid inconsistent IR. This is a workaround; the proper fix is to
+	 * ensure all IR construction paths apply ctype() consistently.
+	 */
+	if (p->n_type == LONG)
+		p->n_type = LONGLONG;
+
 	o = p->n_op;
 	switch (o) {
 		case STASG:
@@ -264,8 +281,8 @@ clocal(NODE *p)
 				slval(l, (unsigned)glval(l));
 				goto delp;
 			}
-			if (l->n_type < INT || DEUNSIGN(l->n_type) == LONGLONG) {
-				p->n_left = block(SCONV, l, NIL, UNSIGNED, 0, 0);
+			if (l->n_type < LONGLONG) {
+				p->n_left = block(SCONV, l, NIL, LONGLONG, 0, 0);
 				break;
 			}
 			if (l->n_op == SCONV)

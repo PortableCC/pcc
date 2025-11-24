@@ -27,7 +27,7 @@
 
 extern void defalign(int);
 
-static int isConverstion=0;
+static int isShrink=0;
 static int addStack=0;
 static int isExtend=0;
 #define	exname(x) x
@@ -545,49 +545,6 @@ emul(NODE *p)
 }
 
 static void
-halfword(NODE *p)
-{
-	NODE *r = getlr(p, 'R');
-	NODE *l = getlr(p, 'L');
-	int idx0 = 0;
-	CONSZ lval;
-
-	if (features(FEATURE_BIGENDIAN)) {
-		idx0 = 1;
-	}
-
-	if (p->n_op == ASSIGN && r->n_op == OREG) {
-                /* load */
-		lval = getlval(r);
-		expand(p, 0, "\tldrh A1,");
-		printf("[%s,#" CONFMT "]\n", rnames[r->n_rval], lval+idx0);
-        } else if (p->n_op == ASSIGN && l->n_op == OREG) {
-                /* store */
-		lval = getlval(l);
-		expand(p, 0, "\tstrh AR,");
-		printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
-        } else if (p->n_op == SCONV || p->n_op == UMUL) {
-                /* load */
-		lval = getlval(l);
-		expand(p, 0, "\tldrh A1,");
-		printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
-        } else if (p->n_op == NAME || p->n_op == ICON || p->n_op == OREG) {
-                /* load */
-		lval = getlval(p);
-		switch (p->n_type) {
-			case SHORT:
-				expand(p, 0, "\tldrsh A1,");
-				break;
-			default:
-				expand(p, 0, "\tldrh A1,");
-		}
-		printf("[%s,#" CONFMT "]\n", rnames[p->n_rval], lval+idx0);
-	} else {
-		comperr("halfword");
-	}
-}
-
-static void
 bfext(NODE *p)
 {
 	int sz;
@@ -676,8 +633,8 @@ zzzcode(NODE *p, int c)
 				printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], pr);
 #endif
 			break;
-	        case 'D':
-			isConverstion= 1;
+	        case 'W':
+			isShrink = 1;
                 	break;
 		case 'E': /* print out emulated ops */
 			emul(p);
@@ -687,10 +644,6 @@ zzzcode(NODE *p, int c)
 			fpemul(p);
 			break;
 
-		case 'H':		/* do halfword access */
-			halfword(p);
-			break;
-
 		case 'I':		/* init constant */
 			if (p->n_name[0] != '\0')
 				comperr("named init");
@@ -698,7 +651,7 @@ zzzcode(NODE *p, int c)
 			    getlval(p) & 0xffffffff);
         		break;
 		case 'J':		/* init longlong constant */
-			load_64constant_into_reg(DECRA(p->n_reg, 1)-R16,
+			load_64constant_into_reg(DECRA(p->n_reg, 1),
 			    getlval(p) & 0xffffffffffffffff);
 			break;
 
@@ -860,30 +813,24 @@ adrput(FILE *io, NODE *p)
 				case USHORT:
 				case BOOL:
 				case UNSIGNED:
-					if (!ISPTR(p->n_type)) {
-						if (isConverstion) {
-							fprintf(io, "%s", wnames[0]);
-							isConverstion = 0;
-						}
-						else if (isExtend) {
-							fprintf(io, "%s", rnames[p->n_rval]);
-							isExtend = 0;
-						}
-						else
-							fprintf(io, "%s", wnames[p->n_rval]);
-					}
-					else
+					if (isExtend)
 						fprintf(io, "%s", rnames[p->n_rval]);
+					else
+						fprintf(io, "%s", wnames[p->n_rval]);
 					break;
 				case DOUBLE:
 				case LDOUBLE:
 				case LONGLONG:
 				case ULONGLONG:
-					fprintf(io, "%s", rnames[p->n_rval]);
+				default: /* PTR */
+					if (isShrink)
+						fprintf(io, "%s", wnames[p->n_rval]);
+					else
+						fprintf(io, "%s", rnames[p->n_rval]);
 					break;
-				default:
-					fprintf(io, "%s", rnames[p->n_rval]);
 			}
+			isExtend = 0;
+		        isShrink = 0;
 		return;
 
 	default:
@@ -1232,9 +1179,9 @@ special(NODE *p, int shape)
  * default to ARMv2
  */
 #ifdef TARGET_BIG_ENDIAN
-#define DEFAULT_FEATURES	FEATURE_BIGENDIAN | FEATURE_MUL
+#define DEFAULT_FEATURES	FEATURE_BIGENDIAN | FEATURE_EXTEND
 #else
-#define DEFAULT_FEATURES	FEATURE_MUL
+#define DEFAULT_FEATURES	FEATURE_EXTEND
 #endif
 
 static int fset = DEFAULT_FEATURES;

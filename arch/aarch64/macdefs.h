@@ -287,7 +287,6 @@ int retreg(int ty);
 int features(int f);
 
 #define FEATURE_BIGENDIAN	0x00010000
-#define FEATURE_HALFWORDS	0x00020000	/* ldrsh/ldrh, ldrsb */
 #define FEATURE_EXTEND		0x00040000	/* sxth, sxtb, uxth, uxtb */
 #define FEATURE_MUL		0x00080000
 #define FEATURE_MULL		0x00100000
