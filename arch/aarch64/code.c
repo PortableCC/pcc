@@ -20,6 +20,7 @@
  */
 
 #include <assert.h>
+#include <limits.h>
 
 #include "pass1.h"
 
@@ -617,14 +618,13 @@ movearg_struct(NODE *p, int *regp, int *stackofsp)
 	return q;
 }
 
-
 static NODE *
-moveargs(NODE *p, int *regp, int *fregp, int *stackofsp)
+moveargs(NODE *p, int vararg, int *idxp, int *regp, int *fregp, int *stackofsp)
 {
 	NODE *r, **rp;
 
 	if (p->n_op == CM) {
-		p->n_left = moveargs(p->n_left, regp, fregp, stackofsp);
+		p->n_left = moveargs(p->n_left, vararg, idxp, regp, fregp, stackofsp);
 		r = p->n_right;
 		rp = &p->n_right;
 	} else {
@@ -636,9 +636,11 @@ moveargs(NODE *p, int *regp, int *fregp, int *stackofsp)
 		&& (r->n_type == DOUBLE || r->n_type == LDOUBLE
 		 || r->n_type == FLOAT);
 
-	if (r->n_op == STARG) {
+        if (r->n_op == STARG) {
 		*rp = movearg_struct(r, regp, stackofsp);
-	} else if ((isfp && *fregp >= NARGREGS) || (!isfp && *regp >= NARGREGS)) {
+	} else if ((*idxp >= vararg)
+		   || (isfp && *fregp >= NARGREGS)
+		   || (!isfp && *regp >= NARGREGS)) {
 		*rp = pusharg(r, stackofsp);
 	} else if (DEUNSIGN(r->n_type) == LONGLONG) {
 		*rp = movearg_64bit(r, regp);
@@ -656,6 +658,7 @@ moveargs(NODE *p, int *regp, int *fregp, int *stackofsp)
 		*rp = movearg_32bit(r, regp);
 	}
 
+	(*idxp)++;
 	return straighten(p);
 }
 
@@ -720,15 +723,23 @@ builtin_cfa(const struct bitable *bt, NODE *a)
 NODE *
 funcode(NODE *p)
 {
-	int reg, freg, stackofs;
-	reg = freg = stackofs = 0;
+	int idx, reg, freg, stackofs;
+	idx = reg = freg = stackofs = 0;
+	int vararg = INT_MAX;
 
 	if (p->n_type == STRTY+FTN || p->n_type == UNIONTY+FTN) {
 		p = retstruct(p);
 		reg = R1;
 	}
 
-	p->n_right = moveargs(p->n_right, &reg, &freg, &stackofs);
+#if defined(MACHOABI)
+	if (p->n_left->n_df)
+		vararg = pr_ellidx(p->n_left->n_df->dlst);
+	if (vararg < 0)
+		vararg = INT_MAX;
+#endif
+
+	p->n_right = moveargs(p->n_right, vararg, &idx, &reg, &freg, &stackofs);
 
 	if (p->n_right == NULL)
 		p->n_op += (UCALL - CALL);

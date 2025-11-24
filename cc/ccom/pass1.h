@@ -485,6 +485,7 @@ int pr_ckproto(int usym, int udef, int old);
 void pr_callchk(struct symtab *sp, P1ND *f, P1ND *a);
 void pr_oldstyle(struct symtab **as, int nparams);
 int pr_hasell(int);
+int pr_ellidx(int);
 struct tdef *intdef(struct tdef *, TWORD);
 struct tdef *intdefq(TWORD);
 void incref(struct tdef *d, struct tdef *s);
