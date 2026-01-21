@@ -65,6 +65,8 @@ char *rnames[] = {
 	"d28", "d29", "d30", "d31"
 };
 
+extern int p1maxstacksize;
+
 /*
  * Handling of integer constants.  We have 8 bits + an even
  * number of rotates available as a simple immediate.
@@ -142,6 +144,12 @@ offcalc(struct interpass_prolog *ipp)
 #endif
 
 	addto = p2maxautooff;
+
+	/* XXX - move calculation from pass1 to pass2.
+	 * it works, but it is hacky. we are crossing
+	 * the pass1-pass2 boundary informally.
+	 */
+	addto += p1maxstacksize;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
@@ -611,19 +619,25 @@ argsiz(NODE *p)
 void
 zzzcode(NODE *p, int c)
 {
-	int pr;
-
 	switch (c) {
 		case 'B': /* bit-field sign extension */
 			bfext(p);
 			break;
 
 		case 'C':  /* remove from stack after subroutine call */
+/* XXX - we use a fixed stack that can hold the
+ * maximum stack space required by any subroutine call,
+ * so we don't need to move the SP mid-function.
+ * however, we might want to change this in the future.
+ */
+#if 0
 			pr = p->n_qual;
+
 			if (p->n_op == UCALL)
 				return; /* XXX remove ZC from UCALL */
 			if (pr > 0)
 				printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], pr);
+#endif
 			break;
 	        case 'D':
 			isConverstion= 1;
@@ -1000,6 +1014,7 @@ myreader(struct interpass *ipole)
 				break;
 		}
 	}
+
 	if (x2debug)
 		printip(ipole);
 }

@@ -22,7 +22,6 @@
 #include <assert.h>
 
 #include "pass1.h"
-#include "pass2.h"
 
 #ifdef LANG_CXX
 #define p1listf listf
@@ -43,6 +42,8 @@
 #endif
 
 static int rvnr;
+int p1maxstacksize = 0; /* XXX - remove, move calculation to pass2 */
+
 
 /*
  * Print out assembler segment name.
@@ -103,12 +104,12 @@ defloc(struct symtab *sp)
  * used by bfcode() and its helpers
  */
 static void
-putintemp(struct symtab *sym)
+putintemp(struct symtab *sym, NODE *q)
 {
 	NODE *p;
 
 	p = tempnode(0, sym->stype, sym->sdf, sym->sap);
-	p = buildtree(ASSIGN, p, nametree(sym));
+	p = buildtree(ASSIGN, p, q);
 	sym->soffset = regno(p->n_left);
 	sym->sflags |= STNODE;
 	ecomp(p);
@@ -117,151 +118,77 @@ putintemp(struct symtab *sym)
 /* setup a 64-bit parameter (double/ldouble/longlong)
  * used by bfcode() */
 static void
-param_64bit(struct symtab *sym, int *argofsp, int dotemps)
+param_64bit(struct symtab *sym, int *regp, int *stackofsp, int dotemps)
 {
-	int argofs = *argofsp;
-	NODE *p, *q;
-	int navail;
+	NODE *q;
 
-#if ALLONGLONG == 64
-	/* alignment */
-	++argofs;
-	argofs &= ~1;
-	*argofsp = argofs;
-#endif
-
-	navail = NARGREGS - argofs;
-
-	if (navail < 2) {
-		/* half in and half out of the registers */
-		if (features(FEATURE_BIGENDIAN)) {
-			cerror("param_64bit");
-			p = q = NULL;
-		} else {
-			q = block(REG, NIL, NIL, INT, 0, 0);
-			regno(q) = R0 + argofs;
-			if (dotemps) {
-				q = block(SCONV, q, NIL,
-				    ULONGLONG, 0, 0);
-				p = nametree(sym);
-				p->n_type = ULONGLONG;
-				p->n_df = 0;
-				p->n_ap = NULL;
-				p = block(LS, p, bcon(32), ULONGLONG, 0, 0);
-				q = block(PLUS, p, q, ULONGLONG, 0, 0);
-				p = tempnode(0, ULONGLONG, 0, 0);
-				sym->soffset = regno(p);
-				sym->sflags |= STNODE;
-			} else {
-				p = nametree(sym);
-				regno(p) = sym->soffset;
-				p->n_type = INT;
-				p->n_df = 0;
-				p->n_ap = NULL;
-			}
+	if (*regp >= NARGREGS) {
+		sym->soffset = *stackofsp + ARGINIT;
+		q = nametree(sym);
+		*stackofsp += SZLONG;
+		if (dotemps) {
+		        putintemp(sym, q);
 		}
-		p = buildtree(ASSIGN, p, q);
-		ecomp(p);
-		*argofsp = argofs + 2;
-		return;
-	}
-
-	q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
-	regno(q) = R16 + argofs;
-	if (dotemps) {
-		p = tempnode(0, sym->stype, sym->sdf, sym->sap);
-		sym->soffset = regno(p);
-		sym->sflags |= STNODE;
 	} else {
-		p = nametree(sym);
-	}
-	p = buildtree(ASSIGN, p, q);
-	ecomp(p);
-	*argofsp = argofs + 2;
-}
-
-/* setup a 32-bit param on the stack
- * used by bfcode() */
-static void
-param_32bit(struct symtab *sym, int *argofsp, int dotemps)
-{
-	NODE *p, *q;
-
-	q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
-	regno(q) = R0 + (*argofsp)++;
-	if (dotemps) {
-		p = tempnode(0, sym->stype, sym->sdf, sym->sap);
-		sym->soffset = regno(p);
-		sym->sflags |= STNODE;
-	} else {
-		p = nametree(sym);
-	}
-	p = buildtree(ASSIGN, p, q);
-	ecomp(p);
-}
-
-/* setup a double param on the stack
- * used by bfcode() */
-static void
-param_double(struct symtab *sym, int *argofsp, int dotemps)
-{
-	NODE *p, *q, *t;
-	int tmpnr;
-
-	/*
-	 * we have to dump the float from the general register
-	 * into a temp, since the register allocator doesn't like
-	 * floats to be in CLASSA.  This may not work for -xtemps.
-	 */
-
-	t = tempnode(0, ULONGLONG, 0, 0);
-	tmpnr = regno(t);
-	q = block(REG, NIL, NIL, INT, 0, 0);
-	q->n_rval = R16 + (*argofsp)++;
-	p = buildtree(ASSIGN, t, q);
-	ecomp(p);
-
-	if (dotemps) {
-		sym->soffset = tmpnr;
-		sym->sflags |= STNODE;
-	} else {
-		q = tempnode(tmpnr, sym->stype, sym->sdf, sym->sap);
-		p = nametree(sym);
-		p = buildtree(ASSIGN, p, q);
-		ecomp(p);
+		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
+		regno(q) = R0 + (*regp)++;
+		putintemp(sym, q);
 	}
 }
 
-/* setup a float param on the stack
+/* setup a 32-bit param
  * used by bfcode() */
 static void
-param_float(struct symtab *sym, int *argofsp, int dotemps)
+param_32bit(struct symtab *sym, int *regp, int *stackofsp, int dotemps)
 {
-	NODE *p, *q, *t;
-	int tmpnr;
+	/* On aarch64, setup of 32-bit and 64-bit args
+	   are equivalent.
+	   Each argument either occupies one register,
+	   or 8-byte aligned stack.
+	*/
+        param_64bit(sym, regp, stackofsp, dotemps);
+}
 
-	/*
-	 * we have to dump the float from the general register
-	 * into a temp, since the register allocator doesn't like
-	 * floats to be in CLASSA.  This may not work for -xtemps.
-	 */
+/* setup a double param
+ * used by bfcode() */
+static void
+param_double(struct symtab *sym, int *fregp, int *stackofsp, int dotemps)
+{
+	NODE *q;
 
-	t = tempnode(0, INT, 0, 0);
-	tmpnr = regno(t);
-	q = block(REG, NIL, NIL, INT, 0, 0);
-	q->n_rval = R0 + (*argofsp)++;
-	p = buildtree(ASSIGN, t, q);
-	ecomp(p);
-
-	if (dotemps) {
-		sym->soffset = tmpnr;
-		sym->sflags |= STNODE;
+	/* Only hard-float ABI reaches here.
+	   soft-float ABI parameters are handled
+	   by param_64bit.
+	*/
+	if (*fregp >= NARGREGS) {
+		sym->soffset = *stackofsp + ARGINIT;
+		q = nametree(sym);
+		*stackofsp += SZLONG;
+		if (dotemps) {
+		        putintemp(sym, q);
+		}
 	} else {
-		q = tempnode(tmpnr, sym->stype, sym->sdf, sym->sap);
-		p = nametree(sym);
-		p = buildtree(ASSIGN, p, q);
-		ecomp(p);
+		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
+		regno(q) = V0 + (*fregp)++;
+		putintemp(sym, q);
 	}
+}
+
+/* setup a float param
+ * used by bfcode() */
+static void
+param_float(struct symtab *sym, int *fregp, int *stackofsp, int dotemps)
+{
+	/* Only hard-float ABI reaches here.
+	   soft-float ABI parameters are handled
+	   by param_32bit.
+
+	   On aarch64, setup of 32-bit and 64-bit FP args
+	   are equivalent.
+	   Each argument either occupies one register,
+	   or 8-byte aligned stack.
+	*/
+	param_double(sym, fregp, stackofsp, dotemps);
 }
 
 /* setup the hidden pointer to struct return parameter
@@ -284,9 +211,10 @@ param_retstruct(void)
  * push the registers out to memory
  * used by bfcode() */
 static void
-param_struct(struct symtab *sym, int *argofsp)
+param_struct(struct symtab *sym, int *regp, int *stackofsp)
 {
-	int argofs = *argofsp;
+	/* XXX - investigate, is stack correct? */
+	int argofs = *regp;
 	NODE *p, *q;
 	int navail;
 	int sz;
@@ -309,7 +237,7 @@ param_struct(struct symtab *sym, int *argofsp)
 		ecomp(p);
 	}
 
-	*argofsp = argofs;
+	*regp = argofs;
 }
 
 
@@ -322,20 +250,29 @@ param_struct(struct symtab *sym, int *argofsp)
 void
 bfcode(struct symtab **sp, int cnt)
 {
-	int saveallargs = 0;
-	int i, argofs = 0;
+	int saveallargs, i, reg, freg, stackofs;
+	saveallargs = i = reg = freg = stackofs = 0;
+	p1maxstacksize = 0;
 
+#if defined(MACHOABI)
+	/*
+	 * On aarch64 Darwin ABI, varargs are already spilled
+	 * to memory by caller. No need to spill from callee side.
+	 */
+	saveallargs = 0;
+#else
 	/*
 	 * Detect if this function has ellipses and save all
 	 * argument registers onto stack.
 	 */
 	if (cftnsp->sdf->dlst)
 		saveallargs = pr_hasell(cftnsp->sdf->dlst);
+#endif
 
 	/* if returning a structure, move the hidden argument into a TEMP */
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
 		param_retstruct();
-		++argofs;
+		++reg;
 	}
 
 	/* recalculate the arg offset and create TEMP moves */
@@ -344,40 +281,32 @@ bfcode(struct symtab **sp, int cnt)
 		if (sp[i] == NULL)
 			continue;
 
-		if ((argofs >= NARGREGS) && !xtemps)
-			break;
-
-		if (argofs > NARGREGS) {
-			putintemp(sp[i]);
-		} else if (sp[i]->stype == STRTY || sp[i]->stype == UNIONTY) {
-			param_struct(sp[i], &argofs);
+	        if (sp[i]->stype == STRTY || sp[i]->stype == UNIONTY) {
+			param_struct(sp[i], &reg, &stackofs);
 		} else if (DEUNSIGN(sp[i]->stype) == LONGLONG  || DEUNSIGN(sp[i]->stype) == LONG) {
-			param_64bit(sp[i], &argofs, xtemps && !saveallargs);
+			param_64bit(sp[i], &reg, &stackofs, xtemps && !saveallargs);
 		} else if (sp[i]->stype == DOUBLE || sp[i]->stype == LDOUBLE) {
 			if (features(FEATURE_HARDFLOAT))
-				param_double(sp[i], &argofs,
-				    xtemps && !saveallargs);
+				param_double(sp[i], &freg, &stackofs, xtemps && !saveallargs);
 			else
-				param_64bit(sp[i], &argofs,
-				    xtemps && !saveallargs);
+				param_64bit(sp[i], &reg, &stackofs, xtemps && !saveallargs);
 		} else if (sp[i]->stype == FLOAT) {
 			if (features(FEATURE_HARDFLOAT))
-				param_float(sp[i], &argofs,
-				    xtemps && !saveallargs);
+				param_float(sp[i], &freg, &stackofs, xtemps && !saveallargs);
 			else
-				param_32bit(sp[i], &argofs,
-				    xtemps && !saveallargs);
+				param_32bit(sp[i], &reg, &stackofs, xtemps && !saveallargs);
 		} else {
-			param_32bit(sp[i], &argofs, xtemps && !saveallargs);
+			param_32bit(sp[i], &reg, &stackofs, xtemps && !saveallargs);
 		}
 	}
 
 	/* if saveallargs, save the rest of the args onto the stack */
-	while (saveallargs && argofs < NARGREGS) {
+	/* XXX - investigate, rewrite for FP regs */
+	while (saveallargs && reg < NARGREGS) {
       		NODE *p, *q;
-		int off = ARGINIT/SZINT + argofs;
+		int off = ARGINIT/SZINT + reg;
 		q = block(REG, NIL, NIL, INT, 0, 0);
-		regno(q) = R0 + argofs++;
+		regno(q) = R0 + reg++;
 		p = block(REG, NIL, NIL, INT, 0, 0);
 		regno(p) = SPREG;
 		p = block(PLUS, p, bcon(4*off), INT, 0, 0);
@@ -531,7 +460,7 @@ reverse(NODE *p)
 /* push arg onto the stack */
 /* called by moveargs() */
 static NODE *
-pusharg(NODE *p, int *regp)
+pusharg(NODE *p, int *stackofsp)
 {
 	NODE *q;
 	int sz;
@@ -544,34 +473,14 @@ pusharg(NODE *p, int *regp)
 	q = block(REG, NIL, NIL, INT, 0, 0);
 	regno(q) = SP;
 
-	if (szty(p->n_type) == 1) {
-		++(*regp);
-		q = block(MINUSEQ, q, bcon(4), INT, 0, 0);
-	} else {
-		(*regp) += 2;
-		q = block(MINUSEQ, q, bcon(8), INT, 0, 0);
-	}
+	q = block(PLUS, q, bcon(*stackofsp), INT, 0, 0);
+	*stackofsp += SZLONG / 8;
 
 	q = block(UMUL, q, NIL, p->n_type, p->n_df, p->n_ap);
 
 	return buildtree(ASSIGN, q, p);
 }
 
-/* setup call stack with 32-bit argument */
-/* called from moveargs() */
-static NODE *
-movearg_32bit(NODE *p, int *regp)
-{
-	int reg = *regp;
-	NODE *q;
-
-	q = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
-	regno(q) = reg++;
-	q = buildtree(ASSIGN, q, p);
-
-	*regp = reg;
-	return q;
-}
 
 /* setup call stack with 64-bit argument */
 /* called from moveargs() */
@@ -579,41 +488,47 @@ static NODE *
 movearg_64bit(NODE *p, int *regp)
 {
 	int reg = *regp;
-	NODE *q, *r;
+	NODE *q;
 
-#if ALLONGLONG == 64
-	/* alignment */
-	++reg;
-	reg &= ~1;
+	q = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+	regno(q) = R0 + reg++;
+	q = buildtree(ASSIGN, q, p);
+
 	*regp = reg;
-#endif
+	return q;
+}
 
-	if (reg > R3) {
-		q = pusharg(p, regp);
-	} else if (reg == R3) {
-		/* half in and half out of the registers */
-		r = tcopy(p);
-		if (!features(FEATURE_BIGENDIAN)) {
-			q = block(SCONV, p, NIL, INT, 0, 0);
-			q = movearg_32bit(q, regp);     /* little-endian */
-			r = buildtree(RS, r, bcon(32));
-			r = block(SCONV, r, NIL, INT, 0, 0);
-			r = pusharg(r, regp); /* little-endian */
-		} else {
-			q = buildtree(RS, p, bcon(32));
-			q = block(SCONV, q, NIL, INT, 0, 0);
-			q = movearg_32bit(q, regp);     /* big-endian */
-			r = block(SCONV, r, NIL, INT, 0, 0);
-			r = pusharg(r, regp); /* big-endian */
-		}
-		q = straighten(block(CM, q, r, p->n_type, p->n_df, p->n_ap));
-	} else {
-		q = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
-		regno(q) = R16 + (reg - R0);
-		q = buildtree(ASSIGN, q, p);
-		*regp = reg + 2;
-	}
+/* setup call stack with 32-bit argument */
+/* called from moveargs() */
+static NODE *
+movearg_32bit(NODE *p, int *regp)
+{
+	/* On aarch64, passing of 32-bit and 64-bit args
+	   are equivalent.
+	   Each argument either occupies one register,
+	   or 8-byte aligned stack.
+	*/
+	return movearg_64bit(p, regp);
+}
 
+
+/* setup call stack with float/double argument */
+/* called from moveargs() */
+static NODE *
+movearg_double(NODE *p, int *regp)
+{
+	/* Only hard-float ABI reaches here.
+	   soft-float ABI parameters are handled
+	   by movearg_64bit.
+	*/
+	int reg = *regp;
+	NODE *q;
+
+	q = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+	regno(q) = V0 + reg++;
+	q = buildtree(ASSIGN, q, p);
+
+	*regp = reg;
 	return q;
 }
 
@@ -622,102 +537,24 @@ movearg_64bit(NODE *p, int *regp)
 static NODE *
 movearg_float(NODE *p, int *regp)
 {
-	NODE *q, *r;
-	TWORD ty = INCREF(p->n_type);
-	int tmpnr;
+	/* Only hard-float ABI reaches here.
+	   soft-float ABI parameters are handled
+	   by movearg_32bit.
 
-	/*
-	 * Floats are passed in the general registers for
-	 * compatibily with libraries compiled to handle soft-float.
-	 */
-
-	if (xtemps) {
-		/* bounce on TOS */
-		r = block(REG, NIL, NIL, ty, p->n_df, p->n_ap);
-		regno(r) = SP;
-		r = block(PLUS, r, bcon(-4), ty, p->n_df, p->n_ap);
-		r = block(UMUL, r, NIL, p->n_type, p->n_df, p->n_ap);
-		r = buildtree(ASSIGN, r, p);
-		ecomp(r);
-
-		/* bounce into temp */
-		r = block(REG, NIL, NIL, PTR+INT, 0, 0);
-		regno(r) = SP;
-		r = block(PLUS, r, bcon(-8), PTR+INT, 0, 0);
-		r = block(UMUL, r, NIL, INT, 0, 0);
-		q = tempnode(0, INT, 0, 0);
-		tmpnr = regno(q);
-		r = buildtree(ASSIGN, q, r);
-		ecomp(r);
-	} else {
-		/* copy directly into temp */
-		q = tempnode(0, p->n_type, p->n_df, p->n_ap);
-		tmpnr = regno(q);
-		r = buildtree(ASSIGN, q, p);
-		ecomp(r);
-	}
-
-	/* copy from temp to register parameter */
-	r = tempnode(tmpnr, INT, 0, 0);
-	q = block(REG, NIL, NIL, INT, 0, 0);
-	regno(q) = (*regp)++;
-	p = buildtree(ASSIGN, q, r);
-
-	return p;
+	   On aarch64, passing of 32-bit and 64-bit FP args
+	   are equivalent.
+	   Each argument either occupies one register,
+	   or 8-byte aligned stack.
+	*/
+        return movearg_double(p, regp);
 }
-
-/* setup call stack with float/double argument */
-/* called from moveargs() */
-static NODE *
-movearg_double(NODE *p, int *regp)
-{
-	NODE *q, *r;
-	TWORD ty = INCREF(p->n_type);
-	int tmpnr;
-
-	if (xtemps) {
-		/* bounce on TOS */
-		r = block(REG, NIL, NIL, ty, p->n_df, p->n_ap);
-		regno(r) = SP;
-		r = block(PLUS, r, bcon(-8), ty, p->n_df, p->n_ap);
-		r = block(UMUL, r, NIL, p->n_type, p->n_df, p->n_ap);
-		r = buildtree(ASSIGN, r, p);
-		ecomp(r);
-
-		/* bounce into temp */
-		r = block(REG, NIL, NIL, PTR+LONGLONG, 0, 0);
-		regno(r) = SP;
-		r = block(PLUS, r, bcon(-8), PTR+LONGLONG, 0, 0);
-		r = block(UMUL, r, NIL, LONGLONG, 0, 0);
-		q = tempnode(0, LONGLONG, 0, 0);
-		tmpnr = regno(q);
-		r = buildtree(ASSIGN, q, r);
-		ecomp(r);
-	} else {
-		/* copy directly into temp */
-		q = tempnode(0, p->n_type, p->n_df, p->n_ap);
-		tmpnr = regno(q);
-		r = buildtree(ASSIGN, q, p);
-		ecomp(r);
-	}
-
-	/* copy from temp to register parameter */
-	r = tempnode(tmpnr, LONGLONG, 0, 0);
-	q = block(REG, NIL, NIL, LONGLONG, 0, 0);
-	regno(q) = R16 - R0 + (*regp);
-	p = buildtree(ASSIGN, q, r);
-
-	(*regp) += 2;
-
-	return p;
-}
-
 
 /* setup call stack with a structure */
 /* called from moveargs() */
 static NODE *
-movearg_struct(NODE *p, int *regp)
+movearg_struct(NODE *p, int *regp, int *stackofsp)
 {
+	/* XXX - investigate */
 	int reg = *regp;
 	NODE *l, *q, *t, *r;
 	int tmpnr;
@@ -767,7 +604,7 @@ movearg_struct(NODE *p, int *regp)
 		t = block(SCONV, t, NIL, PTR+INT, 0, 0);
 		t = block(PLUS, t, bcon(4*i), PTR+INT, 0, 0);
 		t = buildtree(UMUL, t, NIL);
-		r = pusharg(t, &reg);
+		r = pusharg(t, stackofsp);
 		q = block(CM, q, r, INT, 0, 0);
 	}
 
@@ -779,13 +616,12 @@ movearg_struct(NODE *p, int *regp)
 
 
 static NODE *
-moveargs(NODE *p, int *regp)
+moveargs(NODE *p, int *regp, int *fregp, int *stackofsp)
 {
 	NODE *r, **rp;
-	int reg;
 
 	if (p->n_op == CM) {
-		p->n_left = moveargs(p->n_left, regp);
+		p->n_left = moveargs(p->n_left, regp, fregp, stackofsp);
 		r = p->n_right;
 		rp = &p->n_right;
 	} else {
@@ -793,18 +629,26 @@ moveargs(NODE *p, int *regp)
 		rp = &p;
 	}
 
-	reg = *regp;
+	int isfp = features(FEATURE_HARDFLOAT)
+		&& (r->n_type == DOUBLE || r->n_type == LDOUBLE
+		 || r->n_type == FLOAT);
 
-	if (reg > R3 && r->n_op != STARG) {
-		*rp = pusharg(r, regp);
-	} else if (r->n_op == STARG) {
-		*rp = movearg_struct(r, regp);
+	if (r->n_op == STARG) {
+		*rp = movearg_struct(r, regp, stackofsp);
+	} else if ((isfp && *fregp >= NARGREGS) || (!isfp && *regp >= NARGREGS)) {
+		*rp = pusharg(r, stackofsp);
 	} else if (DEUNSIGN(r->n_type) == LONGLONG) {
 		*rp = movearg_64bit(r, regp);
 	} else if (r->n_type == DOUBLE || r->n_type == LDOUBLE) {
-		*rp = movearg_double(r, regp);
+		if (features(FEATURE_HARDFLOAT))
+			*rp = movearg_double(r, fregp);
+		else
+			*rp = movearg_64bit(r, regp);
 	} else if (r->n_type == FLOAT) {
-		*rp = movearg_float(r, regp);
+		if (features(FEATURE_HARDFLOAT))
+			*rp = movearg_float(r, fregp);
+		else
+			*rp = movearg_32bit(r, regp);
 	} else {
 		*rp = movearg_32bit(r, regp);
 	}
@@ -873,17 +717,21 @@ builtin_cfa(const struct bitable *bt, NODE *a)
 NODE *
 funcode(NODE *p)
 {
-	int reg = R0;
+	int reg, freg, stackofs;
+	reg = freg = stackofs = 0;
 
 	if (p->n_type == STRTY+FTN || p->n_type == UNIONTY+FTN) {
 		p = retstruct(p);
 		reg = R1;
 	}
 
-	p->n_right = moveargs(p->n_right, &reg);
+	p->n_right = moveargs(p->n_right, &reg, &freg, &stackofs);
 
 	if (p->n_right == NULL)
 		p->n_op += (UCALL - CALL);
+
+	if (stackofs > p1maxstacksize)
+		p1maxstacksize = stackofs;
 
 	return p;
 }
