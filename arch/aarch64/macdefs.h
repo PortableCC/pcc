@@ -28,7 +28,7 @@
  * Storage space requirements
  */
 #define SZCHAR          8
-#define SZBOOL          32
+#define SZBOOL          8 /* XXX - investigate */
 #define SZINT           32
 #define SZFLOAT         32
 #define SZDOUBLE        64
@@ -42,17 +42,17 @@
  * Alignment constraints
  */
 #define ALCHAR          8
-#define ALBOOL          32
+#define ALBOOL          8
 #define ALINT           32
 #define ALFLOAT         32
-#define ALDOUBLE        32
-#define ALLDOUBLE       32
-#define ALLONG          32
-#define ALLONGLONG      32
+#define ALDOUBLE        64
+#define ALLDOUBLE       64
+#define ALLONG          64
+#define ALLONGLONG      64
 #define ALSHORT         16
-#define ALPOINT         32
+#define ALPOINT         64
 #define ALSTRUCT        32
-#define ALSTACK         32
+#define ALSTACK         128
 
 /*
  * Min/max values.
@@ -63,7 +63,7 @@
 #define	MIN_SHORT	-32768
 #define	MAX_SHORT	32767
 #define	MAX_USHORT	65535
-#define	MIN_INT		-1
+#define	MIN_INT		(-0x7fffffff-1)
 #define	MAX_INT		0x7fffffff
 #define	MAX_UNSIGNED	0xffffffff
 #define	MIN_LONG	0x8000000000000000L
@@ -73,7 +73,7 @@
 #define	MAX_LONGLONG	0x7fffffffffffffffLL
 #define	MAX_ULONGLONG	0xffffffffffffffffULL
 
-#define	BOOL_TYPE	INT	/* what used to store _Bool */
+#define	BOOL_TYPE	UCHAR	/* what used to store _Bool */
 
 /*
  * Use large-enough types.
@@ -96,8 +96,7 @@ typedef long long OFFSZ;
 #define STOFARG(p)
 #define STOSTARG(p)
 
-#define	szty(t)	(((t) == DOUBLE || (t) == LDOUBLE || \
-	(t) == LONG || (t) == ULONG || (t) == LONGLONG || (t) == ULONGLONG) ? 2 : 1)
+#define szty(t) (t < LONG || t == FLOAT ? 1 : t == LDOUBLE ? 4 : 2)
 
 #define R0	0
 #define R1	1
@@ -137,18 +136,111 @@ typedef long long OFFSZ;
 #define SP	R31
 #define LR	R30
 
+#define V0	32
+#define V1	33
+#define V2	34
+#define V3	35
+#define V4	36
+#define V5	37
+#define V6	38
+#define V7	39
+#define V8	40
+#define V9	41
+#define V10	42
+#define V11	43
+#define V12	44
+#define V13	45
+#define V14	46
+#define V15	47
+#define V16	48
+#define V17	49
+#define V18	50
+#define V19	51
+#define V20	52
+#define V21	53
+#define V22	54
+#define V23	55
+#define V24	56
+#define V25	57
+#define V26	58
+#define V27	59
+#define V28	60
+#define V29	61
+#define V30	62
+#define V31	63
+
 #define NUMCLASS 3
-#define	MAXREGS  34	
+#define	MAXREGS  64
 
 #define RSTATUS \
-	SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG, SAREG|TEMPREG,	\
-	SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG,	\
-	SAREG|PERMREG, SAREG|PERMREG, SAREG|PERMREG,			\
-	0, 0, 0, 0, 0,							\
-        SBREG|TEMPREG, SBREG|TEMPREG, SBREG|TEMPREG, SBREG,		\
-        SBREG, SBREG, SBREG, SBREG, SBREG, SBREG,			\
-	SCREG, SCREG, SCREG, SCREG,					\
-	SCREG, SCREG, SCREG, SCREG,					\
+/* x0  */ SAREG|TEMPREG, \
+/* x1  */ SAREG|TEMPREG, \
+/* x2  */ SAREG|TEMPREG, \
+/* x3  */ SAREG|TEMPREG, \
+/* x4  */ SAREG|TEMPREG, \
+/* x5  */ SAREG|TEMPREG, \
+/* x6  */ SAREG|TEMPREG, \
+/* x7  */ SAREG|TEMPREG, \
+/* x8  */ SAREG|TEMPREG, \
+/* x9  */ SAREG|TEMPREG, \
+/* x10 */ SAREG|TEMPREG, \
+/* x11 */ SAREG|TEMPREG, \
+/* x12 */ SAREG|TEMPREG, \
+/* x13 */ SAREG|TEMPREG, \
+/* x14 */ SAREG|TEMPREG, \
+/* x15 */ SAREG|TEMPREG, \
+/* x16 */ 0,            /* IP0 scratch (not allocatable) */ \
+/* x17 */ 0,            /* IP1 scratch */ \
+/* x18 */ 0,            /* platform register */ \
+/* x19 */ SAREG|PERMREG, \
+/* x20 */ SAREG|PERMREG, \
+/* x21 */ SAREG|PERMREG, \
+/* x22 */ SAREG|PERMREG, \
+/* x23 */ SAREG|PERMREG, \
+/* x24 */ SAREG|PERMREG, \
+/* x25 */ SAREG|PERMREG, \
+/* x26 */ SAREG|PERMREG, \
+/* x27 */ SAREG|PERMREG, \
+/* x28 */ SAREG|PERMREG, \
+/* x29 */ 0,            /* FP (frame pointer) */ \
+/* x30 */ 0,            /* LR */ \
+/* x31 */ 0,            /* SP/WZR */ \
+        \
+	/* class B empty for now */ \
+        \
+/* v0  */ SCREG|TEMPREG, \
+/* v1  */ SCREG|TEMPREG, \
+/* v2  */ SCREG|TEMPREG, \
+/* v3  */ SCREG|TEMPREG, \
+/* v4  */ SCREG|TEMPREG, \
+/* v5  */ SCREG|TEMPREG, \
+/* v6  */ SCREG|TEMPREG, \
+/* v7  */ SCREG|TEMPREG, \
+/* v8  */ SCREG|PERMREG, /* callee-saved */ \
+/* v9  */ SCREG|PERMREG, /* callee-saved */ \
+/* v10 */ SCREG|PERMREG, /* callee-saved */ \
+/* v11 */ SCREG|PERMREG, /* callee-saved */ \
+/* v12 */ SCREG|PERMREG, /* callee-saved */ \
+/* v13 */ SCREG|PERMREG, /* callee-saved */ \
+/* v14 */ SCREG|PERMREG, /* callee-saved */ \
+/* v15 */ SCREG|PERMREG, /* callee-saved */ \
+/* v16 */ SCREG|TEMPREG, \
+/* v17 */ SCREG|TEMPREG, \
+/* v18 */ SCREG|TEMPREG, \
+/* v19 */ SCREG|TEMPREG, \
+/* v20 */ SCREG|TEMPREG, \
+/* v21 */ SCREG|TEMPREG, \
+/* v22 */ SCREG|TEMPREG, \
+/* v23 */ SCREG|TEMPREG, \
+/* v24 */ SCREG|TEMPREG, \
+/* v25 */ SCREG|TEMPREG, \
+/* v26 */ SCREG|TEMPREG, \
+/* v27 */ SCREG|TEMPREG, \
+/* v28 */ SCREG|TEMPREG, \
+/* v29 */ SCREG|TEMPREG, \
+/* v30 */ SCREG|TEMPREG, \
+/* v31 */ 0            /* unusable due to class size limit */
+
 
 /* no overlapping registers at all */
 #define ROVERLAP \
@@ -156,10 +248,21 @@ typedef long long OFFSZ;
         { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
         { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
         { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
-        { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 },
+        { -1 }, { -1 }, { -1 }, { -1 }, \
+	\
+        /* class B empty for now */ \
+	\
+        { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
+        { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
+        { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
+        { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, \
+        { -1 }, { -1 }, { -1 }, { -1 }
+
+
+#define STACK_DOWN              /* stack grows negatively for temporaries */
 
 #define ARGINIT		(16*8)	/* # bits above fp where arguments start */
-#define AUTOINIT	(32*8)	/* # bits above fp where automatics start */
+#define AUTOINIT	0	/* # bits above fp where automatics start */
 
 #undef	FIELDOPS		/* no bit-field instructions */
 #define TARGET_ENDIAN TARGET_LE
@@ -171,7 +274,7 @@ typedef long long OFFSZ;
 /* Return a register class based on the type of the node */
 #define PCLASS(p)	(1 << gclass((p)->n_type))
 
-#define GCLASS(x)	(x < 16 ? CLASSA : x < 26 ? CLASSB : CLASSC)
+#define GCLASS(x)	(x < 32 ? CLASSA : CLASSC )
 #define DECRA(x,y)      (((x) >> (y*6)) & 63)   /* decode encoded regs */
 #define ENCRD(x)        (x)             /* Encode dest reg in n_reg */
 #define ENCRA1(x)       ((x) << 6)      /* A1 */
@@ -208,7 +311,7 @@ NODE *arm_builtin_va_copy(const struct bitable *bt, NODE *a);
 #undef NODE
 
 #define COM     "\t// "
-#define NARGREGS	4
+#define NARGREGS	8
 
 /* floating point definitions */
 #define USE_IEEEFP_32

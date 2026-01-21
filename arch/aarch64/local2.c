@@ -23,32 +23,46 @@
 
 #include "pass2.h"
 
+#define SZFPSP		16
+
 extern void defalign(int);
 
-int isConverstion=0;
-int addStack=0;
+static int isConverstion=0;
+static int addStack=0;
 #define	exname(x) x
 
 /*
 In a 32-bit context,registers are specified by using w0-w30 in A64 instruction set
 */
 char *wnames[] = {
-	"w0", "w1", "w2", "w3","w4","w5", "w6", "w7",
-	"w8", "w9", "w10","w11","w12","w13","w14",
-	"w15", "w16","w17","w18","w19","w20", "w21",
-	"w22","w23","w24","w25","w26","w27","w28",
-	"w29","w30",
+	 "w0",  "w1",  "w2",  "w3",  "w4",  "w5",  "w6",
+	 "w7",  "w8",  "w9", "w10", "w11", "w12", "w13",
+	"w14", "w15", "w16", "w17", "w18", "w19", "w20",
+	"w21", "w22", "w23", "w24", "w25", "w26", "w27",
+	"w28", "w29", "w30",  "sp",
+	
+	 "s0",  "s1",  "s2",  "s3",  "s4",  "s5",  "s6",
+	 "s7",  "s8",  "s9", "s10", "s11", "s12", "s13",
+	"s14", "s15", "s16", "s17", "s18", "s19", "s20",
+	"s21", "s22", "s23", "s24", "s25", "s26", "s27",
+	"s28", "s29", "s30", "s31"
 };
 
 /*
 In a 64-bit context,registers are specified by using x0-x30 in A64 instruction set
 */
 char *rnames[] = {
-	"x0", "x1", "x2", "x3","x4","x5", "x6", "x7",
-	"x8", "x9", "x10","x11","x12","x13","x14", 
-	"x15", "x16","x17","x18","x19","x20", "x21",
-	"x22","x23","x24","x25","x26","x27","x28",
-	"x29","x30","sp",
+	 "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",
+	 "x7",  "x8",  "x9", "x10", "x11", "x12", "x13",
+	"x14", "x15", "x16", "x17", "x18", "x19", "x20",
+	"x21", "x22", "x23", "x24", "x25", "x26", "x27",
+	"x28", "x29", "x30",  "sp",
+	
+	 "d0",  "d1",  "d2",  "d3",  "d4",  "d5",  "d6",
+	 "d7",  "d8",  "d9", "d10", "d11", "d12", "d13",
+	"d14", "d15", "d16", "d17", "d18", "d19", "d20",
+	"d21", "d22", "d23", "d24", "d25", "d26", "d27",
+	"d28", "d29", "d30", "d31"
 };
 
 /*
@@ -142,8 +156,8 @@ offcalc(struct interpass_prolog *ipp)
 void
 prologue(struct interpass_prolog *ipp)
 {
-        int addto;
-        int vals[4], nc, i;
+	int addto;
+	int vals[4], nc, i;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
@@ -159,30 +173,37 @@ prologue(struct interpass_prolog *ipp)
 #endif
 
 	ftype = ipp->ipp_type;
-        printf("%s:\n", exname(ipp->ipp_name));
-        addto = offcalc(ipp);
-        if (addto < 64){
-		addto = 64;       
-        }
-        if((addto % 16)){
-                addto = addto + (16 - (addto % 16));
-        }
-        if (trepresent(addto)) {
-                printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], addto);
+	printf("%s:\n", exname(ipp->ipp_name));
+
+	addto = offcalc(ipp);
+
+#define BALSTACK (ALSTACK/SZCHAR)
+	if (addto < BALSTACK) {
+		addto = BALSTACK;
+	}
+	if (addto % BALSTACK) {
+		addto = addto + (BALSTACK - (addto % BALSTACK));
+	}
+#undef BALSTACK
+	addStack = addto;
+
+	printf("\tstp %s,%s,[%s,#%d]!\n", rnames[FP], rnames[LR], rnames[SP], -SZFPSP);
+	printf("\tmov %s,%s\n", rnames[FP], rnames[SP]);
+	if (trepresent(addto)) {
+		printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], addto);
         } else {
-                nc = encode_constant(addto, vals);
-                for (i = 0; i < nc; i++)
-                        printf("\tsub %s,%s,#%d\n",
-                            rnames[SP], rnames[SP], vals[i]);
+		nc = encode_constant(addto, vals);
+		for (i = 0; i < nc; i++)
+			printf("\tsub %s,%s,#%d\n",
+			       rnames[SP], rnames[SP], vals[i]);
         }
-        printf("\tstp %s,%s,[%s]\n", rnames[FP],rnames[LR],rnames[SP]);
-        printf("\tmov %s,%s\n", rnames[FP], rnames[SP]);
-        addStack=addto;
 }
 
 void
 eoftn(struct interpass_prolog *ipp)
 {
+	int vals[4], nc, i;
+
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return; /* no code needs to be generated */
 
@@ -190,16 +211,16 @@ eoftn(struct interpass_prolog *ipp)
 	if (ftype == STRTY || ftype == UNIONTY) {
 		assert(0);
 	} else {
-                if (addStack == 0){
-                        printf("\tldp %s,%s,[%s],#%d \n", rnames[FP], rnames[LR],
-                                rnames[SP], 64);
-                        printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], 64);
-                }
-                else{
-                        printf("\tldp %s,%s,[%s] \n", rnames[FP], rnames[LR],
-                                rnames[SP]);
-                        printf("\tadd %s,%s,%d\n", rnames[SP], rnames[SP], addStack);
-                }
+		if (trepresent(addStack)) {
+			printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], addStack);
+		} else {
+			nc = encode_constant(addStack, vals);
+			for (i = 0; i < nc; i++)
+				printf("\tadd %s,%s,#%d\n",
+				       rnames[SP], rnames[SP], vals[i]);
+		}
+		printf("\tldp %s,%s,[%s],#%d\n", rnames[FP], rnames[LR],
+		       rnames[SP], SZFPSP);
 	}
 	printf("\tret\n");
 #ifndef MACHOABI
@@ -776,6 +797,7 @@ adrput(FILE *io, NODE *p)
 	
 		case REG:
 			switch (p->n_type) {
+				case FLOAT:
 				case CHAR:
 				case UCHAR:
 				case INT:
@@ -796,14 +818,9 @@ adrput(FILE *io, NODE *p)
 					break;
 				case DOUBLE:
 				case LDOUBLE:
-					if (features(FEATURE_HARDFLOAT)) {
-						fprintf(io, "%s", rnames[p->n_rval]);
-						break;
-					}
-					/* FALLTHROUGH */
 				case LONGLONG:
 				case ULONGLONG:
-					fprintf(io, "%s", rnames[p->n_rval-R16]);
+					fprintf(io, "%s", rnames[p->n_rval]);
 					break;
 				default:
 					fprintf(io, "%s", rnames[p->n_rval]);
@@ -1040,8 +1057,7 @@ rmove(int s, int d, TWORD t)
 			/* FALLTHROUGH */
 	        case LONGLONG:
         	case ULONGLONG:
-		#define LONGREG(x, y) rnames[(x)-(R16-(y))]
-			printf("\tmov %s,%s\n",LONGREG(d,0), LONGREG(s,0));
+			printf("\tmov %s,%s\n",rnames[d], rnames[s]);
                		break;
 		case FLOAT:
 			if (features(FEATURE_HARDFLOAT)) {
@@ -1108,20 +1124,11 @@ COLORMAP(int c, int *r)
 int
 gclass(TWORD t)
 {
-	if (t == DOUBLE || t == LDOUBLE) {
-		if (features(FEATURE_HARDFLOAT))
+	if (features(FEATURE_HARDFLOAT)) {
+		if (t == DOUBLE || t == LDOUBLE || t == FLOAT)
 			return CLASSC;
-		else
-			return CLASSB;
 	}
-	if (t == FLOAT) {
-		if (features(FEATURE_HARDFLOAT))
-			return CLASSC;
-		else
-			return CLASSA;
-	}
-	if (DEUNSIGN(t) == LONGLONG || DEUNSIGN(t) == LONG || t == LONGLONG || t == LONG)
-		return CLASSB;
+
 	return CLASSA;
 }
 
@@ -1129,8 +1136,8 @@ int
 retreg(int t)
 {
 	int c = gclass(t);
-	if (c == CLASSB)
-		return R16;
+	if (c == CLASSC)
+		return V0;
 	return R0;
 }
 

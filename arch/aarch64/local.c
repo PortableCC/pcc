@@ -134,7 +134,7 @@ clocal(NODE *p)
 					/* fake up a structure reference */
 					r = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
 					slval(r, 0);
-					r->n_rval = SPREG;
+					r->n_rval = FPREG;
 					p = stref(block(STREF, r, p, 0, 0, 0));
 					break;
 				case REGISTER:
@@ -200,7 +200,7 @@ clocal(NODE *p)
 
 			if (l->n_op == ICON) {
 				CONSZ val = glval(l);
-				CONSZ lval;
+				CONSZ lval = 0;
 
 				if (!ISPTR(p->n_type)) /* Pointers don't need to be conv'd */
 				switch (p->n_type) {
@@ -385,7 +385,6 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; int i[2]; } u;
 	struct symtab *q;
 	TWORD t;
 	int i, j;
