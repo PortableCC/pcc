@@ -30,6 +30,7 @@
 #ifdef LANG_CXX
 #define p1listf listf
 #define p1tfree tfree
+#define sss sap
 #else
 #define NODE P1ND
 #define talloc p1alloc
@@ -53,10 +54,6 @@ getsoname(struct symtab *sp)
 	return (ap = attr_find(sp->sap, ATTR_SONAME)) ?
 	    ap->sarg(0) : sp->sname;
 }
-
-#ifndef LANG_CXX
-#define	sap sss
-#endif
 
 /*
  * clocal() is called to do local transformations on
@@ -307,15 +304,17 @@ myp2tree(NODE *p)
 
 	sp = IALLOC(sizeof(struct symtab));
 	sp->sclass = STATIC;
+	sp->sss = 0;
 	sp->sap = 0;
 	sp->slevel = 1; /* fake numeric label */
 	sp->soffset = getlab();
 	sp->sflags = 0;
 	sp->stype = p->n_type;
 	sp->squal = (CON >> TSHIFT);
+	sp->sname = NULL;
 
 	defloc(sp);
-	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	inval(0, tsize(sp->stype, sp->sdf, sp->sss), p);
 
 	p->n_op = NAME;
 	slval(p, 0);
@@ -482,7 +481,7 @@ defzero(struct symtab *sp)
 {
 	int off;
 
-	off = tsize(sp->stype, sp->sdf, sp->sap);
+	off = tsize(sp->stype, sp->sdf, sp->sss);
 	off = (off+(SZCHAR-1))/SZCHAR;
 	printf("	.%scomm ", sp->sclass == STATIC ? "l" : "");
 	if (sp->slevel == 0)
