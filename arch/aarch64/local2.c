@@ -1157,7 +1157,7 @@ myoptim(struct interpass *ipp)
 void
 rmove(int s, int d, TWORD t)
 {
-        switch (t) {
+	switch (t) {
 		case DOUBLE:
 		case LDOUBLE:
 			if (features(FEATURE_HARDFLOAT)) {
@@ -1210,6 +1210,7 @@ rmove(int s, int d, TWORD t)
 int
 COLORMAP(int c, int *r)
 {
+	/* XXX - investigate */
 	int num = 0;	/* number of registers used */
 	switch (c) {
 		case CLASSA:
@@ -1282,9 +1283,9 @@ special(NODE *p, int shape)
  * default to ARMv2
  */
 #ifdef TARGET_BIG_ENDIAN
-#define DEFAULT_FEATURES	FEATURE_BIGENDIAN | FEATURE_EXTEND
+#define DEFAULT_FEATURES	FEATURE_BIGENDIAN | FEATURE_EXTEND | FEATURE_FPSIMD
 #else
-#define DEFAULT_FEATURES	FEATURE_EXTEND
+#define DEFAULT_FEATURES	FEATURE_EXTEND | FEATURE_FPSIMD
 #endif
 
 static int fset = DEFAULT_FEATURES;
@@ -1295,8 +1296,16 @@ static int fset = DEFAULT_FEATURES;
 void
 mflags(char *str)
 {
-	//Handling needs to be done for ARMv8
+	if (strcasecmp(str, "soft-float") == 0) {
+		fset &= ~FEATURE_HARDFLOAT;
+	} else if (strcasecmp(str, "hard-float") == 0) {
+		fset |= FEATURE_HARDFLOAT;
+	} else {
+		fprintf(stderr, "unknown m option '%s'\n", str);
+		exit(1);
+	}
 }
+
 int
 features(int mask)
 {

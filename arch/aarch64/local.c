@@ -273,6 +273,14 @@ clocal(NODE *p)
 				p->n_left->n_type = INT;
 				return p;
 			}
+			if ((p->n_type == FLOAT || p->n_type == DOUBLE ||
+			    p->n_type == LDOUBLE) &&
+			    (DEUNSIGN(l->n_type) == CHAR ||
+			    DEUNSIGN(l->n_type) == SHORT)) {
+				p = block(SCONV, p, NIL, p->n_type, p->n_df, p->n_ap);
+				p->n_left->n_type = INT;
+				return p;
+			}
 			break;
 
 		case PCONV:

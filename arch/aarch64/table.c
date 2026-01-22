@@ -299,273 +299,111 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	ldrh A1,AL" COM "convert ushort to int/long\n", },
 
-{ SCONV,	INAREG | FEATURE_FPA,
+{ SCONV,	INAREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
-	SAREG,	TWORD,
-		NAREG,	RESC1,
-		"	fix AL,AR" COM "convert float to int\n", },
-
-{ SCONV,	INAREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SAREG,	TSWORD,
+	SAREG,	TSWORD|TLONGLONG,
 		NAREG,		RESC1,
-		"	ftosis AL,AR" COM "convert float to int\n", },
+		"	fcvtzs A1,AL" COM "convert float to int/long\n", },
 
-{ SCONV,	INAREG | FEATURE_VFP,
+{ SCONV,	INAREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
-	SAREG,	TSWORD,
+	SAREG,	TUWORD|TULONGLONG,
 		NAREG,		RESC1,
-		"	ftouis AL,AR" COM "convert float to int\n", },
+		"	fcvtzu A1,AL" COM "convert float to uint/ulong\n", },
 
 { SCONV,	INAREG,
 	SAREG,	TFLOAT,
-	SAREG,	TWORD,
+	SAREG,	TWORD|TLONGLONG|TULONGLONG,
 		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)), RESC1,
 		"ZF", },
 
-/* XXX - investigate */
-{ SCONV,	INBREG | FEATURE_FPA,
-	SCREG,	TFLOAT,
-	SBREG,	TULONGLONG|TLONGLONG,
-		NBREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INBREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SBREG,	TULONGLONG|TLONGLONG,
-		NBREG,		RESC1,
-		COM "unimplemented\n", },
-
-/* XXX - investigate */
-{ SCONV,	INBREG,
-	SAREG,	TFLOAT,
-	SBREG,	TULONGLONG|TLONGLONG,
-		NEEDS(NREG(B, 1), NLEFT(R0), NRES(R16)), RESC1,
-		"ZF", },
-
-{ SCONV,	INAREG | FEATURE_FPA,
+{ SCONV,	INAREG | FEATURE_FPSIMD,
 	SCREG,	TDOUBLE|TLDOUBLE,
-	SAREG,	TWORD,
+	SAREG,	TSWORD|TLONGLONG,
 		NAREG,		RESC1,
-		"	fix AL,AR" COM "convert double/ldouble to int\n", },
+		"	fcvtzs A1,AL" COM "convert (l)double to int/long\n", },
 
-{ SCONV,	INAREG | FEATURE_VFP,
+{ SCONV,	INAREG | FEATURE_FPSIMD,
 	SCREG,	TDOUBLE|TLDOUBLE,
-	SAREG,	TSWORD,
+	SAREG,	TUWORD|TULONGLONG,
 		NAREG,		RESC1,
-		"	ftosid AL,AR" COM "convert double/ldouble to int\n", },
-
-{ SCONV,	INAREG | FEATURE_VFP,
-	SCREG,	TDOUBLE|TLDOUBLE,
-	SAREG,	TUWORD,
-		NAREG,		RESC1,
-		"	ftouid AL,AR" COM "convert double/ldouble to int\n", },
+		"	fcvtzu A1,AL" COM "convert (l)double to uint/ulong\n", },
 
 { SCONV,	INAREG,
-	SBREG,	TDOUBLE|TLDOUBLE,
-	SAREG,	TWORD,
-		NEEDS(NREG(A, 1), NLEFT(R16), NRES(R0)),		RESC1,
+	SAREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TWORD|TLONGLONG|TULONGLONG,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)),		RESC1,
 		"ZF", },
 
-/* XXX - investiagte */
-{ SCONV,	INBREG | FEATURE_FPA,
-	SCREG,	TDOUBLE|TLDOUBLE,
-	SBREG,	TLONGLONG|TULONGLONG,
-		NBREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INBREG | FEATURE_VFP,
-	SCREG,	TDOUBLE|TLDOUBLE,
-	SBREG,	TULONGLONG|TLONGLONG,
-		NBREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INBREG,
-	SBREG,	TDOUBLE|TLDOUBLE,
-	SBREG,	TULONGLONG|TLONGLONG,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRES(R16)),		RESC1,
-		"ZF", },
-
-{ SCONV,	INCREG | FEATURE_FPA,
-	SAREG,	TWORD,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
+	SAREG,	TSWORD|TLONGLONG,
 	SCREG,	TFLOAT,
 		NCREG,		RESC1,
-		"	flts AL,AR" COM "convert int to float\n" },
+		"	scvtf A1,AL" COM "convert int/long to float\n" },
 
-{ SCONV,	INCREG | FEATURE_VFP,
-	SAREG,	TSWORD,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
+	SAREG,	TUWORD|TULONGLONG,
 	SCREG,	TFLOAT,
 		NCREG,		RESC1,
-		"	fsitos AL,AR" COM "convert int to float\n" },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SAREG,	TUWORD,
-	SCREG,	TFLOAT,
-		NCREG,		RESC1,
-		"	fuitos AL,AR" COM "convert int to float\n" },
+		"	ucvtf A1,AL" COM "convert uint/ulong to float\n" },
 
 { SCONV,	INAREG,
-	SAREG,	TWORD,
+	SAREG,	TWORD|TLONGLONG|TULONGLONG,
 	SAREG,	TFLOAT,
 		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)),	RESC1,
 		"ZF", },
 
-/* XXX - investigate */
-{ SCONV,	INCREG | FEATURE_FPA,
-	SBREG,	TULONGLONG|TLONGLONG,
-	SCREG,	TFLOAT,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
+	SAREG,	TSWORD|TLONGLONG,
+	SCREG,	TDOUBLE|TLDOUBLE,
 		NCREG,		RESC1,
-		COM "unimplemented\n", },
+		"	scvtf A1,AL" COM "convert int/long to (l)double\n" },
 
-{ SCONV,	INCREG | FEATURE_VFP,
-	SBREG,	TULONGLONG|TLONGLONG,
-	SCREG,	TFLOAT,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
+	SAREG,	TUWORD|TULONGLONG,
+	SCREG,	TDOUBLE|TLDOUBLE,
 		NCREG,		RESC1,
-		COM "unimplemented\n", },
+		"	ucvtf A1,AL" COM "convert uint/ulong to (l)double\n" },
 
 { SCONV,	INAREG,
-	SBREG,	TULONGLONG|TLONGLONG,
-	SAREG,	TFLOAT,
-		NAREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INCREG | FEATURE_FPA,
-	SAREG,	TWORD,
-	SCREG,	TDOUBLE,
-		NCREG,		RESC1,
-		"	fltd AL,AR" COM "convert int to double\n" },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SAREG,	TSWORD,
-	SCREG,	TDOUBLE,
-		NCREG,		RESC1,
-		"	fsitod AL,AR" COM "convert int to double\n" },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SAREG,	TUWORD,
-	SCREG,	TDOUBLE,
-		NCREG,		RESC1,
-		"	fuitod AL,AR" COM "convert int to double\n" },
-
-{ SCONV,	INBREG,
-	SAREG,	TWORD,
-	SBREG,	TDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R0), NRES(R16)),	RESC1,
+	SAREG,	TWORD|TLONGLONG|TULONGLONG,
+	SAREG,	TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)),	RESC1,
 		"ZF", },
 
-/* XXX - investigate */
-{ SCONV,	INCREG | FEATURE_FPA,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SCREG,	TDOUBLE,
-		NCREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SCREG,	TDOUBLE,
-		NCREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRES(R16)),	RESC1,
-		"ZF", },
-
-{ SCONV,	INCREG | FEATURE_FPA,
-	SAREG,	TWORD,
-	SCREG,	TLDOUBLE,
-		NCREG,		RESC1,
-		"	flte AL,AR" COM "convert int to ldouble\n" },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SAREG,	TSWORD,
-	SCREG,	TLDOUBLE,
-		NCREG,		RESC1,
-		"	fsitod AL,AR" COM "convert int to ldouble\n" },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SAREG,	TUWORD,
-	SCREG,	TLDOUBLE,
-		NCREG,		RESC1,
-		"	fuitod AL,AR" COM "convert uint to ldouble\n" },
-
-{ SCONV,	INBREG,
-	SAREG,	TWORD,
-	SBREG,	TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R0), NRES(R16)), RESC1,
-		"ZF", },
-
-/* XXX - investigate */
-{ SCONV,	INCREG | FEATURE_FPA,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SCREG,	TLDOUBLE,
-		NCREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SCREG,	TLDOUBLE,
-		NCREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INBREG,
-	SBREG,	TLONGLONG|TULONGLONG,
-	SBREG,	TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRES(R16)), RESC1,
-		"ZF", },
-
-{ SCONV,	INCREG | FEATURE_FPA,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TFLOAT,
 		NCREG,		RESC1,
-		COM "unimplemented\n", },
-
-{ SCONV,	INCREG | FEATURE_VFP,
-	SCREG,	TDOUBLE|TLDOUBLE,
-	SCREG,	TFLOAT,
-		NCREG,		RESC1,
-		"	fcvtds AL,AR" COM "convert float to double\n" },
+		"	fcvt A1,AL" COM "convert double to float\n" },
 
 { SCONV,	INAREG,
-	SBREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
 	SAREG,	TFLOAT,
-		NEEDS(NREG(A, 1), NLEFT(R16), NRES(R0)), RESC1,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)), RESC1,
 		"ZF", },
 
-{ SCONV,	INCREG | FEATURE_FPA,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
 	SCREG,	TDOUBLE|TLDOUBLE,
 		NCREG,		RESC1,
-		COM "unimplemented\n", },
+		"	fcvt A1,AL" COM "convert float to double\n" },
 
-{ SCONV,	INCREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SCREG,	TDOUBLE|TLDOUBLE,
-		NCREG,		RESC1,
-		"	fcvtsd AL,AR" COM "convert float to double\n" },
-
-{ SCONV,	INBREG,
+{ SCONV,	INAREG,
 	SAREG,	TFLOAT,
-	SBREG,	TDOUBLE|TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R0), NRES(R16)), RESC1,
+	SAREG,	TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)), RESC1,
 		"ZF", },
 
-{ SCONV,	INCREG | FEATURE_FPA,
+{ SCONV,	INCREG | FEATURE_FPSIMD,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TDOUBLE|TLDOUBLE,
 		0,		RLEFT,
 		COM "convert (l)double to (l)double", },
 
-{ SCONV,	INCREG | FEATURE_VFP,
-	SCREG,	TDOUBLE|TLDOUBLE,
-	SCREG,	TDOUBLE|TLDOUBLE,
-		0,		RLEFT,
-		COM "convert (l)double to (l)double", },
-
-{ SCONV,	INBREG,
-	SBREG,	TDOUBLE|TLDOUBLE,
-	SBREG,	TDOUBLE|TLDOUBLE,
+{ SCONV,	INAREG,
+	SAREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
 		0,		RLEFT,
 		COM "convert (l)double to (l)double", },
 
@@ -600,18 +438,20 @@ struct optab table[] = {
 		"	bl CL" COM "call (args, result in r0) to scon/sname (CL)\n"
 		"ZC", },
 
-{ CALL,		INCREG | FEATURE_FPA,
+/* XXX - investigate */
+{ CALL,		INCREG | FEATURE_FPSIMD,
 	SCON|SNAME,	TANY,
 	SCREG,		TFLOAT,
 		XSL(C), RESC1,	/* should be 0 */
 		"	bl CL" COM "call (args, result r0) to scon/sname (CL)\n"
 		"ZC", },
 
-{ CALL,		INCREG | FEATURE_FPA,
+/* XXX - investigate */
+{ CALL,		INCREG | FEATURE_FPSIMD,
 	SCON|SNAME,	TANY,
 	SCREG,		TDOUBLE|TLDOUBLE,
 		XSL(C), RESC1,	/* should be 0 */
-		"	bl CL" COM "call (args, result in r0:r1) to scon/sname (CL)\n"
+		"	bl CL" COM "call (args, result in r0) to scon/sname (CL)\n"
 		"ZC", },
 
 { CALL,		INAREG,
@@ -621,11 +461,11 @@ struct optab table[] = {
 		"	bl CL" COM "call (args, result r0) to scon/sname (CL)\n"
 		"ZC", },
 
-{ CALL,		INBREG,
+{ CALL,		INAREG,
 	SCON|SNAME,	TANY,
-	SBREG,		TDOUBLE|TLDOUBLE,
-		XSL(B), RESC1,	/* should be 0 */
-		"	bl CL" COM "call (args, result in r0:r1) to scon/sname (CL)\n"
+	SAREG,		TDOUBLE|TLDOUBLE,
+		XSL(A), RESC1,	/* should be 0 */
+		"	bl CL" COM "call (args, result in r0) to scon/sname (CL)\n"
 		"ZC", },
 
 { UCALL,	INAREG,
@@ -640,17 +480,17 @@ struct optab table[] = {
 		XSL(A),	RESC1,	/* should be 0 */
 		"	bl CL" COM "call (no args, result in r0) to scon/sname (CL)\n", },
 
-{ UCALL,	INCREG | FEATURE_FPA,
+{ UCALL,	INCREG | FEATURE_FPSIMD,
 	SCON|SNAME,	TANY,
 	SCREG,		TFLOAT,
 		XSL(C),	RESC1,	/* should be 0 */
 		"	bl CL" COM "call (no args, result in r0) to scon/sname (CL)\n", },
 
-{ UCALL,	INCREG | FEATURE_FPA,
+{ UCALL,	INCREG | FEATURE_FPSIMD,
 	SCON|SNAME,	TANY,
 	SCREG,		TDOUBLE|TLDOUBLE,
 		XSL(C),	RESC1,	/* should be 0 */
-		"	bl CL" COM "call (no args, result in r0:r1) to scon/sname (CL)\n", },
+		"	bl CL" COM "call (no args, result in r0) to scon/sname (CL)\n", },
 
 { CALL,		FOREFF,
 	SAREG,	TANY,
@@ -752,17 +592,11 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	adds A1,AL,AR" COM "64-bit addition\n", },
 
-{ PLUS,		INCREG | FEATURE_FPA,
+{ PLUS,		INCREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
 		NCREG,	RESC1,
-		"	adfs A1,AL,AR" COM "float add\n", },
-
-{ PLUS,		INCREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SCREG,	TFLOAT,
-		NCREG,	RESC1,
-		"	fadds A1,AL,AR" COM "float add\n", },
+		"	fadd A1,AL,AR" COM "float add\n", },
 
 { PLUS,		INAREG,
 	SAREG,	TFLOAT,
@@ -770,40 +604,16 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
-{ PLUS,		INCREG | FEATURE_FPA,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
+{ PLUS,		INCREG | FEATURE_FPSIMD,
+	SCREG,	TDOUBLE|TLDOUBLE,
+	SCREG,	TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	adfd A1,AL,AR" COM "double add\n", },
+		"	fadd A1,AL,AR" COM "(l)double add\n", },
 
-{ PLUS,		INCREG | FEATURE_VFP,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
-		NCREG,	RESC1,
-		"	faddd A1,AL,AR" COM "double add\n", },
-
-{ PLUS,		INBREG,
-	SBREG,	TDOUBLE,
-	SBREG,	TDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
-		"ZF", },
-
-{ PLUS,		INCREG | FEATURE_FPA,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	adfe A1,AL,AR" COM "ldouble add\n", },
-
-{ PLUS,		INCREG | FEATURE_VFP,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	faddd A1,AL,AR" COM "ldouble add\n", },
-
-{ PLUS,		INBREG,
-	SBREG,	TLDOUBLE,
-	SBREG,	TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
+{ PLUS,		INAREG,
+	SAREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
 { MINUS,	INAREG,
@@ -830,17 +640,11 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	subs A1,AL,AR" COM "64-bit subtraction\n", },
 
-{ MINUS,	INCREG | FEATURE_FPA,
+{ MINUS,	INCREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
 		NCREG,	RESC1,
-		"	sufs A1,AL,AR" COM "float subtraction\n", },
-
-{ MINUS,	INCREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SCREG,	TFLOAT,
-		NCREG,	RESC1,
-		"	fsubs A1,AL,AR" COM "float subtraction\n", },
+		"	fsub A1,AL,AR" COM "float subtraction\n", },
 
 { MINUS,	INAREG,
 	SAREG,	TFLOAT,
@@ -848,40 +652,16 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
-{ MINUS,	INCREG | FEATURE_FPA,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
+{ MINUS,	INCREG | FEATURE_FPSIMD,
+	SCREG,	TDOUBLE|TLDOUBLE,
+	SCREG,	TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	sufd A1,AL,AR" COM "double subtraction\n", },
+		"	fsub A1,AL,AR" COM "(l)double subtraction\n", },
 
-{ MINUS,	INCREG | FEATURE_VFP,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
-		NCREG,	RESC1,
-		"	fsubd A1,AL,AR" COM "double subtraction\n", },
-
-{ MINUS,	INBREG,
-	SBREG,	TDOUBLE,
-	SBREG,	TDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
-		"ZF", },
-
-{ MINUS,	INCREG | FEATURE_FPA,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	sufe A1,AL,AR" COM "ldouble subtraction\n", },
-
-{ MINUS,	INCREG | FEATURE_VFP,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	fsubd A1,AL,AR" COM "double subtraction\n", },
-
-{ MINUS,	INBREG,
-	SBREG,	TLDOUBLE,
-	SBREG,	TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
+{ MINUS,	INAREG,
+	SAREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
 /*
@@ -1005,67 +785,57 @@ struct optab table[] = {
 		"ZA"
 		"	strh AR, [ZXA1]" COM "assign (u)short global\n", },
 
-/* XXX - investigate */
-{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPA,
-	SOREG|SNAME,	TFLOAT,
+{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPSIMD,
+	SOREG,	TFLOAT,
 	SCREG,		TFLOAT,
 		0,	RDEST,
-		"	stfs AR,AL" COM "assign float\n", },
+		"	str AR,AL" COM "assign float\n", },
 
-{ ASSIGN, 	FOREFF|INCREG | FEATURE_VFP,
-	SOREG|SNAME,	TFLOAT,
+{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPSIMD,
+	SNAME,	TFLOAT,
 	SCREG,		TFLOAT,
-		0,	RDEST,
-		COM "unimplemented\n", },
+		NAREG,	RDEST,
+		"ZA"
+		"	str AR,[ZXA1]" COM "assign global float\n", },
 
-/* XXX - investigate */
 { ASSIGN, 	FOREFF|INAREG,
-	SOREG|SNAME,	TFLOAT,
+	SOREG,	TFLOAT,
 	SAREG,		TFLOAT,
 		0,	RDEST,
 		"	str AR,AL" COM "assign float (soft-float)\n", },
 
-/* XXX - investigate */
-{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPA,
-	SOREG|SNAME,	TDOUBLE,
-	SCREG,		TDOUBLE,
-		0,	RDEST,
-		"	stfd AR,AL" COM "assign double\n", },
+{ ASSIGN, 	FOREFF|INAREG,
+	SNAME,	TFLOAT,
+	SAREG,		TFLOAT,
+		NAREG,	RDEST,
+		"ZA"
+		"	str AR,[ZXA1]" COM "assign global float (soft-float)\n", },
 
-{ ASSIGN, 	FOREFF|INCREG | FEATURE_VFP,
-	SOREG|SNAME,	TDOUBLE,
-	SCREG,		TDOUBLE,
+{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPSIMD,
+	SOREG,	TDOUBLE|TLDOUBLE,
+	SCREG,		TDOUBLE|TLDOUBLE,
 		0,	RDEST,
-		COM "unimplemented\n", },
+		"	str AR,AL" COM "assign (l)double\n", },
 
-/* XXX - investigate */
-{ ASSIGN, 	FOREFF|INBREG,
-	SOREG|SNAME,	TDOUBLE,
-	SBREG,		TDOUBLE,
-		0,	RDEST,
-		"	str AR,AL" COM "assign double (soft-float)\n"
-		"	str UR,UL\n", },
+{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPSIMD,
+	SNAME,	TDOUBLE|TLDOUBLE,
+	SCREG,		TDOUBLE|TLDOUBLE,
+		NAREG,	RDEST,
+		"ZA"
+		"	str AR,[ZXA1]" COM "assign global (l)double\n", },
 
-/* XXX - investigate */
-{ ASSIGN, 	FOREFF|INCREG | FEATURE_FPA,
-	SOREG|SNAME,	TLDOUBLE,
-	SCREG,		TLDOUBLE,
+{ ASSIGN, 	FOREFF|INAREG,
+	SOREG,	TDOUBLE|TLDOUBLE,
+	SAREG,		TDOUBLE|TLDOUBLE,
 		0,	RDEST,
-		"	stfe AR,AL" COM "assign ldouble\n", },
+		"	str AR,AL" COM "assign (l)double (soft-float)\n", },
 
-{ ASSIGN, 	FOREFF|INCREG | FEATURE_VFP,
-	SOREG|SNAME,	TLDOUBLE,
-	SCREG,		TLDOUBLE,
-		0,	RDEST,
-		COM "not implemented", },
-
-/* XXX - investigate */
-{ ASSIGN, 	FOREFF|INBREG,
-	SOREG|SNAME,	TLDOUBLE,
-	SBREG,		TLDOUBLE,
-		0,	RDEST,
-		"	str AR,AL" COM "assign ldouble (soft-float)\n"
-		"	str UR,UL\n", },
+{ ASSIGN, 	FOREFF|INAREG,
+	SNAME,	TDOUBLE|TLDOUBLE,
+	SAREG,		TDOUBLE|TLDOUBLE,
+		NAREG,	RDEST,
+		"ZA"
+		"	str AR,[ZXA1]" COM "assign global (l)double (soft-float)\n", },	
 
 /* assign register to register */
 { ASSIGN,	FOREFF|INAREG,
@@ -1080,17 +850,11 @@ struct optab table[] = {
                 0,      RDEST,
                 "	mov AL,AR" COM "assign AR to AL\n", },
 
-{ ASSIGN,	FOREFF|INCREG | FEATURE_FPA,
+{ ASSIGN,	FOREFF|INCREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
 		0,	RDEST,
-		"	mvf AL,AR" COM "assign float reg to float reg\n", },
-
-{ ASSIGN,	FOREFF|INCREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SCREG,	TFLOAT,
-		0,	RDEST,
-		"	fcpys AL,AR" COM "assign float reg to float reg\n", },
+		"	fmov AL,AR" COM "assign float reg to float reg\n", },
 
 { ASSIGN,	FOREFF|INAREG,
 	SAREG,	TFLOAT,
@@ -1098,24 +862,17 @@ struct optab table[] = {
 		0,	RDEST,
 		"	mov AL,AR" COM "assign float reg to float reg\n", },
 
-{ ASSIGN,	FOREFF|INCREG | FEATURE_FPA,
+{ ASSIGN,	FOREFF|INCREG | FEATURE_FPSIMD,
 	SCREG,	TDOUBLE|TLDOUBLE,
 	SCREG,	TDOUBLE|TLDOUBLE,
 		0,	RDEST,
-		"	mvf AL,AR" COM "assign float reg to float reg\n", },
-
-{ ASSIGN,	FOREFF|INCREG | FEATURE_VFP,
-	SCREG,	TDOUBLE|TLDOUBLE,
-	SCREG,	TDOUBLE|TLDOUBLE,
-		0,	RDEST,
-		"	fcpyd AL,AR" COM "assign float reg to float reg\n", },
+		"	mvf AL,AR" COM "assign (l)double reg to (l)double reg\n", },
 
 { ASSIGN,	FOREFF|INBREG,
-	SBREG,	TDOUBLE|TLDOUBLE,
-	SBREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
 		0,	RDEST,
-		"	mov AL,AR" COM "assign (l)double reg to (l)double reg\n"
-		"	mov UL,UR\n", },
+		"	mov AL,AR" COM "assign (l)double reg to (l)double reg\n", },
 
 { ASSIGN,	FOREFF|INAREG,
 	SFLD,		TANY,
@@ -1182,17 +939,11 @@ struct optab table[] = {
                 "	udiv A1,AL,AR" COM "long/longlong unsigned divide\n",},
 
 
-{ DIV,	INCREG | FEATURE_FPA,
+{ DIV,	INCREG | FEATURE_FPSIMD,
 	SCREG,		TFLOAT,
 	SCREG,		TFLOAT,
 		NCREG,	RESC1,
-		"	dvfs A1,AL,AL" COM "fast (float) divide\n", },
-
-{ DIV,	INCREG | FEATURE_VFP,
-	SCREG,		TFLOAT,
-	SCREG,		TFLOAT,
-		NCREG,	RESC1,
-		"	fdivs A1,AL,AL" COM "fast (float) divide\n", },
+		"	fdiv A1,AL,AR" COM "float divide\n", },
 
 { DIV,	INAREG,
 	SAREG,		TFLOAT,
@@ -1200,40 +951,16 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
-{ DIV,	INCREG | FEATURE_FPA,
-	SCREG,		TDOUBLE,
-	SCREG,		TDOUBLE,
+{ DIV,	INCREG | FEATURE_FPSIMD,
+	SCREG,		TDOUBLE|TLDOUBLE,
+	SCREG,		TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	dvfd A1,AL,AL" COM "double divide\n", },
+		"	fdiv A1,AL,AR" COM "(l)double divide\n", },
 
-{ DIV,	INCREG | FEATURE_VFP,
-	SCREG,		TDOUBLE,
-	SCREG,		TDOUBLE,
-		NCREG,	RESC1,
-		"	fdivd A1,AL,AL" COM "double divide\n", },
-
-{ DIV,	INBREG,
-	SBREG,		TDOUBLE,
-	SBREG,		TDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
-		"ZF", },
-
-{ DIV,	INCREG | FEATURE_FPA,
-	SCREG,		TLDOUBLE,
-	SCREG,		TLDOUBLE,
-		NCREG,	RESC1,
-		"	dvfe A1,AL,AR" COM "long double load\n", },
-
-{ DIV,	INCREG | FEATURE_VFP,
-	SCREG,		TLDOUBLE,
-	SCREG,		TLDOUBLE,
-		NCREG,	RESC1,
-		"	fdivd A1,AL,AL" COM "double divide\n", },
-
-{ DIV,	INBREG,
-	SBREG,		TLDOUBLE,
-	SBREG,		TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
+{ DIV,	INAREG,
+	SAREG,		TDOUBLE|TLDOUBLE,
+	SAREG,		TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
 { MOD,	INAREG,
@@ -1276,17 +1003,11 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"	mul A1,AL,AR\n", },
 
-{ MUL,	INCREG | FEATURE_FPA,
+{ MUL,	INCREG | FEATURE_FPSIMD,
 	SCREG,		TFLOAT,
 	SCREG,		TFLOAT,
 		NCREG,	RESC1,
-		"	fmls A1,AL,AL" COM "fast (float) multiply\n", },
-
-{ MUL,	INCREG | FEATURE_VFP,
-	SCREG,		TFLOAT,
-	SCREG,		TFLOAT,
-		NCREG,	RESC1,
-		"	fmuls A1,AL,AL" COM "float multiply\n", },
+		"	fmul A1,AL,AR" COM "float multiply\n", },
 
 { MUL,	INAREG,
 	SAREG,		TFLOAT,
@@ -1294,22 +1015,16 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
-{ MUL,	INCREG | FEATURE_FPA,
+{ MUL,	INCREG | FEATURE_FPSIMD,
 	SCREG,		TDOUBLE|TLDOUBLE,
 	SCREG,		TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	mufd A1,AL,AL" COM "fast (l)double multiply\n", },
+		"	fmul A1,AL,AR" COM "(l)double multiply\n", },
 
-{ MUL,	INCREG | FEATURE_VFP,
-	SCREG,		TDOUBLE|TLDOUBLE,
-	SCREG,		TDOUBLE|TLDOUBLE,
-		NCREG,	RESC1,
-		"	muld A1,AL,AL" COM "(l)double multiply\n", },
-
-{ MUL,	INBREG,
-	SBREG,		TDOUBLE|TLDOUBLE,
-	SBREG,		TDOUBLE|TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRIGHT(R18), NRES(R16)), RESC1,
+{ MUL,	INAREG,
+	SAREG,		TDOUBLE|TLDOUBLE,
+	SAREG,		TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRIGHT(R1), NRES(R0)), RESC1,
 		"ZF", },
 
 /*
@@ -1352,17 +1067,11 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"	ldr A1,AL" COM "64-bit load\n", },
 
-{ UMUL, INCREG | FEATURE_FPA,
+{ UMUL, INCREG | FEATURE_FPSIMD,
 	SANY,		TANY,
 	SOREG|SNAME,	TFLOAT,
 		NCREG,	RESC1,
-		"	ldfs A1,AL" COM "float load\n", },
-
-{ UMUL, INCREG | FEATURE_VFP,
-	SANY,		TANY,
-	SOREG|SNAME,	TFLOAT,
-		NCREG,	RESC1,
-		COM "not implemented\n", },
+		"	ldr A1,AL" COM "float load\n", },
 
 { UMUL, INAREG,
 	SANY,		TANY,
@@ -1370,44 +1079,17 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"	ldr A1,AL" COM "float load\n", },
 
-{ UMUL, INCREG | FEATURE_FPA,
+{ UMUL, INCREG | FEATURE_FPSIMD,
 	SANY,		TANY,
-	SOREG|SNAME,	TDOUBLE,
+	SOREG|SNAME,	TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	ldfd A1,AL" COM "double load\n", },
+		"	ldr A1,AL" COM "(l)double load\n", },
 
-{ UMUL, INCREG | FEATURE_VFP,
+{ UMUL, INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TDOUBLE,
-		NCREG,	RESC1,
-		COM "not implemented\n", },
-
-{ UMUL, INBREG,
-	SANY,		TANY,
-	SOREG|SNAME,	TDOUBLE,
-		NBREG,	RESC1,
-		"	ldr A1,AL" COM "double load\n"
-		"	ldr U1,UL\n", },
-
-{ UMUL, INCREG | FEATURE_FPA,
-	SANY,		TANY,
-	SOREG|SNAME,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	ldfe A1,AL" COM "long double load\n", },
-
-{ UMUL, INCREG | FEATURE_VFP,
-	SANY,		TANY,
-	SOREG|SNAME,	TLDOUBLE,
-		NCREG,	RESC1,
-		COM "not implemented\n", },
-
-{ UMUL, INBREG,
-	SANY,		TANY,
-	SOREG|SNAME,	TLDOUBLE,
-		NBREG,	RESC1,
-		"	ldr A1,AL" COM "long double load (soft-float)\n"
-		"	ldr U1,UL\n", },
-
+	SOREG|SNAME,	TDOUBLE|TLDOUBLE,
+		NAREG,	RESC1,
+		"	ldr A1,AL" COM "(l)double load\n", },
 /*
  * Logical/branching operators
  */
@@ -1433,17 +1115,11 @@ struct optab table[] = {
 		0, 	RESCC,
 		"	cmp AL,AR" COM "AR-AL (sets flags)\n", },
 
-{ OPLOG,	FORCC | FEATURE_FPA,
+{ OPLOG,	FORCC | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
 		0,	RESCC,
-		"	cmfs AL,AR" COM "float compare\n", },
-
-{ OPLOG,	FORCC | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SCREG,	TFLOAT,
-		0,	RESCC,
-		"	fcmps AL,AR" COM "float compare\n", },
+		"	fcmp AL,AR" COM "float compare\n", },
 
 { OPLOG,	FORCC,
 	SAREG,	TFLOAT,
@@ -1451,40 +1127,16 @@ struct optab table[] = {
 		NEEDS(NLEFT(R0), NRIGHT(R1), NRES(R0)),	RESCC,
 		"ZF", },
 
-{ OPLOG,	FORCC | FEATURE_FPA,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
+{ OPLOG,	FORCC | FEATURE_FPSIMD,
+	SCREG,	TDOUBLE|TLDOUBLE,
+	SCREG,	TDOUBLE|TLDOUBLE,
 		0,	RESCC,
-		"	cmfd AL,AR" COM "double compare\n", },
-
-{ OPLOG,	FORCC | FEATURE_VFP,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
-		0,	RESCC,
-		"	fcmpd AL,AR" COM "double compare\n", },
+		"	fcmp AL,AR" COM "(l)double compare\n", },
 
 { OPLOG,	FORCC,
-	SBREG,	TDOUBLE,
-	SBREG,	TDOUBLE,
-		NEEDS(NLEFT(R16), NRIGHT(R18), NRES(R0)),	RESCC,
-		"ZF", },
-
-{ OPLOG,	FORCC | FEATURE_FPA,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		0,	RESCC,
-		"	cmfe AL,AR" COM "ldouble compare\n", },
-
-{ OPLOG,	FORCC | FEATURE_VFP,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		0,	RESCC,
-		"	fcmpd AL,AR" COM "double compare\n", },
-
-{ OPLOG,	FORCC,
-	SBREG,	TLDOUBLE,
-	SBREG,	TLDOUBLE,
-		NEEDS(NLEFT(R16), NRIGHT(R18), NRES(R0)),	RESCC,
+	SAREG,	TDOUBLE|TLDOUBLE,
+	SAREG,	TDOUBLE|TLDOUBLE,
+		NEEDS(NLEFT(R0), NRIGHT(R1), NRES(R0)),	RESCC,
 		"ZF", },
 
 /* AND/OR/ER */
@@ -1637,67 +1289,63 @@ struct optab table[] = {
                 NAREG,  RESC1,
 		"	mov A1,AL" COM "load AL into A1\n", },
 
-/* XXX - investigate */
-{ OPLTYPE,	INCREG | FEATURE_FPA,
+{ OPLTYPE,	INCREG | FEATURE_FPSIMD,
 	SANY,		TANY,
-	SOREG|SNAME,	TFLOAT,
+	SOREG,	TFLOAT,
 		NCREG,	RESC1,
-		"	ldfs A1,AL" COM "load float\n", },
+		"	ldr A1,AL" COM "load float\n", },
 
-{ OPLTYPE,	INCREG | FEATURE_VFP,
+{ OPLTYPE,	INCREG | FEATURE_FPSIMD,
 	SANY,		TANY,
-	SOREG|SNAME,	TFLOAT,
-		NCREG,	RESC1,
-		COM "not implemented\n", },
+	SNAME,	TFLOAT,
+		NEEDS(NREG(A,1), NREG(C,1)),	RESC2,
+		"ZA"
+		"	ldr A2,[ZXA1]" COM "load float\n", },
 
-/* XXX - investigate */
 { OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TFLOAT,
+	SOREG,	TFLOAT,
 		NAREG,	RESC1,
 		"	ldr A1,AL" COM "load float (soft-float)\n", },
 
-/* XXX - investigate */
-{ OPLTYPE,	INCREG | FEATURE_FPA,
+{ OPLTYPE,	INAREG,
 	SANY,		TANY,
-	SOREG|SNAME,	TDOUBLE,
+	SNAME,	TFLOAT,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldr A1,[ZXA1]" COM "load float (soft-float)\n", },	
+
+{ OPLTYPE,	INCREG | FEATURE_FPSIMD,
+	SANY,		TANY,
+	SOREG,	TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	ldfd A1,AL" COM "load double\n", },
+		"	ldr A1,AL" COM "load (l)double\n", },
 
-{ OPLTYPE,	INCREG | FEATURE_VFP,
+{ OPLTYPE,	INCREG | FEATURE_FPSIMD,
 	SANY,		TANY,
-	SOREG|SNAME,	TDOUBLE,
+	SNAME,	TDOUBLE|TLDOUBLE,
+		NEEDS(NREG(A,1), NREG(C,1)),	RESC2,
+		"ZA"
+		"	ldr A2,[ZXA1]" COM "load (l)double\n", },
+
+{ OPLTYPE,	INAREG,
+	SANY,		TANY,
+	SOREG,	TDOUBLE|TLDOUBLE,
+		NAREG,	RESC1,
+		"	ldr A1,AL" COM "load (l)double (soft-float)\n", },
+
+{ OPLTYPE,	INAREG,
+	SANY,		TANY,
+	SNAME,	TDOUBLE|TLDOUBLE,
+		NAREG,	RESC1,
+		"ZA"
+		"	ldr A1,[ZXA1]" COM "load (l)double (soft-float)\n", },
+	
+{ OPLTYPE,	INCREG | FEATURE_FPSIMD,
+	SANY,	TANY,
+	SCREG,	TANY,
 		NCREG,	RESC1,
-		COM "not implemented\n" },
-
-/* XXX - investigate */
-{ OPLTYPE,	INBREG,
-	SANY,		TANY,
-	SOREG|SNAME,	TDOUBLE,
-		NBREG,	RESC1,
-		"	ldr A1,AL" COM "load double (soft-float)\n"
-		"	ldr U1,UL\n", },
-
-/* XXX - investigate */
-{ OPLTYPE,	INCREG | FEATURE_FPA,
-	SANY,		TANY,
-	SOREG|SNAME,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	ldfe A1,AL" COM "load ldouble\n", },
-
-{ OPLTYPE,	INCREG | FEATURE_VFP,
-	SANY,		TANY,
-	SOREG|SNAME,	TLDOUBLE,
-		NCREG,	RESC1,
-		COM "not implemented\n", },
-
-/* XXX - investigate */
-{ OPLTYPE,	INBREG,
-	SANY,		TANY,
-	SOREG|SNAME,	TLDOUBLE,
-		NBREG,	RESC1,
-		"	ldr A1,AL" COM "load ldouble (soft-float)\n"
-		"	ldr U1,UL\n", },
+		"	mov A1,AL" COM "load AL into A1\n" },
 
 /*
  * Negate a word.
@@ -1715,17 +1363,11 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	neg A1,AL" COM "64-bit negation\n", },
 
-{ UMINUS,	INCREG | FEATURE_FPA,
+{ UMINUS,	INCREG | FEATURE_FPSIMD,
 	SCREG,	TFLOAT,
 	SCREG,	TFLOAT,
 		NCREG,	RESC1,
-		"	mvfs A1,AL" COM "float negation\n", },
-
-{ UMINUS,	INCREG | FEATURE_VFP,
-	SCREG,	TFLOAT,
-	SCREG,	TFLOAT,
-		NCREG,	RESC1,
-		"	negs A1,AL" COM "float negation\n", },
+		"	fneg A1,AL" COM "float negation\n", },
 
 { UMINUS,	INAREG,
 	SAREG,	TFLOAT,
@@ -1733,40 +1375,16 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)), RESC1,
 		"ZF", },
 
-{ UMINUS,	INCREG | FEATURE_FPA,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
+{ UMINUS,	INCREG | FEATURE_FPSIMD,
+	SCREG,	TDOUBLE|TLDOUBLE,
+	SCREG,	TDOUBLE|TLDOUBLE,
 		NCREG,	RESC1,
-		"	mvfd A1,AL" COM "double negation\n", },
+		"	fneg A1,AL" COM "(l)double negation\n", },
 
-{ UMINUS,	INCREG | FEATURE_VFP,
-	SCREG,	TDOUBLE,
-	SCREG,	TDOUBLE,
-		NCREG,	RESC1,
-		"	negd A1,AL" COM "double negation\n", },
-
-{ UMINUS,	INBREG,
-	SBREG,	TDOUBLE,
-	SBREG,	TDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRES(R16)), RESC1,
-		"ZF", },
-
-{ UMINUS,	INCREG | FEATURE_FPA,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	mvfe A1,AL" COM "ldouble negation\n", },
-
-{ UMINUS,	INCREG | FEATURE_VFP,
-	SCREG,	TLDOUBLE,
-	SCREG,	TLDOUBLE,
-		NCREG,	RESC1,
-		"	negd A1,AL" COM "ldouble negation\n", },
-
-{ UMINUS,	INBREG,
-	SBREG,	TLDOUBLE,
-	SBREG,	TLDOUBLE,
-		NEEDS(NREG(B, 1), NLEFT(R16), NRES(R16)), RESC1,
+{ UMINUS,	INAREG,
+	SAREG,	TDOUBLE,
+	SAREG,	TDOUBLE,
+		NEEDS(NREG(A, 1), NLEFT(R0), NRES(R0)), RESC1,
 		"ZF", },
 
 { COMPL,	INAREG,
