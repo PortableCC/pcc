@@ -1,6 +1,7 @@
 /*      $Id$    */
 
  /*
+ * Copyright (c) 2025, 2026 Hakan Candar (hakan@candar.tr).
  * Copyright (c) 2020 Puresoftware Ltd.
  *
  * Permission to use, copy, modify, and distribute this software for any
