@@ -52,6 +52,19 @@ offstar(NODE *p, int shape)
 
 	r = p->n_right;
 	if( p->n_op == PLUS || p->n_op == MINUS ){
+		if (r->n_op == OREG || r->n_op == NAME) {
+			/* OREG/NAMEs in PLUS/MINUS instructions
+			 * should be moved into AREG first.
+			 * one case is runtime array indexing i.e. arr[idx].
+			 */
+			r = mkbinode(SCONV, r, NULL, LONGLONG);
+			p->n_right = r;
+			(void)geninsn(p->n_right, INAREG);
+			if (isreg(p->n_left) == 0)
+				(void)geninsn(p->n_left, INAREG);
+			(void)geninsn(p, INAREG);
+			return;
+		}
 		if( r->n_op == ICON ){
 			if (isreg(p->n_left) == 0)
 				(void)geninsn(p->n_left, INAREG);
