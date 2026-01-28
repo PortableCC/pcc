@@ -32,10 +32,7 @@ int
 notoff(TWORD ty, int r, CONSZ off, char *cp)
 {
 	if (cp && cp[0]) return 1;
-	if (DEUNSIGN(ty) == INT || ty == UCHAR)
-		return !(off < 4096 && off > -4096);
-	else
-		return !(off < 256 && off > -256);
+	return !(off < 256 && off >= -256);
 }
 
 /*
@@ -68,7 +65,7 @@ offstar(NODE *p, int shape)
 		if( r->n_op == ICON ){
 			if (isreg(p->n_left) == 0)
 				(void)geninsn(p->n_left, INAREG);
-			/* Converted in ormake() */
+			(void)geninsn(p, INAREG);
 			return;
 		}
 		/* usually for arraying indexing: */
@@ -78,6 +75,7 @@ offstar(NODE *p, int shape)
 				(void)geninsn(p->n_left, INAREG);
 			if (isreg(r->n_left) == 0)
 				(void)geninsn(r->n_left, INAREG);
+			/* Converted in ormake() */
 			return;
 		}
 	}
@@ -85,8 +83,7 @@ offstar(NODE *p, int shape)
 }
 
 /*
- * Unable to convert to OREG (notoff() returned failure).  Output
- * suitable instructions to replace OREG.
+ * Do the actual conversion of offstar-found OREGs into real OREGs.
  */
 void
 myormake(NODE *q)
@@ -102,13 +99,7 @@ myormake(NODE *q)
 	 * This handles failed OREGs conversions, due to the offset
 	 * being too large for an OREG.
 	 */
-	if ((p->n_op == PLUS || p->n_op == MINUS) && p->n_right->n_op == ICON) {
-		if (isreg(p->n_left) == 0)
-			(void)geninsn(p->n_left, INAREG);
-		if (isreg(p->n_right) == 0)
-			(void)geninsn(p->n_right, INAREG);
-		(void)geninsn(p, INAREG);
-	} else if (p->n_op == REG) {
+	if (p->n_op == REG) {
 		q->n_op = OREG;
 		setlval(q, getlval(p));
 		q->n_rval = p->n_rval;
