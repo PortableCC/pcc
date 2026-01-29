@@ -21,6 +21,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "pass1.h" /* for astypnames, talign and defalign */
 #include "pass2.h"
 
 #define SZFPSP		16
@@ -69,22 +70,55 @@ char *rnames[] = {
 extern int p1maxstacksize;
 
 /*
- * Handling of integer constants.  We have 8 bits + an even
- * number of rotates available as a simple immediate.
+ * Handling of integer constants for 12-bit immediates.
+ * We have 8 bits + an even number of rotates available
+ * as a simple immediate.
  * If a constant isn't trivially representable, use an ldr
  * and a subsequent sequence of orr operations.
  */
 
 static int
-trepresent(const unsigned int val)
+t12represent(long long val)
 {
-	int i;
-#define rotate_left(v, n) (v << n | v >> (32 - n))
+	unsigned long long i = (unsigned long long)val;
+#define rotate_left32(v, n) (v << n | v >> (32 - n))
 
 	for (i = 0; i < 32; i += 2)
-		if (rotate_left(val, i) <= 0xff)
+		if (rotate_left32(val, i) <= 0xff)
 			return 1;
 	return 0;
+#undef rotate_left32
+}
+
+/*
+ * Handling of integer constants for 16-bit immediates.
+ *
+ * Return 1 if VAL can be synthesized with a single "mov" pseudo-op,
+ * i.e. either MOVZ or MOVN (one 16-bit chunk at shift 0/16/32/48).
+ * Return 0 otherwise.
+ */
+static int
+t16represent(long long val)
+{
+	unsigned long long u = (unsigned long long)val;
+	int nz_z = 0; /* halfwords that are non-zero (MOVZ pattern) */
+	int nz_n = 0; /* halfwords that are not 0xFFFF (MOVN pattern) */
+
+	for (int shift = 0; shift <= 48; shift += 16) {
+		unsigned hw = (unsigned)((u >> shift) & 0xFFFFULL);
+
+		/* MOVZ: all halfwords must be 0 except possibly one */
+		if (hw != 0)
+			if (++nz_z > 1)
+				nz_z = 2; /* clamp */
+
+		/* MOVN: all halfwords must be 0xFFFF except possibly one */
+		if (hw != 0xFFFFU)
+			if (++nz_n > 1)
+				nz_n = 2; /* clamp */
+	}
+
+	return (nz_z <= 1) || (nz_n <= 1);
 }
 
 /*
@@ -198,7 +232,7 @@ prologue(struct interpass_prolog *ipp)
 
 	printf("\tstp %s,%s,[%s,#%d]!\n", rnames[FP], rnames[LR], rnames[SP], -SZFPSP);
 	printf("\tmov %s,%s\n", rnames[FP], rnames[SP]);
-	if (trepresent(addto)) {
+	if (t12represent(addto)) {
 		printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], addto);
         } else {
 		nc = encode_constant(addto, vals);
@@ -220,7 +254,7 @@ eoftn(struct interpass_prolog *ipp)
 	if (ftype == STRTY || ftype == UNIONTY) {
 		assert(0);
 	} else {
-		if (trepresent(addStack)) {
+		if (t12represent(addStack)) {
 			printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], addStack);
 		} else {
 			nc = encode_constant(addStack, vals);
@@ -380,7 +414,7 @@ stasg(NODE *p)
 			printf("\tadd %s,%s,%s\n", rnames[R0], rnames[R0],
 			    rnames[R2UPK1(r)]);
 		} else  {
-			if (trepresent(val)) {
+			if (t12represent(val)) {
 				printf("\tadd %s,%s,#%d\n",
 				    rnames[R0], rnames[regno(l)], val);
 			} else {
@@ -787,7 +821,7 @@ adrput(FILE *io, NODE *p)
 				if (getlval(p) != 0)
 					fprintf(io, "+%lld", getlval(p));
 			} else
-				fprintf(io, "#" CONFMT, getlval(p));
+				fprintf(io, LABFMT, (int)getlval(p));
 			return;
 
 		case OREG:
@@ -992,11 +1026,6 @@ myreader(struct interpass *ipole)
 
 	DLIST_FOREACH(ip, ipole, qelem) {
 		switch (ip->type) {
-			case IP_NODE:
-				lineno = ip->lineno;
-				ipbase = ip;
-				walkf(ip->ip_node, prtaddr, 0);
-				break;
 			case IP_EPILOG:
 				ipbase = ip;
 				if (notfirst)
@@ -1055,12 +1084,71 @@ fixtree2(NODE *p, void *arg)
 void
 mycanon(NODE *p)
 {
-	walkf(p, fixtree2, 0);
+}
+
+static unsigned int lastimmtype;
+
+/*
+ * Put big immediates in literal pools.
+ */
+static void
+immput(NODE *p, void *arg)
+{
+	/*
+	 * Late legalization: pass2 and backend rewrites may introduce new ICON nodes
+	 * (e.g. TEMP -> stack/OREG lowering). After these transformations, some ICON
+	 * values may no longer be representable as immediate operands in AArch64
+	 * instructions. Convert such ICONs to literal-pool loads here so the backend
+	 * never emits an unencodable immediate.
+	 *
+	 * Float literals are handled earlier in pass1; integers require a pass2 sweep
+	 * to catch ICONs generated after pass1 has finished.
+	 */
+	int lab;
+	TWORD t;
+	U_CONSZ uval;
+
+        if (p->n_op == ICON && !t16represent(getlval(p))) {
+		t = p->n_type;
+		uval = (glval(p) & SZMASK(sztable[t]));
+
+		if (lastimmtype != t)
+			defalign(talign(t, NULL));
+
+		lab = getlab2();
+	        deflab(lab);
+		printf("%s 0x%llx\n", astypnames[t], uval);
+
+		p->n_op = NAME;
+		setlval(p,lab);
+		p->n_name = "";
+		lastimmtype = p->n_type;
+	}
 }
 
 void
 myoptim(struct interpass *ipp)
 {
+	lastimmtype = 0;
+	struct interpass *ip;
+
+	DLIST_FOREACH(ip, ipp, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, prtaddr, 0);
+
+	DLIST_FOREACH(ip, ipp, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, immput, 0);
+
+	DLIST_FOREACH(ip, ipp, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, fixtree2, 0);
+
+#ifndef ALFTN
+#define ALFTN	ALINT
+#endif
+	if (lastimmtype != 0)
+		defalign(ALFTN);
 }
 
 /*

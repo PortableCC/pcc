@@ -403,48 +403,30 @@ ninval(CONSZ off, int fsz, NODE *p)
 {
 	struct symtab *q;
 	TWORD t;
-	int i, j;
+	U_CONSZ uval;
 
 	t = p->n_type;
 	if (t > BTMASK)
 		t = p->n_type = LONGLONG; /* pointer */
 
+	if (t == FLOAT || t == DOUBLE) /* non-integer value */
+		return 0;
+
 	if (p->n_op == ICON && p->n_sp != NULL
 	    && !(DEUNSIGN(t) == INT || DEUNSIGN(t) == LONGLONG))
 		uerror("element not constant");
 
-	switch (t) {
-		case LONGLONG:
-		case ULONGLONG:
-			i = (glval(p) >> 32);
-			j = (glval(p) & 0xffffffff);
-			p->n_type = INT;
-			if (features(FEATURE_BIGENDIAN)) {
-				slval(p, i);
-				ninval(off+32, 32, p);
-				slval(p, j);
-				ninval(off, 32, p);
-			} else {
-				slval(p, j);
-				ninval(off, 32, p);
-				slval(p, i);
-				ninval(off+32, 32, p);
-			}
-			break;
-		case INT:
-		case UNSIGNED:
-			printf("\t.word 0x%x", (int)glval(p));
-			if ((q = p->n_sp) != NULL) {
-				if ((q->sclass == STATIC && q->slevel > 0)) {
-					printf("+" LABFMT, q->soffset);
-				} else
-					printf("+%s", getexname(q));
-			}
-			printf("\n");
-			break;
-		default:
-			return 0;
+	uval = (glval(p) & SZMASK(sztable[t]));
+
+	printf("%s 0x%llx", astypnames[t], uval);
+	if ((q = p->n_sp) != NULL) {
+		if ((q->sclass == STATIC && q->slevel > 0)) {
+			printf("+" LABFMT, q->soffset);
+		} else
+			printf("+%s", getexname(q));
 	}
+	printf("\n");
+
 	return 1;
 }
 
