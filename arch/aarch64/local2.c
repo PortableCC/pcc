@@ -29,7 +29,6 @@
 extern void defalign(int);
 
 static int isShrink=0;
-static int addStack=0;
 static int isExtend=0;
 #define	exname(x) x
 
@@ -167,40 +166,97 @@ static TWORD ftype;
 
 /*
  * calculate stack size and offsets
+ * 0 - total stack size
+ * 1 - permanent register end offset (0 means no permregs saved)
+ * 2 - max function call stack end offset (0 means no funcalls)
  */
-static int
-offcalc(struct interpass_prolog *ipp)
+static void
+offcalc(struct interpass_prolog *ipp, int *values)
 {
-	int addto;
+#define SETALIGN(x,y) x = (x) + (((y) - ((x) % (y))) % (y))
+	int i, prcount;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
 		printf("offcalc: p2maxautooff=%d\n", p2maxautooff);
 #endif
 
-	addto = p2maxautooff;
+	values[0] = p2maxautooff;
+	values[1] = values[2] = 0;
+	prcount = 0;
+
+	/* count used permanent registers */
+	for (i = 0; i < MAXREGS; i++)
+		if (TESTBIT(p2env.p_regs, i))
+			prcount++;
+
+	/* calculate permanent register save area */
+	if (prcount) {
+	        values[0] += prcount * SZLONGLONG/SZCHAR;
+		SETALIGN(values[0], ALSTACK/SZCHAR);
+		values[1] = values[0];
+	}
 
 	/* XXX - move calculation from pass1 to pass2.
 	 * it works, but it is hacky. we are crossing
 	 * the pass1-pass2 boundary informally.
 	 */
-	addto += p1maxstacksize;
+	if (p1maxstacksize) {
+		values[0] += p1maxstacksize;
+		SETALIGN(values[0], ALSTACK/SZCHAR);
+		values[2] = values[0];
+	}
+
+	SETALIGN(values[0], ALSTACK/SZCHAR);
 
 #ifdef PCC_DEBUG
 	if (x2debug)
-		printf("offcalc: addto=%d\n", addto);
+		printf("offcalc: total=%d proff=%d funoff=%d autos=%d\n",
+		       values[0], values[1], values[2], p2maxautooff);
 #endif
-
-	addto -= AUTOINIT / SZCHAR;
-
-	return addto;
+#undef SETALIGN
 }
+
+/*
+ * print instructions to move stack down
+ */
+static void
+movspdown(int val)
+{
+	int vals[4], nc, i;
+	if (t12represent(val)) {
+		printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], val);
+        } else {
+		nc = encode_constant(val, vals);
+		for (i = 0; i < nc; i++)
+			printf("\tsub %s,%s,#%d\n",
+			       rnames[SP], rnames[SP], vals[i]);
+        }
+}
+
+/*
+ * print instructions to move stack up
+ */
+static void
+movspup(int val)
+{
+	int vals[4], nc, i;
+	if (t12represent(val)) {
+		printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], val);
+	} else {
+		nc = encode_constant(val, vals);
+		for (i = 0; i < nc; i++)
+			printf("\tadd %s,%s,#%d\n",
+			       rnames[SP], rnames[SP], vals[i]);
+	}
+}
+
+static int fframe[4];
 
 void
 prologue(struct interpass_prolog *ipp)
 {
-	int addto;
-	int vals[4], nc, i;
+	int i, pi;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
@@ -218,34 +274,27 @@ prologue(struct interpass_prolog *ipp)
 	ftype = ipp->ipp_type;
 	printf("%s:\n", exname(ipp->ipp_name));
 
-	addto = offcalc(ipp);
-
-#define BALSTACK (ALSTACK/SZCHAR)
-	if (addto < BALSTACK) {
-		addto = BALSTACK;
-	}
-	if (addto % BALSTACK) {
-		addto = addto + (BALSTACK - (addto % BALSTACK));
-	}
-#undef BALSTACK
-	addStack = addto;
+	offcalc(ipp, fframe);
 
 	printf("\tstp %s,%s,[%s,#%d]!\n", rnames[FP], rnames[LR], rnames[SP], -SZFPSP);
 	printf("\tmov %s,%s\n", rnames[FP], rnames[SP]);
-	if (t12represent(addto)) {
-		printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], addto);
-        } else {
-		nc = encode_constant(addto, vals);
-		for (i = 0; i < nc; i++)
-			printf("\tsub %s,%s,#%d\n",
-			       rnames[SP], rnames[SP], vals[i]);
-        }
+
+	if (fframe[1]) {
+		/* save permanent registers */
+		movspdown(fframe[1]);
+		for (i = 0, pi = 0; i < MAXREGS; i++)
+			if (TESTBIT(p2env.p_regs, i))
+				printf("\tstr %s,[%s,#%d]\n",
+				       rnames[i], rnames[SP], pi++ * (SZLONGLONG/SZCHAR));
+	}
+
+	movspdown(fframe[0] - fframe[1]);
 }
 
 void
 eoftn(struct interpass_prolog *ipp)
 {
-	int vals[4], nc, i;
+	int i, pi;
 
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return; /* no code needs to be generated */
@@ -254,17 +303,21 @@ eoftn(struct interpass_prolog *ipp)
 	if (ftype == STRTY || ftype == UNIONTY) {
 		assert(0);
 	} else {
-		if (t12represent(addStack)) {
-			printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], addStack);
-		} else {
-			nc = encode_constant(addStack, vals);
-			for (i = 0; i < nc; i++)
-				printf("\tadd %s,%s,#%d\n",
-				       rnames[SP], rnames[SP], vals[i]);
+		movspup(fframe[0] - fframe[1]);
+
+		if (fframe[1]) {
+			/* load permanent registers */
+			for (i = 0, pi = 0; i < MAXREGS; i++)
+				if (TESTBIT(p2env.p_regs, i))
+					printf("\tldr %s,[%s,#%d]\n",
+					       rnames[i], rnames[SP], pi++ * (SZLONGLONG/SZCHAR));
+			movspup(fframe[1]);
 		}
+
 		printf("\tldp %s,%s,[%s],#%d\n", rnames[FP], rnames[LR],
 		       rnames[SP], SZFPSP);
 	}
+
 	printf("\tret\n");
 #ifndef MACHOABI
 	printf("\t.size %s,.-%s\n", exname(ipp->ipp_name),
