@@ -65,7 +65,7 @@ clocal(NODE *p)
 	struct symtab *q;
 	NODE *l, *r, *t;
 	int o;
-	int ty;
+	int ty, tyl;
 	int tmpnr, isptrvoid = 0;
 	char *n;
 
@@ -198,17 +198,20 @@ clocal(NODE *p)
 				nfree(p);
 				return l;
 			}
-			if ((p->n_type & TMASK) == 0 && (l->n_type & TMASK) == 0 &&
-			    tsize(p->n_type, p->n_df, p->n_ap) == tsize(l->n_type, l->n_df, l->n_ap)) {
-				if (p->n_type != FLOAT && p->n_type != DOUBLE &&
-				    l->n_type != FLOAT && l->n_type != DOUBLE &&
-				    l->n_type != LDOUBLE && p->n_type != LDOUBLE) {
-					if (l->n_op == NAME || l->n_op == UMUL ||
-					    l->n_op == TEMP) {
-						l->n_type = p->n_type;
-						nfree(p);
-						return l;
-					}
+
+			/* fix LONG that slipped due to INTPTR in trees.c */
+			if (l->n_type == LONG)
+				l->n_type = LONGLONG;
+
+			/* (u)longlong to (u)longlong conversion is free. */
+			ty = DEUNSIGN(p->n_type);
+			tyl = DEUNSIGN(l->n_type);
+			if ((ty == LONGLONG || ISPTR(p->n_type)) &&
+			    (tyl == LONGLONG || ISPTR(l->n_type))) {
+				if (l->n_op == NAME || l->n_op == UMUL || l->n_op == TEMP) {
+					l->n_type = p->n_type;
+					nfree(p);
+					return l;
 				}
 			}
 
