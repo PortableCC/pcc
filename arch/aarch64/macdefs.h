@@ -32,7 +32,11 @@
 #define SZINT           32
 #define SZFLOAT         32
 #define SZDOUBLE        64
+#ifndef MACHOABI
+#define SZLDOUBLE       128
+#else
 #define SZLDOUBLE       64
+#endif
 #define SZLONG          64
 #define SZSHORT         16
 #define SZLONGLONG      64
@@ -46,7 +50,11 @@
 #define ALINT           32
 #define ALFLOAT         32
 #define ALDOUBLE        64
+#ifndef MACHOABI
+#define ALLDOUBLE       128
+#else
 #define ALLDOUBLE       64
+#endif
 #define ALLONG          64
 #define ALLONGLONG      64
 #define ALSHORT         16
@@ -318,5 +326,11 @@ NODE *arm_builtin_va_copy(const struct bitable *bt, NODE *a);
 #define FLT_PREFIX	IEEEFP_32
 #define USE_IEEEFP_64
 #define DBL_PREFIX	IEEEFP_64
+#ifndef MACHOABI
+#define USE_IEEEFP_128
+#define LDBL_PREFIX	IEEEFP_128
+#define DEFAULT_FPI_DEFS { &fpi_binary32, &fpi_binary64, &fpi_binary128 }
+#else
 #define LDBL_PREFIX	IEEEFP_64
 #define DEFAULT_FPI_DEFS { &fpi_binary32, &fpi_binary64, &fpi_binary64 }
+#endif
