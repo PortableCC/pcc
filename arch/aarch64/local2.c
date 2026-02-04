@@ -668,7 +668,7 @@ addrload(NODE *p)
 
 	if (l->n_op == NAME) {
 		if (kflag) { /* PIC load */
-			if (1 /* normal */) {
+			if (l->n_name[0] != '@') { /* non-extern/got */
 #ifdef MACHOABI
 				expand(p, 0, "\tadrp ZXA1,AL@page\n");
 				expand(p, 0, "\tadd ZXA1,ZXA1,AL@pageoff\n");
@@ -869,8 +869,11 @@ adrput(FILE *io, NODE *p)
 		p = p->n_left;
 	switch (p->n_op) {
 		case NAME:
+			const char *name;
 			if (p->n_name[0] != '\0') {
-				fputs(p->n_name, io);
+				/* skip GOT prefix '@' if exists */
+				name = p->n_name[0] == '@' ? p->n_name+1 : p->n_name;
+				fputs(name, io);
 				if (getlval(p) != 0)
 					fprintf(io, "+%lld", getlval(p));
 			} else

@@ -55,6 +55,50 @@ getsoname(struct symtab *sp)
 	    ap->sarg(0) : sp->sname;
 }
 
+#define IALLOC(sz)	(isinlining ? permalloc(sz) : tmpalloc(sz))
+
+/*
+ * Make a symtab entry for PIC use.
+ */
+static struct symtab *
+picsymtab(char *p, char *s, char *s2)
+{
+	struct symtab *sp = IALLOC(sizeof(struct symtab));
+	size_t len = strlen(p) + strlen(s) + strlen(s2) + 1;
+
+	sp->sname = IALLOC(len);
+	strlcpy(sp->sname, p, len);
+	strlcat(sp->sname, s, len);
+	strlcat(sp->sname, s2, len);
+	sp->sap = attr_new(ATTR_SONAME, 1);
+	sp->sap->sarg(0) = sp->sname;
+	sp->sclass = EXTERN;
+	sp->sflags = sp->slevel = 0;
+	return sp;
+}
+
+/*
+ * Create a reference for an extern variable or function.
+ */
+static NODE *
+picext(NODE *p)
+{
+	struct symtab *sp;
+	char *c;
+	if (ISFTN(p->n_type))
+		return p;
+	if (attr_find(p->n_sp->sap, ATTR_AARCH64_BEENHERE))
+		return p;
+
+	c = getexname(p->n_sp);
+	/* prefix got symbols with '@'. handle instrs in local2.c */
+	sp = picsymtab("", "@", c);
+	p->n_sp = sp;
+
+	sp->sap = attr_add(sp->sap, attr_new(ATTR_AARCH64_BEENHERE, 1));
+	return p;
+}
+
 /*
  * clocal() is called to do local transformations on
  * an expression tree before being sent to the backend.
@@ -155,6 +199,13 @@ clocal(NODE *p)
 					p->n_op = REG;
 					slval(p, 0);
 					p->n_rval = q->soffset;
+					break;
+				case EXTERN:
+				case EXTDEF:
+					if (kflag == 0 || statinit)
+						break;
+					if (blevel > 0)
+						p = picext(p);
 					break;
 				case STATIC:
 					if (q->slevel > 0) {

@@ -286,6 +286,11 @@ int COLORMAP(int c, int *r);
 int retreg(int ty);
 int features(int f);
 
+/*
+ * aarch64-specific symbol table flags.
+ */
+#define	ATTR_P1_TARGET	ATTR_AARCH64_BEENHERE
+
 #define FEATURE_BIGENDIAN	0x00010000
 #define FEATURE_EXTEND		0x00040000	/* sxth, sxtb, uxth, uxtb */
 #define FEATURE_FPSIMD		0x10000000
