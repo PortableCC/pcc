@@ -29,6 +29,7 @@ extern void defalign(int);
 
 static int isConverstion=0;
 static int addStack=0;
+static int isExtend=0;
 #define	exname(x) x
 
 /*
@@ -616,10 +617,46 @@ argsiz(NODE *p)
 	return 0;
 }
 
+static void
+addrload(NODE *p)
+{
+	NODE *l = getlr(p, 'L');
+
+	if (l->n_op == NAME) {
+		if (kflag) { /* PIC load */
+			if (1 /* normal */) {
+#ifdef MACHOABI
+				expand(p, 0, "\tadrp ZXA1,AL@page\n");
+				expand(p, 0, "\tadd ZXA1,ZXA1,AL@pageoff\n");
+#else
+				expand(p, 0, "\tadrp ZXA1,AL\n");
+				expand(p, 0, "\tadd ZXA1,ZXA1,:lo12:AL\n");
+#endif
+			} else { /* got */
+#ifdef MACHOABI
+				expand(p, 0, "\tadrp ZXA1,AL@gotpage\n");
+				expand(p, 0, "\tldr ZXA1,[ZXA1,AL@gotpageoff]\n");
+#else
+				expand(p, 0, "\tadrp ZXA1,:got:AL\n");
+				expand(p, 0, "\tldr ZXA1,[ZXA1,:got_lo12:AL]\n");
+#endif
+			}
+		} else { /* non-PIC load from near pool */
+			expand(p, 0, "\tadr ZXA1,AL\n");
+		}
+	} else {
+		comperr("addrload");
+	}
+}
+
 void
 zzzcode(NODE *p, int c)
 {
 	switch (c) {
+		case 'A': /* load address of NAME */
+			addrload(p);
+			break;
+
 		case 'B': /* bit-field sign extension */
 			bfext(p);
 			break;
@@ -667,6 +704,10 @@ zzzcode(NODE *p, int c)
 
 		case 'Q': /* emit struct assign */
 			stasg(p);
+			break;
+
+		case 'X':
+			isExtend = 1;
 			break;
 
 		default:
@@ -824,6 +865,10 @@ adrput(FILE *io, NODE *p)
 							fprintf(io, "%s", wnames[0]);
 							isConverstion = 0;
 						}
+						else if (isExtend) {
+							fprintf(io, "%s", rnames[p->n_rval]);
+							isExtend = 0;
+						}
 						else
 							fprintf(io, "%s", wnames[p->n_rval]);
 					}
@@ -944,7 +989,7 @@ prtaddr(NODE *p, void *arg)
 		p->n_op = ADDROF;
 	}
 
-	if (p->n_op != ADDROF || l->n_op != NAME)
+	if (p->n_op != NAME || kflag)
 		return;
 
 	/* if we passed 1k nodes printout list */
@@ -959,8 +1004,8 @@ prtaddr(NODE *p, void *arg)
 	/* write address to byte stream */
 
 	SLIST_FOREACH(el, &aslist, link) {
-		if (el->num == getlval(l) && el->name[0] == l->n_name[0] &&
-		    strcmp(el->name, l->n_name) == 0) {
+		if (el->num == getlval(p) && el->name[0] == p->n_name[0] &&
+		    strcmp(el->name, p->n_name) == 0) {
 			found = 1;
 			break;
 		}
@@ -969,25 +1014,25 @@ prtaddr(NODE *p, void *arg)
 		/* we know that this is text segment */
 		lab = prtnumber++;
 		if (nodcnt <= 1000 && notfirst == 0) {
-			if (getlval(l))
+			if (getlval(p))
 				printf(PRTLAB ":\n\t.dword %s+%lld\n",
-				    lab, l->n_name, getlval(l));
+				    lab, p->n_name, getlval(p));
 			 else
                                 printf(PRTLAB ":\n\t.dword %s\n",
-                                    lab, l->n_name);	
+                                    lab, p->n_name);
 		}
 		el = tmpalloc(sizeof(struct addrsymb));
-		el->num = getlval(l);
-		el->name = l->n_name;
+		el->num = getlval(p);
+		el->name = p->n_name;
 		el->str = tmpalloc(32);
 		snprintf(el->str, 32, PRTLAB, lab);
 		SLIST_INSERT_LAST(&aslist, el, link);
 	}
 
-	nfree(l);
-	p->n_op = NAME;
 	setlval(p, 0);
-	p->n_name = el->str;
+	p->n_left = mklnode(NAME, getlval(p), 0, PTR|p->n_type);
+	p->n_left->n_name = el->str;
+	p->n_op = UMUL;
 }
 
 void

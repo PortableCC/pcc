@@ -1837,6 +1837,12 @@ struct optab table[] = {
                 0,      0,
 		"	stmfd sp!,{AL,UL}" COM "save function arg to stack (endianness problem here?)\n", },
 
+{ ADDROF,	INAREG,
+	SNAME,	TANY,
+	SANY,	TANY,
+		NAREG, RESC1,
+		"ZA", },
+
 # define DF(x) FORREW,SANY,TANY,SANY,TANY,NEEDS(NREWRITE),x,""
 
 { UMUL, DF( UMUL ), },
