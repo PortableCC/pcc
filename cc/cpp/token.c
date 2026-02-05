@@ -220,6 +220,10 @@ inpbuf(void)
 		if (ch == '\\') {
 			ADDCH(ninp, len, ch);
 			ch = fgetc(ifiles->ifp);
+			if (ch == '\\') {
+				ADDCH(ninp, len, ch);
+				continue;
+			}
 			if (ch == '\n') {
 				/* \\n */
 				len--;
