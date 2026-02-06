@@ -935,7 +935,8 @@ prtline(int nl)
 		if (dMflag)
 			return; /* no output */
 		if (ifiles->lineno == 1 &&
-		    (MMDflag == 0 || ifiles->idx != SYSINC)) {
+		    (MMDflag == 0 || ifiles->idx != SYSINC) &&
+		    ifiles->fname[0] != '<') {
 			printf("%s: %s\n", Mfile, ifiles->fname);
 			if (MPflag &&
 			    strcmp((const char *)ifiles->fname, (char *)MPfile))
