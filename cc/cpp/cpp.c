@@ -817,7 +817,7 @@ include(void)
 			goto end;
 	}
 	if ((fn = (usch *)fsrch((usch *)fname, &idx, &inw)) == NULL)
-		error("cannot find '%s'", fn);
+		error("cannot find '%s'", fname);
 end:	bufree(ob);
 	if ((ifp = fopen((char *)fn, "r")) == NULL)
 		error("pushfile: error open %s", fn);
@@ -2332,6 +2332,8 @@ putch(register int ch)
 void
 putstr(const usch *s)
 {
+	if (Mflag)
+		return;
 	if (skpows)
 		cntline();
 	fprintf(stdout, "%s", s);
