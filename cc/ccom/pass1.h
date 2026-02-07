@@ -461,6 +461,7 @@ struct symtab *strmemb(struct ssdesc *);
 int yylex(void);
 void yyerror(char *);
 int pragmas_gcc(char *t);
+P1ND *cstknode(TWORD t, union dimfun *df, struct ssdesc *ss);
 int concast(P1ND *p, TWORD t);
 char *stradd(char *old, char *new);
 #ifdef WORD_ADDRESSED

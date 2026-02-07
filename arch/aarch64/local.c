@@ -19,7 +19,6 @@
  * We define location operations which operate on the expression tree
  * during the first pass (before sending to the backend for code generation.)
  */
-
 #include <assert.h>
 
 #include "pass1.h"
@@ -46,6 +45,7 @@
 #endif
 
 extern void defalign(int);
+static NODE * stret(NODE *p);
 
 static char *
 getsoname(struct symtab *sp)
@@ -110,7 +110,6 @@ clocal(NODE *p)
 	NODE *l, *r, *t;
 	int o;
 	int ty, tyl;
-	int tmpnr, isptrvoid = 0;
 	char *n;
 
 	/*
@@ -155,29 +154,9 @@ clocal(NODE *p)
 			}
 			return r;
 
-		case CALL:
 		case STCALL:
 		case USTCALL:
-			if (p->n_type == VOID)
-				break;
-			/*
-			 * if the function returns void*, ecode() invokes
-			 * delvoid() to convert it to uchar*.
-			 * We just let this happen on the ASSIGN to the temp,
-			 * and cast the pointer back to void* on access
-			 * from the temp.
-			 */
-			if (p->n_type == PTR+VOID)
-				isptrvoid = 1;
-			r = tempnode(0, p->n_type, p->n_df, p->n_ap);
-			tmpnr = regno(r);
-			r = block(ASSIGN, r, p, p->n_type, p->n_df, p->n_ap);
-
-			p = tempnode(tmpnr, r->n_type, r->n_df, r->n_ap);
-			if (isptrvoid) {
-				p = block(PCONV, p, NIL, PTR+VOID, p->n_df, 0);
-			}
-			p = buildtree(COMOP, r, p);
+			p = stret(p);
 			break;
 
 		case NAME:
@@ -363,6 +342,59 @@ clocal(NODE *p)
 			nfree(p);
 			p = l;
 			break;
+	}
+
+	return p;
+}
+
+/*
+ * Handle the return value from a call returning a struct.
+ *
+ * XXX - This routine would ideally live under code.c, but
+ * funcode() only gets invoked for function calls that take
+ * arguments. This routine applies to all struct returning calls.
+ */
+static NODE *
+stret(NODE *p)
+{
+	NODE *l, *t, *r;
+	int tmpnr, sz, szb, i, num;
+
+	sz = tsize(DECREF(p->n_type), p->n_df, p->n_ap);
+	szb = sz / SZCHAR;
+	num = (sz+SZLONGLONG-1) / SZLONGLONG;
+
+	if (szb > 16) {
+		t = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+		regno(t) = R8;
+		l = cstknode(DECREF(p->n_type), p->n_df, p->n_ap);
+		l = buildtree(ADDROF, l, NIL);
+		l = buildtree(ASSIGN, t, l);
+
+		r = tempnode(0, p->n_type, p->n_df, p->n_ap);
+		tmpnr = regno(r);
+		t = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+		regno(t) = R8;
+		r = buildtree(ASSIGN, r, t);
+
+		r = buildtree(COMOP, l, r);
+		r = buildtree(COMOP, r, p);
+
+		p = tempnode(tmpnr, p->n_type, p->n_df, p->n_ap);
+		p = buildtree(COMOP, r, p);
+	} else {
+		r = p;
+		for (i = 0; i < num; i++) {
+			l = cstknode(LONGLONG, 0, 0);
+			t = block(REG, NIL, NIL, LONGLONG, 0, 0);
+			regno(t) = R0 + num-i-1;
+			l = buildtree(ASSIGN, l, t);
+			p = buildtree(COMOP, p, l);
+		}
+		t = block(REG, NIL, NIL, PTR+STRTY, r->n_df, r->n_ap);
+		regno(t) = FPREG;
+		t = block(PLUS, t, bcon((AUTOINIT-autooff)/SZCHAR), PTR+STRTY, r->n_df, r->n_ap);
+		p = buildtree(COMOP, p, t);
 	}
 
 	return p;

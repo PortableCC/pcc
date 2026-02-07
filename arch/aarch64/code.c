@@ -32,6 +32,7 @@
 #define talloc p1alloc
 #define tcopy p1tcopy
 #define nfree p1nfree
+#define attr ssdesc
 #undef n_type
 #define n_type ptype
 #undef n_qual
@@ -102,6 +103,36 @@ defloc(struct symtab *sp)
 		printf("%s:\n", n);
 	else
 		printf(LABFMT ":\n", sp->soffset);
+}
+
+/*
+ * Create a node on stack storage.
+ *
+ * This is almost equivalent to cstknode(), with the
+ * exception that this never creates TEMP nodes, only
+ * stack nodes.
+ *
+ * XXX - I suggest this to be moved to ccom/trees.c
+ * & cxxcom/trees.c as a generic routine.
+ */
+static NODE *
+mkstknode(TWORD t, union dimfun *df, struct attr *ss)
+{
+	struct symtab s;
+	NODE *n;
+
+	s.stype = t;
+	s.squal = 0;
+	s.sdf = df;
+	s.sap = ss;
+	s.sclass = AUTO;
+	s.soffset = NOOFFSET;
+	s.sname = "mkstknode"; /* or else nametree() accesses invalid string */
+
+	oalloc(&s, &autooff);
+	n = nametree(&s);
+	n->n_sp = 0;
+	return n;
 }
 
 /* Put a symbol in a temporary
@@ -205,7 +236,7 @@ param_retstruct(void)
 	p = tempnode(0, PTR-FTN+cftnsp->stype, 0, cftnsp->sap);
 	rvnr = regno(p);
 	q = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
-	regno(q) = R0;
+	regno(q) = R8;
 	p = buildtree(ASSIGN, p, q);
 	ecomp(p);
 }
@@ -215,33 +246,101 @@ param_retstruct(void)
  * push the registers out to memory
  * used by bfcode() */
 static void
-param_struct(struct symtab *sym, int *regp, int *stackofsp)
+param_struct(struct symtab *sym, int *regp, int *fregp, int *stackofsp)
 {
-	/* XXX - investigate, is stack correct? */
-	int argofs = *regp;
-	NODE *p, *q;
+	int reg = *regp;
+	NODE *p, *q, *s;
 	int navail;
-	int sz;
-	int off;
+	int sz, szb;
 	int num;
 	int i;
 
-	navail = NARGREGS - argofs;
-	sz = tsize(sym->stype, sym->sdf, sym->sap) / SZINT;
-	off = ARGINIT/SZINT + argofs;
-	num = sz > navail ? navail : sz;
-	for (i = 0; i < num; i++) {
-		q = block(REG, NIL, NIL, INT, 0, 0);
-		regno(q) = R0 + argofs++;
-		p = block(REG, NIL, NIL, INT, 0, 0);
-		regno(p) = SP;
-		p = block(PLUS, p, bcon(4*off++), INT, 0, 0);
-		p = block(UMUL, p, NIL, INT, 0, 0);
-		p = buildtree(ASSIGN, p, q);
-		ecomp(p);
+	navail = NARGREGS - reg;
+	navail = navail < 0 ? 0 : navail;
+	sz = tsize(sym->stype, sym->sdf, sym->sap);
+	szb = sz / SZCHAR;
+	num = (sz+SZLONGLONG-1) / SZLONGLONG; /* ceil(sz/8) */
+
+	/* XXX - HFA structs are not handled yet */
+
+	if (szb > 16) {
+		/*
+		 * the struct is larger than 16 bytes. it was copied by the caller
+		 * and lives in their stack frame. obtain the pointer to it.
+		 */
+		/*
+		 * XXX: Unnecessary copy.
+		 * For ABI reasons, this C "struct by value" parameter is actually
+		 * passed indirectly (hidden pointer). Our IR/symbol model cannot
+		 * currently represent "indirect-by-ABI" params, so we materialize
+		 * a local stack copy and treat it as the canonical object.
+		 *
+		 * Proper fix: represent indirect struct params explicitly (e.g. param
+		 * becomes a PTR-to-struct with implicit deref at uses), or perform a
+		 * dedicated IR lowering pass that rewrites references to use the hidden
+		 * pointer instead of forcing a memcpy.
+		 */
+		s = cstknode(sym->stype, sym->sdf, sym->sap);
+		sym->soffset = AUTOINIT - autooff;
+
+		if (navail == 0) {
+			/*
+			 * we have no free argument register left, read pointer
+			 * from stack.
+			 */
+			q = block(REG, NIL, NIL, INCREF(PTR+STRTY), 0, sym->sap);
+			regno(q) = FPREG;
+			q = block(PLUS, q, bcon(ARGINIT/SZCHAR + *stackofsp), INCREF(PTR+STRTY), 0, sym->sap);
+			*stackofsp += SZLONGLONG;
+			q = buildtree(UMUL, q, 0);
+
+			/* XXX - perform unnecessary copy */
+			q = buildtree(UMUL, q, 0);
+			p = buildtree(ASSIGN, s, q);
+			ecomp(p);
+		} else {
+			/*
+			 * we have at least one free argument register, read the
+			 * pointer from the available register.
+			 */
+			q = block(REG, NIL, NIL, PTR+STRTY, 0, sym->sap);
+			regno(q) = R0 + reg++;
+
+			/* XXX - perform unnecessary copy */
+			q = buildtree(UMUL, q, 0);
+			p = buildtree(ASSIGN, s, q);
+			ecomp(p);
+		}
+	} else {
+		/*
+		 * the struct is <=16 bytes in size. it was packed by the caller.
+		 */
+		if (navail < num) {
+			/*
+			 * we are over available argument registers.
+			 * the caller pushed the struct to the call stack.
+			 */
+			sym->soffset = ARGINIT + *stackofsp;
+			*stackofsp += num * SZLONGLONG;
+		} else {
+			/*
+			 * we have enough free argument registers.
+			 * reconstruct the packed struct in the stack.
+			 */
+			for (i = 0; i < num; i++) {
+				s = mkstknode(LONGLONG, 0, 0); /* 8-byte chunk */
+				q = block(REG, NIL, NIL, LONGLONG, 0, 0);
+				regno(q) = R0 + reg + num-i-1;
+				p = buildtree(ASSIGN, s, q);
+				ecomp(p);
+				if (i == num - 1)
+					sym->soffset = AUTOINIT - autooff;
+			}
+			reg += num;
+		}
 	}
 
-	*regp = argofs;
+	*regp = reg;
 }
 
 
@@ -276,7 +375,6 @@ bfcode(struct symtab **sp, int cnt)
 	/* if returning a structure, move the hidden argument into a TEMP */
 	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
 		param_retstruct();
-		++reg;
 	}
 
 	/* recalculate the arg offset and create TEMP moves */
@@ -286,7 +384,7 @@ bfcode(struct symtab **sp, int cnt)
 			continue;
 
 	        if (sp[i]->stype == STRTY || sp[i]->stype == UNIONTY) {
-			param_struct(sp[i], &reg, &stackofs);
+			param_struct(sp[i], &reg, &freg, &stackofs);
 		} else if (DEUNSIGN(sp[i]->stype) == LONGLONG  || DEUNSIGN(sp[i]->stype) == LONG) {
 			param_64bit(sp[i], &reg, &stackofs, xtemps && !saveallargs);
 		} else if (sp[i]->stype == DOUBLE || sp[i]->stype == LDOUBLE) {
@@ -327,17 +425,19 @@ bfcode(struct symtab **sp, int cnt)
 void
 efcode(void)
 {
-	NODE *p, *q;
-	int tempnr;
+	NODE *p, *q, *t;
+	int tempnr, sz, szb, num, i;
 
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
 		return;
 
+	sz = tsize(DECREF(cftnsp->stype), cftnsp->sdf, cftnsp->sap);
+	szb = sz / SZCHAR;
+	num = (sz+SZLONGLONG-1) / SZLONGLONG;
+
 	/*
 	 * At this point, the address of the return structure on
 	 * has been FORCEd to RETREG, which is R0.
-	 * We want to copy the contents from there to the address
-	 * we placed into the tempnode "rvnr".
 	 */
 
 	/* move the pointer out of R0 to a tempnode */
@@ -350,15 +450,42 @@ efcode(void)
 
 	/* get the address from the tempnode */
 	q = tempnode(tempnr, PTR+STRTY, 0, cftnsp->sap);
-	q = buildtree(UMUL, q, NIL);
 	
-	/* now, get the structure destination */
-	p = tempnode(rvnr, PTR+STRTY, 0, cftnsp->sap);
-	p = buildtree(UMUL, p, NIL);
+	if (szb > 16) {
+		/*
+		 * Struct exceeds 16 bytes in size.
+		 * We want to copy the contents from there to the address
+		 * we placed into the tempnode "rvnr".
+		 */
+		q = buildtree(UMUL, q, NIL);
+		/* get the structure destination */
+		p = tempnode(rvnr, PTR+STRTY, 0, cftnsp->sap);
+		p = buildtree(UMUL, p, NIL);
 
-	/* struct assignment */
-	p = buildtree(ASSIGN, p, q);
-	ecomp(p);
+		/* struct assignment */
+		p = buildtree(ASSIGN, p, q);
+		ecomp(p);
+	} else {
+		/*
+		 * Struct is <= 16 bytes in size.
+		 * We want to place the contents from there to
+		 * R0, and if >8 bytes R1.
+		 */
+		for (i = 0; i < num; i++) {
+			/* divide struct to 8-byte chunk */
+			t = block(SCONV, tcopy(q), NIL, PTR+LONGLONG, 0, 0);
+			t = block(PLUS, t, bcon(8*i), PTR+LONGLONG, 0, 0);
+			t = buildtree(UMUL, t, NIL);
+
+			/* get return register (R0 or R1) */
+			p = block(REG, NIL, NIL, LONGLONG, 0, 0);
+			regno(p) = R0 + num-i-1;
+
+			/* register assignment */
+			p = buildtree(ASSIGN, p, t);
+			ecomp(p);
+		}
+	}
 }
 
 /*
@@ -559,63 +686,97 @@ movearg_float(NODE *p, int *regp)
 /* setup call stack with a structure */
 /* called from moveargs() */
 static NODE *
-movearg_struct(NODE *p, int *regp, int *stackofsp)
+movearg_struct(NODE *p, int *regp, int *fregp, int *stackofsp)
 {
-	/* XXX - investigate */
 	int reg = *regp;
-	NODE *l, *q, *t, *r;
-	int tmpnr;
+	NODE *l, *q, *t, *r, *s;
 	int navail;
 	int num;
-	int sz;
-	int ty;
+	int sz, szb;
 	int i;
 
 	assert(p->n_op == STARG);
 
-	navail = NARGREGS - (reg - R0);
+	navail = NARGREGS - reg;
 	navail = navail < 0 ? 0 : navail;
-	sz = tsize(p->n_type, p->n_df, p->n_ap) / SZINT;
-	num = sz > navail ? navail : sz;
+	sz = tsize(p->n_type, p->n_df, p->n_ap);
+	szb = sz / SZCHAR;
+	num = (sz+SZLONGLONG-1) / SZLONGLONG; /* ceil(sz/8) */
 
 	/* remove STARG node */
 	l = p->n_left;
 	nfree(p);
-	ty = l->n_type;
 
-	/*
-	 * put it into a TEMP, rather than tcopy(), since the tree
-	 * in p may have side-affects
-	 */
-	t = tempnode(0, ty, l->n_df, l->n_ap);
-	tmpnr = regno(t);
-	q = buildtree(ASSIGN, t, l);
+	/* XXX - HFA structs are not handled yet */
 
-	/* copy structure into registers */
-	for (i = 0; i < num; i++) {
-		t = tempnode(tmpnr, ty, 0, 0);
-		t = block(SCONV, t, NIL, PTR+INT, 0, 0);
-		t = block(PLUS, t, bcon(4*i), PTR+INT, 0, 0);
-		t = buildtree(UMUL, t, NIL);
+	if (szb > 16) {
+		/*
+		 * the struct is larger than 16 bytes. create a copy of it
+		 * and obtain a pointer to it.
+		 */
+		t = buildtree(UMUL, l, NIL);
+		s = cstknode(t->n_type, t->n_df, t->n_ap); /* free real estate */
+		t = buildtree(ASSIGN, s, t);
+		t = nfree(t);
+		q = tcopy(s->n_left); /* pointer to copied struct */
 
-		r = block(REG, NIL, NIL, INT, 0, 0);
-		regno(r) = reg++;
-		r = buildtree(ASSIGN, r, t);
+		if (navail == 0) {
+			/*
+			 * we have no free argument register left, push the pointer
+			 * to the stack.
+			 */
+		        q = pusharg(q, stackofsp);
+		} else {
+			/*
+			 * we have at least one free argument register, move the
+			 * pointer to the available register.
+			 */
+			r = block(REG, NIL, NIL, PTR+STRTY, 0, q->n_ap);
+			regno(r) = R0 + reg++;
+			q = buildtree(ASSIGN, r, q);
+		}
+		q = block(CM, q, t, INT, 0, 0);
 
-		q = block(CM, q, r, INT, 0, 0);
+	} else {
+		q = NULL;
+		if (navail < 2) {
+			/*
+			 * we have less than 2 free argument registers, and the struct
+			 * is <=16 bytes in size. push the struct on the stack.
+			 */
+			for (i = 0; i < num; i++) {
+				t = block(SCONV, tcopy(l), NIL, PTR+LONGLONG, 0, 0);
+				t = block(PLUS, t, bcon(8*i), PTR+LONGLONG, 0, 0);
+				t = buildtree(UMUL, t, NIL);
+				r = pusharg(t, stackofsp);
+
+				if (i == 0)
+					q = r;
+				else
+					q = block(CM, q, r, INT, 0, 0);
+			}
+		} else {
+			/*
+			 * we have >=2 free argument registers, and the struct
+			 * is <=16 bytes in size. pack the struct in registers.
+			 */
+			for (i = 0; i < num; i++) {
+				t = block(SCONV, tcopy(l), NIL, PTR+LONGLONG, 0, 0);
+				t = block(PLUS, t, bcon(8*i), PTR+LONGLONG, 0, 0);
+				t = buildtree(UMUL, t, NIL);
+
+				r = block(REG, NIL, NIL, LONGLONG, 0, 0);
+				regno(r) = R0 + reg++;
+				r = buildtree(ASSIGN, r, t);
+
+				if (i == 0)
+					q = r;
+				else
+					q = block(CM, q, r, INT, 0, 0);
+			}
+		}
+		p1tfree(l);
 	}
-
-	/* put the rest of the structure on the stack */
-	for (i = num; i < sz; i++) {
-		t = tempnode(tmpnr, ty, 0, 0);
-		t = block(SCONV, t, NIL, PTR+INT, 0, 0);
-		t = block(PLUS, t, bcon(4*i), PTR+INT, 0, 0);
-		t = buildtree(UMUL, t, NIL);
-		r = pusharg(t, stackofsp);
-		q = block(CM, q, r, INT, 0, 0);
-	}
-
-	q = reverse(q);
 
 	*regp = reg;
 	return q;
@@ -640,7 +801,7 @@ moveargs(NODE *p, int vararg, int *idxp, int *regp, int *fregp, int *stackofsp)
 		 || r->n_type == FLOAT);
 
         if (r->n_op == STARG) {
-		*rp = movearg_struct(r, regp, stackofsp);
+		*rp = movearg_struct(r, regp, fregp, stackofsp);
 	} else if ((*idxp >= vararg)
 		   || (isfp && *fregp >= NARGREGS)
 		   || (!isfp && *regp >= NARGREGS)) {
@@ -665,39 +826,6 @@ moveargs(NODE *p, int vararg, int *idxp, int *regp, int *fregp, int *stackofsp)
 	return straighten(p);
 }
 
-/*
- * Fixup arguments to pass pointer-to-struct as first argument.
- *
- * called from funcode().
- */
-static NODE *
-retstruct(NODE *p)
-{
-	NODE *l, *r, *t, *q;
-	TWORD ty;
-
-	l = p->n_left;
-	r = p->n_right;
-
-	ty = DECREF(l->n_type) - FTN;
-
-	/* structure assign */
-	q = tempnode(0, ty, l->n_df, l->n_ap);
-	q = buildtree(ADDROF, q, NIL);
-
-	/* insert hidden assignment at beginning of list */
-	if (r->n_op != CM) {
-		p->n_right = block(CM, q, r, INCREF(ty), l->n_df, l->n_ap);
-	} else {
-		for (t = r; t->n_left->n_op == CM; t = t->n_left)
-			;
-		t->n_left = block(CM, q, t->n_left, INCREF(ty),
-			    l->n_df, l->n_ap);
-	}
-
-	return p;
-}
-
 NODE *
 builtin_frame_address(const struct bitable *bt, NODE *a)
 {
@@ -720,20 +848,73 @@ builtin_cfa(const struct bitable *bt, NODE *a)
 }
 
 /*
+ * Sort arglist so that register assignments ends up last.
+ * Copied over from amd64/code.c.
+ *
+ * XXX - This routine creates an absurd amount of read/write
+ * instructions when -xtemps is disabled. It works, but it
+ * is suboptimal.
+ */
+static int
+argsort(NODE *p)
+{
+	NODE *q, *r;
+	int rv = 0;
+
+	if (p->n_op != CM) {
+		if (p->n_op == ASSIGN && p->n_left->n_op == REG &&
+		    coptype(p->n_right->n_op) != LTYPE) {
+			q = tempnode(0, p->n_type, p->n_df, p->n_ap);
+			r = tcopy(q);
+			p->n_right = buildtree(COMOP,
+			    buildtree(ASSIGN, q, p->n_right), r);
+		}
+		return rv;
+	}
+	if (p->n_right->n_op == CM) {
+		/* fixup for small structs in regs */
+		q = p->n_right->n_left;
+		p->n_right->n_left = p->n_left;
+		p->n_left = p->n_right;
+		p->n_right = p->n_left->n_right;
+		p->n_left->n_right = q;
+	}
+	if (p->n_right->n_op == ASSIGN && p->n_right->n_left->n_op == REG &&
+	    coptype(p->n_right->n_right->n_op) != LTYPE) {
+		/* move before everything to avoid reg trashing */
+		q = tempnode(0, p->n_right->n_type,
+			     p->n_right->n_df, p->n_right->n_ap);
+		r = tcopy(q);
+		p->n_right->n_right = buildtree(COMOP,
+		    buildtree(ASSIGN, q, p->n_right->n_right), r);
+	}
+	if (p->n_right->n_op == ASSIGN && p->n_right->n_left->n_op == REG) {
+		if (p->n_left->n_op == CM &&
+		    p->n_left->n_right->n_op == STASG) {
+			q = p->n_left->n_right;
+			p->n_left->n_right = p->n_right;
+			p->n_right = q;
+			rv = 1;
+		} else if (p->n_left->n_op == STASG) {
+			q = p->n_left;
+			p->n_left = p->n_right;
+			p->n_right = q;
+			rv = 1;
+		}
+	}
+	return rv | argsort(p->n_left);
+}
+
+/*
  * Called with a function call with arguments as argument.
  * This is done early in buildtree() and only done once.
  */
 NODE *
 funcode(NODE *p)
 {
-	int idx, reg, freg, stackofs;
-	idx = reg = freg = stackofs = 0;
+	int reg, freg, stackofs, idx;
+	reg = freg = stackofs = idx = 0;
 	int vararg = INT_MAX;
-
-	if (p->n_type == STRTY+FTN || p->n_type == UNIONTY+FTN) {
-		p = retstruct(p);
-		reg = R1;
-	}
 
 #if defined(MACHOABI)
 	if (p->n_left->n_df)
@@ -743,6 +924,11 @@ funcode(NODE *p)
 #endif
 
 	p->n_right = moveargs(p->n_right, vararg, &idx, &reg, &freg, &stackofs);
+
+	/* Must sort arglist so that STASG ends up first */
+	/* This avoids registers being clobbered */
+	while (argsort(p->n_right))
+		;
 
 	if (p->n_right == NULL)
 		p->n_op += (UCALL - CALL);

@@ -460,7 +460,7 @@ stasg(NODE *p)
 	int val = getlval(l);
 
 	/* R0 = dest, R1 = src, R2 = len */
-	load_constant_into_reg(R2, attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0));
+	load_64constant_into_reg(R2, attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0));
 	if (l->n_op == OREG) {
 		if (R2TEST(regno(l))) {
 			int r = regno(l);
@@ -473,7 +473,7 @@ stasg(NODE *p)
 				printf("\tadd %s,%s,#%d\n",
 				    rnames[R0], rnames[regno(l)], val);
 			} else {
-				load_constant_into_reg(R0, val);
+				load_64constant_into_reg(R0, val);
 				printf("\tadd %s,%s,%s\n", rnames[R0],
 				    rnames[R0], rnames[regno(l)]);
 			}

@@ -307,7 +307,7 @@ setorder(NODE *p)
 int *
 livecall(NODE *p)
 {
-        static int r[] = { R3, R2, R1, R0, -1 };
+        static int r[] = { R3, R2, R1, R0, -1 }; /* XXX - investigate */
 	int num = 1;
 
 	if (p->n_op != CALL && p->n_op != FORTCALL && p->n_op != STCALL)
