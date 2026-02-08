@@ -338,6 +338,7 @@ type_sq:	   C_TYPE { $$ = mkty($1, 0, 0); }
 			}
 			$$ = mkty(sp->stype, sp->sdf, sp->sss);
 			$$->n_sp = sp;
+			$$->n_ap = sp->sap;
 		}
 		|  struct_dcl { $$ = $1; }
 		|  enum_dcl { $$ = $1; }
