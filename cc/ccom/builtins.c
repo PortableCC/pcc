@@ -560,6 +560,18 @@ builtin_unimp_f(P1ND *f, P1ND *a, TWORD rt)
 }
 #endif
 
+static P1ND *
+builtin_isinf_sign(const struct bitable *bt, P1ND *a)
+{
+	if (a->n_type < FLOAT || a->n_type > DOUBLE) {
+		uerror("non-floating point argument");
+		return bcon(0);
+	}
+	if (a->n_type != DOUBLE)
+		a = cast(a, DOUBLE, 0);
+	return binhelp(a, INT, "__isinf_sign");
+}
+
 #ifndef TARGET_PREFETCH
 static P1ND *
 builtin_prefetch(const struct bitable *bt, P1ND *a)
@@ -946,6 +958,7 @@ static const struct bitable bitable[] = {
 	{ "__builtin_infl", builtin_huge_val, 0, 0, 0, LDOUBLE },
 	{ "__builtin_isgreater", builtin_isgreater, 0, 2, NULL, INT },
 	{ "__builtin_isgreaterequal", builtin_isgreaterequal, 0, 2, NULL, INT },
+	{ "__builtin_isinf_sign", builtin_isinf_sign, BTNOPROTO, 1, NULL, INT },
 	{ "__builtin_isinff", builtin_unimp, 0, 1, fmaxft, INT },
 	{ "__builtin_isinf", builtin_unimp, 0, 1, fmaxt, INT },
 	{ "__builtin_isinfl", builtin_unimp, 0, 1, fmaxlt, INT },
