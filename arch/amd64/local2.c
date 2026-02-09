@@ -360,10 +360,10 @@ fdtoul(NODE *p)
 	E("	cvttsZg2siq AL,A1\n");
 	E("	jmp 3f\n");
 	E("2:\n");
-	E("	subsZg A3,AL\n");
-	E("	cvttsZg2siq AL,A1\n");
-	E("	movabsq $0x8000000000000000,A2\n");
-	E("	xorq A2,A1\n");
+	E("	movq AL,A2\n");
+	E("	subsZg A3,A2\n");
+	E("	cvttsZg2siq A2,A1\n");
+	E("	btcq $63,A1\n");
 	E("3:\n");
 }
 #undef E

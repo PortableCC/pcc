@@ -411,7 +411,7 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SBREG,		TFLOAT|TDOUBLE,
 	SAREG,		TULONG,
-		NEEDS(NREG(A, 2), NREG(B, 1)),	RESC1,
+		NEEDS(NREG(A, 1), NREG(B, 2)),	RESC1,
 		"Zb\n", },
 
 /* long double to unsigned long */
