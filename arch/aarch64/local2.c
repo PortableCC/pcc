@@ -30,7 +30,9 @@ extern void defalign(int);
 
 static int isShrink=0;
 static int isExtend=0;
+#ifndef MACHOABI
 #define	exname(x) x
+#endif
 
 /*
 In a 32-bit context,registers are specified by using w0-w30 in A64 instruction set
@@ -272,7 +274,7 @@ prologue(struct interpass_prolog *ipp)
 #endif
 
 	ftype = ipp->ipp_type;
-	printf("%s:\n", exname(ipp->ipp_name));
+	printf("%s:\n", ipp->ipp_name);
 
 	offcalc(ipp, fframe);
 
