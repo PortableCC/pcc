@@ -1788,6 +1788,7 @@ typenode(NODE *p)
 			sp = lookup(addname(c), 0);
 			tc.type = STRTY;
 			tc.saved = mkty(tc.type, sp->sdf, sp->sss);
+			tc.saved->n_ap = sp->sap;
 			tc.saved->n_sp = sp;
 			tc.type = 0;
 		} else

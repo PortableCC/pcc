@@ -930,6 +930,7 @@ iscplx87(struct symtab *sp)
 static int
 argtyp(TWORD t, union dimfun *df, struct ssdesc *ss)
 {
+	struct symtab *sp;
 	int i, cl2, cl = 0;
 
 	if (t <= ULONG || ISPTR(t) || t == BOOL) {
@@ -945,7 +946,8 @@ argtyp(TWORD t, union dimfun *df, struct ssdesc *ss)
 			cl = STRMEM;
 		} else
 #endif
-		if (iscplx87(strmemb(ss)) == STRX87) {
+		if (attr_find((sp = strmemb(ss))->sap, ATTR_COMPLEX) && 
+		    iscplx87(sp) == STRX87) {
 			cl = STRX87;
 		} else if (sz > 2*SZLONG) {
 			cl = STRMEM;
