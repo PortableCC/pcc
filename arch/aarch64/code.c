@@ -374,6 +374,9 @@ ejobcode(int flag)
 void
 bjobcode(void)
 {
+	/* aarch64 names for some asm constant printouts */
+	astypnames[INT] = astypnames[UNSIGNED] = "\t.long";
+	astypnames[LONG] = astypnames[ULONG] = "\t.quad";
 }
 
 /*

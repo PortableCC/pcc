@@ -407,9 +407,10 @@ ninval(CONSZ off, int fsz, NODE *p)
 
 	t = p->n_type;
 	if (t > BTMASK)
-		t = p->n_type = INT; /* pointer */
+		t = p->n_type = LONGLONG; /* pointer */
 
-	if (p->n_op == ICON && p->n_sp != NULL && DEUNSIGN(t) != INT)
+	if (p->n_op == ICON && p->n_sp != NULL
+	    && !(DEUNSIGN(t) == INT || DEUNSIGN(t) == LONGLONG))
 		uerror("element not constant");
 
 	switch (t) {
