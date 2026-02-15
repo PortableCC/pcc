@@ -1282,6 +1282,9 @@ simpleinit(struct symtab *sp, NODE *p)
 		    (p->n_sp->sflags & SMASK) == SSTRING)
 			p->n_sp->sflags |= SASG;
 		p = optloop(buildtree(ASSIGN, nt, p));
+		/* for structure assignment */
+		if (p->n_op == UMUL)
+			p = p1nfree(p);
 		q = p->n_right;
 		t = q->n_type;
 		sz = (int)tsize(t, q->n_df, q->pss);
