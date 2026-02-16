@@ -67,6 +67,7 @@
 #elif defined(mach_aarch64)
 #define CPPMDADD        { "-D__aarch64__", NULL, }
 #define MUSL_DYLIB      "/lib/ld-musl-aarch64.so.1"
+#define STDINC          "/usr/include", "/usr/include/aarch64-linux-gnu"
 #elif defined(mach_m68k)
 #define CPPMDADD        { "-D__m68k__", NULL, }
 #else
