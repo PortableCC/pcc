@@ -1011,15 +1011,22 @@ myreader(struct interpass *ipole)
 		printip(ipole);
 }
 
-/*
- * Remove some PCONVs after OREGs are created.
- */
 static void
-pconv2(NODE *p, void *arg)
+fixtree2(NODE *p, void *arg)
 {
 	NODE *q;
 
-	if (p->n_op == PLUS) {
+	if (p->n_op == PLUS || p->n_op == MINUS) {
+		/*
+		 * Convert INT ICONs that slipped into PTR additions to LONGLONG.
+		 */
+		if (ISPTR(p->n_left->n_type) &&
+		    p->n_right->n_type == INT && p->n_right->n_op == ICON)
+			p->n_right->n_type = LONGLONG;
+
+		/*
+		 * Remove some PCONVs after OREGs are created.
+		 */
 		if (p->n_type == (PTR+SHORT) || p->n_type == (PTR+USHORT)) {
 			if (p->n_right->n_op != ICON)
 				return;
@@ -1035,12 +1042,20 @@ pconv2(NODE *p, void *arg)
 			 */
 		}
 	}
+
+	/* Remove unnecessary UMUL & ADDROF combinations. */
+	if (p->n_op == ADDROF && p->n_left->n_op == UMUL) {
+		q = p->n_left;
+		*p = *p->n_left->n_left;
+		q = nfree(q);
+		nfree(q);
+	}
 }
 
 void
 mycanon(NODE *p)
 {
-	walkf(p, pconv2, 0);
+	walkf(p, fixtree2, 0);
 }
 
 void
