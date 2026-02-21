@@ -486,6 +486,33 @@ if (pdebug) printf("pr_hasell: dsym %d\n", dsym);
 }
 
 /*
+ * Obtain the vararg start index of a function.
+ * Return index if the function has varargs.
+ * Return -1 if the function does not have varargs.
+ */
+int
+pr_ellidx(int dsym)
+{
+        int t, i;
+	i = 0;
+
+if (pdebug) printf("pr_ellidx: dsym %d\n", dsym);
+        SEEKRD(dsym, t);
+        while (t != TNULL) {
+                if (t == TELLIPSIS)
+                        return i;
+                if (ISSOU(BTYPE(t)))
+                        (void)pr_rptr();
+                for (; t > BTMASK; t = DECREF(t))
+                        if (ISFTN(t) || ISARY(t))
+                                (void)pr_rptr();
+                t = pr_rd();
+		i++;
+        }
+        return -1;
+}
+
+/*
  * Extract the important parts of arguments and put away them for 
  * prototype checking.
  * Return index pointer for this prototype argument list.
