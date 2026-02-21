@@ -27,19 +27,19 @@
 #ifdef LANG_CXX
 #define p1listf listf
 #define p1tfree tfree
+#define	sss sap
+#define ssdesc attr
 #else
 #define NODE P1ND
 #define talloc p1alloc
 #define tcopy p1tcopy
 #define nfree p1nfree
-#define attr ssdesc
 #undef n_type
 #define n_type ptype
 #undef n_qual
 #define n_qual pqual
 #undef n_df
 #define n_df pdf
-#define	sap sss
 #define	n_ap pss
 #endif
 
@@ -116,7 +116,7 @@ defloc(struct symtab *sp)
  * & cxxcom/trees.c as a generic routine.
  */
 static NODE *
-mkstknode(TWORD t, union dimfun *df, struct attr *ss)
+mkstknode(TWORD t, union dimfun *df, struct ssdesc *ss)
 {
 	struct symtab s;
 	NODE *n;
@@ -124,7 +124,8 @@ mkstknode(TWORD t, union dimfun *df, struct attr *ss)
 	s.stype = t;
 	s.squal = 0;
 	s.sdf = df;
-	s.sap = ss;
+	s.sap = 0;
+	s.sss = ss;
 	s.sclass = AUTO;
 	s.soffset = NOOFFSET;
 	s.sname = "mkstknode"; /* or else nametree() accesses invalid string */
@@ -143,7 +144,7 @@ putintemp(struct symtab *sym, NODE *q)
 {
 	NODE *p;
 
-	p = tempnode(0, sym->stype, sym->sdf, sym->sap);
+	p = tempnode(0, sym->stype, sym->sdf, sym->sss);
 	p = buildtree(ASSIGN, p, q);
 	sym->soffset = regno(p->n_left);
 	sym->sflags |= STNODE;
@@ -165,7 +166,7 @@ param_64bit(struct symtab *sym, int *regp, int *stackofsp, int dotemps)
 		        putintemp(sym, q);
 		}
 	} else {
-		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
+		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sss);
 		regno(q) = R0 + (*regp)++;
 		putintemp(sym, q);
 	}
@@ -203,7 +204,7 @@ param_double(struct symtab *sym, int *fregp, int *stackofsp, int dotemps)
 		        putintemp(sym, q);
 		}
 	} else {
-		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sap);
+		q = block(REG, NIL, NIL, sym->stype, sym->sdf, sym->sss);
 		regno(q) = V0 + (*fregp)++;
 		putintemp(sym, q);
 	}
@@ -233,9 +234,9 @@ param_retstruct(void)
 {
 	NODE *p, *q;
 
-	p = tempnode(0, PTR-FTN+cftnsp->stype, 0, cftnsp->sap);
+	p = tempnode(0, PTR-FTN+cftnsp->stype, 0, cftnsp->sss);
 	rvnr = regno(p);
-	q = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
+	q = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sss);
 	regno(q) = R8;
 	p = buildtree(ASSIGN, p, q);
 	ecomp(p);
@@ -257,7 +258,7 @@ param_struct(struct symtab *sym, int *regp, int *fregp, int *stackofsp)
 
 	navail = NARGREGS - reg;
 	navail = navail < 0 ? 0 : navail;
-	sz = tsize(sym->stype, sym->sdf, sym->sap);
+	sz = tsize(sym->stype, sym->sdf, sym->sss);
 	szb = sz / SZCHAR;
 	num = (sz+SZLONGLONG-1) / SZLONGLONG; /* ceil(sz/8) */
 
@@ -280,7 +281,7 @@ param_struct(struct symtab *sym, int *regp, int *fregp, int *stackofsp)
 		 * dedicated IR lowering pass that rewrites references to use the hidden
 		 * pointer instead of forcing a memcpy.
 		 */
-		s = cstknode(sym->stype, sym->sdf, sym->sap);
+		s = cstknode(sym->stype, sym->sdf, sym->sss);
 		sym->soffset = AUTOINIT - autooff;
 
 		if (navail == 0) {
@@ -288,9 +289,9 @@ param_struct(struct symtab *sym, int *regp, int *fregp, int *stackofsp)
 			 * we have no free argument register left, read pointer
 			 * from stack.
 			 */
-			q = block(REG, NIL, NIL, INCREF(PTR+STRTY), 0, sym->sap);
+			q = block(REG, NIL, NIL, INCREF(PTR+STRTY), 0, sym->sss);
 			regno(q) = FPREG;
-			q = block(PLUS, q, bcon(ARGINIT/SZCHAR + *stackofsp), INCREF(PTR+STRTY), 0, sym->sap);
+			q = block(PLUS, q, bcon(ARGINIT/SZCHAR + *stackofsp), INCREF(PTR+STRTY), 0, sym->sss);
 			*stackofsp += SZLONGLONG;
 			q = buildtree(UMUL, q, 0);
 
@@ -303,7 +304,7 @@ param_struct(struct symtab *sym, int *regp, int *fregp, int *stackofsp)
 			 * we have at least one free argument register, read the
 			 * pointer from the available register.
 			 */
-			q = block(REG, NIL, NIL, PTR+STRTY, 0, sym->sap);
+			q = block(REG, NIL, NIL, PTR+STRTY, 0, sym->sss);
 			regno(q) = R0 + reg++;
 
 			/* XXX - perform unnecessary copy */
@@ -431,7 +432,7 @@ efcode(void)
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
 		return;
 
-	sz = tsize(DECREF(cftnsp->stype), cftnsp->sdf, cftnsp->sap);
+	sz = tsize(DECREF(cftnsp->stype), cftnsp->sdf, cftnsp->sss);
 	szb = sz / SZCHAR;
 	num = (sz+SZLONGLONG-1) / SZLONGLONG;
 
@@ -441,15 +442,15 @@ efcode(void)
 	 */
 
 	/* move the pointer out of R0 to a tempnode */
-	q = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sap);
+	q = block(REG, NIL, NIL, PTR+STRTY, 0, cftnsp->sss);
 	q->n_rval = R0;
-	p = tempnode(0, PTR+STRTY, 0, cftnsp->sap);
+	p = tempnode(0, PTR+STRTY, 0, cftnsp->sss);
 	tempnr = regno(p);
 	p = buildtree(ASSIGN, p, q);
 	ecomp(p);
 
 	/* get the address from the tempnode */
-	q = tempnode(tempnr, PTR+STRTY, 0, cftnsp->sap);
+	q = tempnode(tempnr, PTR+STRTY, 0, cftnsp->sss);
 	
 	if (szb > 16) {
 		/*
@@ -459,7 +460,7 @@ efcode(void)
 		 */
 		q = buildtree(UMUL, q, NIL);
 		/* get the structure destination */
-		p = tempnode(rvnr, PTR+STRTY, 0, cftnsp->sap);
+		p = tempnode(rvnr, PTR+STRTY, 0, cftnsp->sss);
 		p = buildtree(UMUL, p, NIL);
 
 		/* struct assignment */
