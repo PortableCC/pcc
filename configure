@@ -2942,6 +2942,7 @@ case "$target_os" in
 	    *7.*) targosver=7 ;;
 	esac
 	case "$target_cpu" in
+	    aarch64) targmach=aarch64 ;;
 	    i?86) targmach=i386 ;;
 	    powerpc) targmach=powerpc endian=big ;;
 	    x86_64) targmach=amd64 ;;
