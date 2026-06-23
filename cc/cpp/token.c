@@ -1,5 +1,3 @@
-/*	$Id$	*/
-
 /*
  * Copyright (c) 2004,2009 Anders Magnusson. All rights reserved.
  *
@@ -120,7 +118,7 @@ static struct iobuf *lb;
 static usch *lpbeg, *lpend, *linp;
 static FILE *lifp;
 
-static int ucn(int ch, usch *p, int len);
+static void ucn(int ch, FILE *ifp, FILE *ofp);
 static void fastcmnt2(int);
 static int chktg(int ch);
 
@@ -204,7 +202,6 @@ inpbuf(void)
 {
 	register usch *ninp;
 	register int len, ch;
-	int latelf = 0;
 
 	if (ifiles->ifp == NULL)
 		return 0;
@@ -217,30 +214,9 @@ inpbuf(void)
 	for (len = 0;;) {
 		if ((ch = getc(ifiles->ifp)) < 0)
 			break;
-		if (ch == '\\') {
-			ADDCH(ninp, len, ch);
-			ch = fgetc(ifiles->ifp);
-			if (ch == '\\') {
-				ADDCH(ninp, len, ch);
-				continue;
-			}
-			if (ch == '\n') {
-				/* \\n */
-				len--;
-				latelf++;
-			} else if (ch == 'u' || ch == 'U') {
-				len = ucn(ch, ninp, len-1);
-			} else
-				ungetc(ch, ifiles->ifp);
-			continue;
-		}
 		ADDCH(ninp, len, ch);
 		if (ch == '\n')
 			break;
-	}
-	while (latelf) {
-		ADDCH(ninp, len, '\n');
-		latelf--;
 	}
 
 	ADDCH(ninp, len, 0);
@@ -356,10 +332,10 @@ fastcmnt2(register int ch)
 
 /*
  * check for universal-character-name on input, and
- * unput to the pushback buffer encoded as UTF-8.
+ * write to the output buffer, encoded as UTF-8.
  */
-static int
-ucn(register int ch, register usch *buf, register int len)
+static void
+ucn(register int ch, FILE *ifp, FILE *ofp)
 {
 	unsigned long cp, m;
 	usch bs[6], *p;
@@ -368,12 +344,12 @@ ucn(register int ch, register usch *buf, register int len)
 	n = ch == 'u' ? 4 : 8;
 	cp = 0;
 	while (n-- > 0) {
-		if ((ch = fgetc(ifiles->ifp)) < 0 ||
+		if ((ch = fgetc(ifp)) < 0 ||
 		    (ISDIGIT(ch) || ((ch|040) >= 'a' && (ch|040) <= 'f')) == 0) {
 #if 0 			/* leave untouched */
 			warning("invalid universal character name");
 #endif
-			return len;
+			return;
 		}
 		cp = cp * 16 + dig2num(ch);
 	}
@@ -388,7 +364,7 @@ ucn(register int ch, register usch *buf, register int len)
 #endif
 
 	if (cp == 0)
-		return len; /* ignore zeroes */
+		return; /* ignore zeroes */
 	n = 0;
 	m = 0x7f;
 	p = bs;
@@ -399,9 +375,8 @@ ucn(register int ch, register usch *buf, register int len)
 	}
 	*p++ = (((m << 1) ^ 0xfe) | cp);
 	while (p > bs) {
-		ADDCH(buf, len, *--p);
+		fputc(*--p, ofp);
 	}
-	return len;
 }
 
 /*
@@ -578,12 +553,6 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 				putch(ch);
 			if (ch == 0)
 				return;
-			if (ch == '%') {
-				if ((c2 = qcchar()) != ':')
-					unch(c2);
-				else
-					ch = '#';
-			}
 			if (ch  == '#')
 				ppdir();
 			else
@@ -844,35 +813,77 @@ pb:	*--inp = c2;
 }
 
 /*
- * Scan over an input file and convert its trigraphs before doing
- * anything else.  This is only called if -T (convert trigraphs) is given.
- * Trigraphs is deprecated in C23.
+ * Cleanup input file before parsing.
+ *	- Convert trigraphs (if -T)
+ *	- Convert UCN
+ *	- Complain (and remove) unwanted characters
+ *	- Remove \\n
+ *	- Remove initial whitespace
+ *	- Convert initial digraphs.
  */
 static FILE *
-trigraphs(FILE *ifd)
+cleanup(FILE *ifd)
 {
-	register int ch, c2, c3;
 	FILE *ofd = tmpfile();
+	int ch, c2, beginning, numlf;
 
-	ch = fgetc(ifd);
-	c2 = fgetc(ifd);
-	c3 = fgetc(ifd);
-
-	while (c3 >= 0) {
-		if (ch == '?' && c2 == '?' && chktg(c3)) {
-			ch = chktg(c3);
-			c2 = fgetc(ifd);
-			c3 = fgetc(ifd);
+	beginning = 1;
+	numlf = 0;
+	while ((ch = getc(ifd)) != EOF) {
+		if (ch < ' ') {
+			if (ch == '\r' || ch == '\f')
+				continue;
+			if (ch != '\n' && ch != '\t')
+				warning("bad char %d", ch);
 		}
-		fputc(ch, ofd);
-		ch = c2;
-		c2 = c3;
-		c3 = fgetc(ifd);
+		if (beginning) {
+			if (ch == ' ' || ch == '\t')
+				continue;
+			if (ch == '%') {
+				if ((c2 = fgetc(ifd)) == ':')
+					ch = '#';
+				else
+					ungetc(c2, ifd);
+			}
+		}
+		beginning = 0;
+		if (Tflag && ch == '?') {
+	chk2:		if ((ch = fgetc(ifd)) == '?') {
+				if (chktg(ch = fgetc(ifd))) {
+					ch = chktg(ch);
+				} else {
+					ungetc(ch, ifd);
+					fputc('?', ofd);
+					goto chk2;
+				}
+			} else {
+				ungetc(ch, ifd);
+				ch = '?';
+			}
+		}
+		if (ch == '\\') {
+			if ((c2 = fgetc(ifd)) == 'u' || c2 == 'U') {
+				/* UCN */
+				ucn(c2, ifd, ofd);
+				continue;
+			}
+
+			if (c2 == '\r')
+				c2 = fgetc(ifd);
+			if (c2 == '\n') {
+				numlf++;
+				continue;
+			}
+			ungetc(c2, ifd);
+		}
+		putc(ch, ofd);
+		if (ch == '\n') {
+			while (numlf) {
+				fputc('\n', ofd);
+				numlf--;
+			}
+		}
 	}
-	if (ch >= 0)
-		fputc(ch, ofd);
-	if (c2 >= 0)
-		fputc(c2, ofd);
 	fclose(ifd);
 	rewind(ofd);
 	return ofd;
@@ -888,8 +899,7 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	register struct includ *ic;
 	register int otrulvl;
 
-	if (Tflag)
-		ifp = trigraphs(ifp);
+	ifp = cleanup(ifp);
 
 	ic = &ibuf;
 	ic->next = ifiles;
