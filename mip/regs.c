@@ -1924,6 +1924,7 @@ OK(REGW *t, REGW *r)
 				printf("(%d) ", ASGNUM(w->a_temp));
 		}
 		printf("\n");
+		(void)ndeg; /* used by disabled assertion below */
 #if 0
 		if (ndeg != DEGREE(t) && DEGREE(t) >= 0)
 			printf("!!!ndeg %d != DEGREE(t) %d\n", ndeg, DEGREE(t));
@@ -2734,9 +2735,11 @@ treerewrite(struct interpass *ipole, REGW *rpole)
 			DLIST_INIT(&longregs, link);
 			DLIST_INSERT_AFTER(&longregs, longsp, link);
 			leafrewrite(ipole, &longregs);
+			DLIST_INIT(longsp, link); /* sever back-pointer before longregs dies */
 		}
 	} else if (!DLIST_ISEMPTY(spole, link))
 		comperr("treerewrite not empty");
+	spole = NULL;
 }
 
 /*
@@ -2758,6 +2761,7 @@ leafrewrite(struct interpass *ipole, REGW *rpole)
 		walkf(ip->ip_node, longtemp, 0); /* convert temps to oregs */
 	}
 	nodepole = NIL;
+	spole = NULL;
 }
 
 /*

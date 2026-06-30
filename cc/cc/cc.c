@@ -103,10 +103,12 @@
 #include <windows.h>
 #include <process.h>
 #include <io.h>
+#ifndef F_OK
 #define F_OK	0x00
 #define R_OK	0x04
 #define W_OK	0x02
 #define X_OK	R_OK
+#endif
 #endif
 
 #include "compat.h"
@@ -489,13 +491,6 @@ main(int argc, char *argv[])
 
 #ifdef _WIN32
 	/* have to prefix path early.  -B may override */
-	incdir = win32pathsubst(incdir);
-	altincdir = win32pathsubst(altincdir);
-	libdir = win32pathsubst(libdir);
-#ifdef PCCINCDIR
-	pccincdir = win32pathsubst(pccincdir);
-	pxxincdir = win32pathsubst(pxxincdir);
-#endif
 #ifdef PCCLIBDIR
 	pcclibdir = win32pathsubst(pcclibdir);
 #endif
