@@ -815,12 +815,29 @@ lastcall(NODE *p)
 }
 
 /*
- * Special shape matching.  Z8001 has no special address modes that need
- * this, so always decline.
+ * Special shape matching.  See SNBA/SFRAME in macdefs.h: the based address
+ * mode rrN(disp) exists only for the ld-family, so non-load rules use these
+ * shapes to accept just the OREG flavours every instruction can encode.
+ * Frame OREGs (base r13) print as L<n>+off(r13) = X mode; pair-base OREGs
+ * with zero displacement print as (rrN) = IR mode.
  */
 int
 special(NODE *p, int shape)
 {
+	switch (shape) {
+	case SNBA:
+		if (p->n_op != OREG)
+			return SRNOPE;
+		if (p->n_rval == FPREG)
+			return SRDIR;
+		if (p->n_rval >= RR0 && getlval(p) == 0)
+			return SRDIR;
+		return SRNOPE;
+	case SFRAME:
+		if (p->n_op == OREG && p->n_rval == FPREG)
+			return SRDIR;
+		return SRNOPE;
+	}
 	return SRNOPE;
 }
 

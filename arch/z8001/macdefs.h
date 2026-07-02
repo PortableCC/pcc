@@ -60,17 +60,26 @@
 
 /*
  * Alignment constraints (in bits).
+ *
+ * The Coherent ABI is word-aligned THROUGHOUT, longs and pointers
+ * included (PDP-11 heritage, K&R compiler).  Proof: struct stat has
+ * seven 16-bit members before st_size (long), placing it at offset 14.
+ * Anything above 16 here also breaks our own calling convention:
+ * FUNARG pushes arguments contiguously while pass 1 would lay out the
+ * callee's incoming arg offsets with alignment padding (seen as the
+ * mixed(int, long, int) failure: caller put the long at +6, callee
+ * read it at +8).  Register pairs need no memory alignment.
  */
 #define ALCHAR		8
 #define ALBOOL		8
 #define ALINT		16
-#define ALFLOAT		32	/* 32-bit float in even register pair */
-#define ALDOUBLE	32	/* 64-bit double aligned to even pair */
-#define ALLDOUBLE	32
-#define ALLONG		32	/* long in even register pair */
-#define ALLONGLONG	32
+#define ALFLOAT		16
+#define ALDOUBLE	16
+#define ALLDOUBLE	16
+#define ALLONG		16
+#define ALLONGLONG	16
 #define ALSHORT		16
-#define ALPOINT		32	/* segmented pointer in even register pair */
+#define ALPOINT		16
 #define ALSTRUCT	16	/* struct: strictest member, minimum word */
 #define ALSTACK		16	/* stack pointer kept word-aligned */
 
@@ -258,6 +267,22 @@ int COLORMAP(int c, int *r);
 
 #define FPREG	R13	/* frame pointer */
 #define STKREG	R15	/* stack pointer (low word of rr14) */
+
+/*
+ * Special shapes.  The Z8001 based address mode rrN(disp) (BA) is only
+ * legal in the ld/ldl/ldb/lda family; every other instruction taking a
+ * memory operand accepts only IR "(rrN)", DA "name" and X "L<n>+off(r13)"
+ * modes (Coherent as machine.c: S_RSRC/S_DEC/S_CLR/S_CP/S_PUSH all lack
+ * BAOK).  So plain SOREG must not appear in non-load rules; these shapes
+ * take its place there.
+ */
+#define	SNBA	(MAXSPECIAL+1)	/* OREG encodable in a non-load insn:
+				   frame (X mode) or pair base with zero
+				   displacement (IR mode) */
+#define	SFRAME	(MAXSPECIAL+2)	/* frame (r13-based) OREG only: for rules
+				   that access both pair halves at off and
+				   off+2 (ZL/ZQ), where a pair-base OREG
+				   would need BA for the second half */
 
 /* Soft-float: big-endian IEEE binary32 and binary64 */
 #define	USE_IEEEFP_32

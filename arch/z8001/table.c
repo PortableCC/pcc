@@ -319,36 +319,55 @@ struct optab table[] = {
 
 /* inc word by 1 */
 { PLUS,		FOREFF|INAREG|FORCC,
-	SAREG|SOREG|SNAME,	TWORD,
-	SONE,			TANY,
+	SAREG|SNAME,	TWORD,
+	SONE,		TANY,
+		0,	RLEFT|RESCC,
+		"	inc	AL,$1\n", },
+
+/* inc word in memory by 1 (inc dst is R/IR/DA/X - no BA) */
+{ PLUS,		FOREFF|FORCC,
+	SNBA,		TWORD,
+	SONE,		TANY,
 		0,	RLEFT|RESCC,
 		"	inc	AL,$1\n", },
 
 /* dec word by 1 (represented as PLUS SMONE in PCC tree) */
 { PLUS,		FOREFF|INAREG|FORCC,
-	SAREG|SOREG|SNAME,	TWORD,
-	SMONE,			TANY,
+	SAREG|SNAME,	TWORD,
+	SMONE,		TANY,
 		0,	RLEFT|RESCC,
 		"	dec	AL,$1\n", },
 
-/* add word reg + reg */
+{ PLUS,		FOREFF|FORCC,
+	SNBA,		TWORD,
+	SMONE,		TANY,
+		0,	RLEFT|RESCC,
+		"	dec	AL,$1\n", },
+
+/* add word reg + reg/name/const (add src is R/IM/IR/DA/X - no BA) */
 { PLUS,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
-	SAREG|SNAME|SOREG|SCON,	TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		0,	RLEFT|RESCC,
 		"	add	AL,AR\n", },
 
-/* add word mem + reg/const (for side effects) */
-{ PLUS,		FOREFF|FORCC,
-	SNAME|SOREG,	TWORD,
-	SAREG|SCON,	TWORD,
+/* add word reg + encodable OREG */
+{ PLUS,		INAREG|FOREFF|FORCC,
+	SAREG,		TWORD,
+	SNBA,		TWORD,
 		0,	RLEFT|RESCC,
 		"	add	AL,AR\n", },
 
 /* add pair + pair (long/ptr); pointer offsets are widened to a pair */
 { PLUS,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG|TPOINT,
-	SBREG|SOREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
+	SBREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
+		0,	RLEFT,
+		"	addl	AL,AR\n", },
+
+{ PLUS,		INBREG|FOREFF,
+	SBREG,		TLONG|TULONG|TPOINT,
+	SNBA,		TLONG|TULONG|TPOINT,
 		0,	RLEFT,
 		"	addl	AL,AR\n", },
 
@@ -371,36 +390,54 @@ struct optab table[] = {
 
 /* dec word by 1 */
 { MINUS,	FOREFF|INAREG|FORCC,
-	SAREG|SOREG|SNAME,	TWORD,
-	SONE,			TANY,
+	SAREG|SNAME,	TWORD,
+	SONE,		TANY,
+		0,	RLEFT|RESCC,
+		"	dec	AL,$1\n", },
+
+{ MINUS,	FOREFF|FORCC,
+	SNBA,		TWORD,
+	SONE,		TANY,
 		0,	RLEFT|RESCC,
 		"	dec	AL,$1\n", },
 
 /* inc word by 1 (MINUS SMONE) */
 { MINUS,	FOREFF|INAREG|FORCC,
-	SAREG|SOREG|SNAME,	TWORD,
-	SMONE,			TANY,
+	SAREG|SNAME,	TWORD,
+	SMONE,		TANY,
 		0,	RLEFT|RESCC,
 		"	inc	AL,$1\n", },
 
-/* subtract word reg - reg */
+{ MINUS,	FOREFF|FORCC,
+	SNBA,		TWORD,
+	SMONE,		TANY,
+		0,	RLEFT|RESCC,
+		"	inc	AL,$1\n", },
+
+/* subtract word reg - reg/name/const (sub src is R/IM/IR/DA/X - no BA) */
 { MINUS,	INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
-	SAREG|SNAME|SOREG|SCON,	TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		0,	RLEFT|RESCC,
 		"	sub	AL,AR\n", },
 
-/* subtract word mem (side effect) */
-{ MINUS,	FOREFF|FORCC,
-	SNAME|SOREG,	TWORD,
-	SAREG|SCON,	TWORD,
+/* subtract word reg - encodable OREG */
+{ MINUS,	INAREG|FOREFF|FORCC,
+	SAREG,		TWORD,
+	SNBA,		TWORD,
 		0,	RLEFT|RESCC,
 		"	sub	AL,AR\n", },
 
 /* subtract pair (long/ptr); pointer offsets are widened to a pair */
 { MINUS,	INBREG|FOREFF,
 	SBREG,		TLONG|TULONG|TPOINT,
-	SBREG|SOREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
+	SBREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
+		0,	RLEFT,
+		"	subl	AL,AR\n", },
+
+{ MINUS,	INBREG|FOREFF,
+	SBREG,		TLONG|TULONG|TPOINT,
+	SNBA,		TLONG|TULONG|TPOINT,
 		0,	RLEFT,
 		"	subl	AL,AR\n", },
 
@@ -428,7 +465,7 @@ struct optab table[] = {
  */
 { MUL,		INAREG,
 	SAREG,		TWORD,
-	SAREG|SNAME|SOREG|SCON,	TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
 		"	mult	rr0,AR\n", },
 
@@ -440,7 +477,7 @@ struct optab table[] = {
  */
 { MUL,		INBREG,
 	SBREG,		TLONG|TULONG,
-	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
+	SBREG|SNAME|SCON,	TLONG|TULONG,
 		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
 		"	multl	rq0,AR\n", },
 
@@ -457,14 +494,14 @@ struct optab table[] = {
  */
 { DIV,		INAREG,
 	SAREG,		TINT,
-	SAREG|SNAME|SOREG|SCON,	TINT,
+	SAREG|SNAME|SCON,	TINT,
 		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
 		"	exts	rr0\n	div	r0,AR\n", },
 
 /* unsigned word divide */
 { DIV,		INAREG,
 	SAREG,		TUNSIGNED,
-	SAREG|SNAME|SOREG|SCON,	TUNSIGNED,
+	SAREG|SNAME|SCON,	TUNSIGNED,
 		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
 		"	clr	r0\n	div	r0,AR\n", },
 
@@ -475,14 +512,14 @@ struct optab table[] = {
  */
 { DIV,		INBREG,
 	SBREG,		TLONG,
-	SBREG|SNAME|SOREG|SCON,	TLONG,
+	SBREG|SNAME|SCON,	TLONG,
 		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
 		"	extsl	rq0\n	divl	rr0,AR\n", },
 
 /* unsigned long divide */
 { DIV,		INBREG,
 	SBREG,		TULONG,
-	SBREG|SNAME|SOREG|SCON,	TULONG,
+	SBREG|SNAME|SCON,	TULONG,
 		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
 		"	subl	rr0,rr0\n	divl	rr0,AR\n", },
 
@@ -493,13 +530,13 @@ struct optab table[] = {
  */
 { MOD,		INAREG,
 	SAREG,		TINT,
-	SAREG|SNAME|SOREG|SCON,	TINT,
+	SAREG|SNAME|SCON,	TINT,
 		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
 		"	exts	rr0\n	div	r0,AR\n	ld	r1,r0\n", },
 
 { MOD,		INAREG,
 	SAREG,		TUNSIGNED,
-	SAREG|SNAME|SOREG|SCON,	TUNSIGNED,
+	SAREG|SNAME|SCON,	TUNSIGNED,
 		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
 		"	clr	r0\n	div	r0,AR\n	ld	r1,r0\n", },
 
@@ -509,13 +546,13 @@ struct optab table[] = {
  */
 { MOD,		INBREG,
 	SBREG,		TLONG,
-	SBREG|SNAME|SOREG|SCON,	TLONG,
+	SBREG|SNAME|SCON,	TLONG,
 		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
 		"	extsl	rq0\n	divl	rr0,AR\n	ldl	rr2,rr0\n", },
 
 { MOD,		INBREG,
 	SBREG,		TULONG,
-	SBREG|SNAME|SOREG|SCON,	TULONG,
+	SBREG|SNAME|SCON,	TULONG,
 		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
 		"	subl	rr0,rr0\n	divl	rr0,AR\n	ldl	rr2,rr0\n", },
 
@@ -523,67 +560,129 @@ struct optab table[] = {
  * Shifts.
  */
 
-/* logical shift left word */
+/* logical shift left word, constant count */
 { LS,		INAREG|FOREFF,
 	SAREG,		TWORD,
-	SAREG|SCON,	TWORD,
+	SCON,		TWORD,
 		0,	RLEFT,
 		"	sll	AL,AR\n", },
 
-/* arithmetic shift right (signed) */
+/* arithmetic shift right (signed), constant count */
 { RS,		INAREG|FOREFF,
 	SAREG,		TINT|TSHORT,
-	SAREG|SCON,	TWORD,
+	SCON,		TWORD,
 		0,	RLEFT,
 		"	sra	AL,AR\n", },
 
-/* logical shift right (unsigned) */
+/* logical shift right (unsigned), constant count */
 { RS,		INAREG|FOREFF,
 	SAREG,		TUNSIGNED|TUSHORT,
-	SAREG|SCON,	TWORD,
+	SCON,		TWORD,
 		0,	RLEFT,
 		"	srl	AL,AR\n", },
 
-/* shift left long pair */
+/* shift left long pair, constant count */
 { LS,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG,
-	SAREG|SCON,	TWORD,
+	SCON,		TWORD,
 		0,	RLEFT,
 		"	slll	AL,AR\n", },
 
-/* arithmetic shift right long pair (signed) */
+/* arithmetic shift right long pair (signed), constant count */
 { RS,		INBREG|FOREFF,
 	SBREG,		TLONG,
-	SAREG|SCON,	TWORD,
+	SCON,		TWORD,
 		0,	RLEFT,
 		"	sral	AL,AR\n", },
 
-/* logical shift right long pair (unsigned) */
+/* logical shift right long pair (unsigned), constant count */
 { RS,		INBREG|FOREFF,
 	SBREG,		TULONG,
-	SAREG|SCON,	TWORD,
+	SCON,		TWORD,
 		0,	RLEFT,
 		"	srll	AL,AR\n", },
+
+/*
+ * Variable (register) counts need the dynamic shift instructions
+ * sdl/sda/sdll/sdal: count in a word register, SIGNED - positive
+ * shifts left, negative shifts right.  So left shifts use the count
+ * as-is and right shifts negate a copy of it into a scratch register.
+ * (sll/sra/srl only accept immediate counts; Coherent as crashes on
+ * a register operand there.)
+ */
+
+/* logical shift left word, register count */
+{ LS,		INAREG|FOREFF,
+	SAREG,		TWORD,
+	SAREG,		TWORD,
+		0,	RLEFT,
+		"	sdl	AL,AR\n", },
+
+/* arithmetic shift right (signed), register count */
+{ RS,		INAREG|FOREFF,
+	SAREG,		TINT|TSHORT,
+	SAREG,		TWORD,
+		NAREG,	RLEFT,
+		"	ld	A1,AR\n	neg	A1\n	sda	AL,A1\n", },
+
+/* logical shift right (unsigned), register count */
+{ RS,		INAREG|FOREFF,
+	SAREG,		TUNSIGNED|TUSHORT,
+	SAREG,		TWORD,
+		NAREG,	RLEFT,
+		"	ld	A1,AR\n	neg	A1\n	sdl	AL,A1\n", },
+
+/* shift left long pair, register count */
+{ LS,		INBREG|FOREFF,
+	SBREG,		TLONG|TULONG,
+	SAREG,		TWORD,
+		0,	RLEFT,
+		"	sdll	AL,AR\n", },
+
+/* arithmetic shift right long pair (signed), register count */
+{ RS,		INBREG|FOREFF,
+	SBREG,		TLONG,
+	SAREG,		TWORD,
+		NAREG,	RLEFT,
+		"	ld	A1,AR\n	neg	A1\n	sdal	AL,A1\n", },
+
+/* logical shift right long pair (unsigned), register count */
+{ RS,		INBREG|FOREFF,
+	SBREG,		TULONG,
+	SAREG,		TWORD,
+		NAREG,	RLEFT,
+		"	ld	A1,AR\n	neg	A1\n	sdll	AL,A1\n", },
 
 /*
  * AND - bitwise and.
  */
 
+/* and/or/xor: dst must be a register; src is R/IM/IR/DA/X - no BA.
+ * The long ZL forms touch both pair halves (off and off+2), so their
+ * memory operand must be a name or a frame slot (SFRAME), never
+ * pair-based. */
+
 { AND,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
-	SAREG|SNAME|SOREG|SCON,	TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		0,	RLEFT|RESCC,
 		"	and	AL,AR\n", },
 
-{ AND,		FOREFF|FORCC,
-	SNAME|SOREG,	TWORD,
-	SAREG|SCON,	TWORD,
+{ AND,		INAREG|FOREFF|FORCC,
+	SAREG,		TWORD,
+	SNBA,		TWORD,
 		0,	RLEFT|RESCC,
 		"	and	AL,AR\n", },
 
 { AND,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG,
-	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
+	SBREG|SNAME|SCON,	TLONG|TULONG,
+		0,	RLEFT,
+		"ZL", },
+
+{ AND,		INBREG|FOREFF,
+	SBREG,		TLONG|TULONG,
+	SFRAME,		TLONG|TULONG,
 		0,	RLEFT,
 		"ZL", },
 
@@ -593,19 +692,25 @@ struct optab table[] = {
 
 { OR,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
-	SAREG|SNAME|SOREG|SCON,	TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		0,	RLEFT|RESCC,
 		"	or	AL,AR\n", },
 
-{ OR,		FOREFF|FORCC,
-	SNAME|SOREG,	TWORD,
-	SAREG|SCON,	TWORD,
+{ OR,		INAREG|FOREFF|FORCC,
+	SAREG,		TWORD,
+	SNBA,		TWORD,
 		0,	RLEFT|RESCC,
 		"	or	AL,AR\n", },
 
 { OR,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG,
-	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
+	SBREG|SNAME|SCON,	TLONG|TULONG,
+		0,	RLEFT,
+		"ZL", },
+
+{ OR,		INBREG|FOREFF,
+	SBREG,		TLONG|TULONG,
+	SFRAME,		TLONG|TULONG,
 		0,	RLEFT,
 		"ZL", },
 
@@ -615,19 +720,25 @@ struct optab table[] = {
 
 { ER,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
-	SAREG|SNAME|SOREG|SCON,	TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		0,	RLEFT|RESCC,
 		"	xor	AL,AR\n", },
 
-{ ER,		FOREFF|FORCC,
-	SNAME|SOREG,	TWORD,
-	SAREG|SCON,	TWORD,
+{ ER,		INAREG|FOREFF|FORCC,
+	SAREG,		TWORD,
+	SNBA,		TWORD,
 		0,	RLEFT|RESCC,
 		"	xor	AL,AR\n", },
 
 { ER,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG,
-	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
+	SBREG|SNAME|SCON,	TLONG|TULONG,
+		0,	RLEFT,
+		"ZL", },
+
+{ ER,		INBREG|FOREFF,
+	SBREG,		TLONG|TULONG,
+	SFRAME,		TLONG|TULONG,
 		0,	RLEFT,
 		"ZL", },
 
@@ -642,18 +753,31 @@ struct optab table[] = {
 		0,	RDEST,
 		"	clr	AL\n", },
 
-/* word mem <- zero */
+/* word mem <- zero (clr dst is R/IR/DA/X - no BA) */
 { ASSIGN,	FOREFF,
-	SNAME|SOREG,	TWORD,
+	SNAME,		TWORD,
 	SZERO,		TANY,
 		0,	0,
 		"	clr	AL\n", },
 
-/* pair <- zero (long) */
+{ ASSIGN,	FOREFF,
+	SNBA,		TWORD,
+	SZERO,		TANY,
+		0,	0,
+		"	clr	AL\n", },
+
+/* pair <- zero (long); ZQ clears both halves (off and off+2), so the
+ * memory form is name/frame only */
 { ASSIGN,	FOREFF|INBREG,
-	SBREG|SNAME|SOREG,	TLONG|TULONG|TPOINT,
-	SZERO,			TANY,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,		TANY,
 		0,	RDEST,
+		"ZQ", },
+
+{ ASSIGN,	FOREFF,
+	SFRAME,		TLONG|TULONG|TPOINT,
+	SZERO,		TANY,
+		0,	0,
 		"ZQ", },
 
 /* word reg <- reg */
@@ -670,9 +794,16 @@ struct optab table[] = {
 		0,	RESCC,
 		"	ld	AL,AR\n", },
 
-/* word mem <- const */
+/* word mem <- const (ld dst,#imm takes IR/DA/X - no BA; a BA dest falls
+ * back to the mem <- reg rule with the constant loaded first) */
 { ASSIGN,	FOREFF,
-	SNAME|SOREG,	TWORD,
+	SNAME,		TWORD,
+	SCON,		TANY,
+		0,	0,
+		"	ld	AL,AR\n", },
+
+{ ASSIGN,	FOREFF,
+	SNBA,		TWORD,
 	SCON,		TANY,
 		0,	0,
 		"	ld	AL,AR\n", },
@@ -691,12 +822,10 @@ struct optab table[] = {
 		0,	0,
 		"	ldl	AL,AR\n", },
 
-/* pair mem <- const long */
-{ ASSIGN,	FOREFF,
-	SNAME|SOREG,	TLONG|TULONG,
-	SCON,		TANY,
-		0,	0,
-		"	ldl	AL,AR\n", },
+/* pair mem <- const long: there is NO direct rule on purpose.  The
+ * hardware has no "ldl mem,#imm" form (Coherent as mchld: only word/byte
+ * have the LDI store path), so the constant is materialized into a pair
+ * register (OPLTYPE ldl $imm) and stored via the mem <- pair rule above. */
 
 /* byte/char reg <- reg or mem (dest reg -> low byte; src reg -> low byte) */
 { ASSIGN,	FOREFF|INAREG|FORCC,
@@ -712,9 +841,15 @@ struct optab table[] = {
 		0,	RESCC,
 		"	ldb	AL,ZJ\n", },
 
-/* byte mem <- const */
+/* byte mem <- const (ldb dst,#imm takes IR/DA/X - no BA) */
 { ASSIGN,	FOREFF,
-	SNAME|SOREG,	TCHAR|TUCHAR,
+	SNAME,		TCHAR|TUCHAR,
+	SCON,		TANY,
+		0,	0,
+		"	ldb	AL,AR\n", },
+
+{ ASSIGN,	FOREFF,
+	SNBA,		TCHAR|TUCHAR,
 	SCON,		TANY,
 		0,	0,
 		"	ldb	AL,AR\n", },
@@ -775,39 +910,97 @@ struct optab table[] = {
  * (e.g. "0 < 0" wrongly taken).  cp/cpl set S, V, C and Z correctly for all
  * signed and unsigned conditions.
  */
+/*
+ * cp/cpb have two hardware forms (Coherent as S_CP): "cp Rd,src" with
+ * src = R/IM/IR/DA/X, and the immediate-compare "cp dst,#imm" with
+ * dst = IR/DA/X.  There is NO mem-vs-reg compare and NO BA operand.
+ * cpl has ONLY the register-dst form: "cpl RRd,src".
+ */
+
+/* compare word vs zero */
 { OPLOG,	FORCC,
-	SAREG|SNAME|SOREG,	TWORD,
+	SAREG|SNAME,	TWORD,
 	SZERO,	TANY,
 		0,	RESCC,
 		"	cp	AL,$0\n", },
 
-/* compare pair vs zero */
 { OPLOG,	FORCC,
-	SBREG|SNAME|SOREG,	TLONG|TULONG|TPOINT,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	cp	AL,$0\n", },
+
+/* compare pair vs zero: register only (no cpl mem,#imm form exists) */
+{ OPLOG,	FORCC,
+	SBREG,	TLONG|TULONG|TPOINT,
 	SZERO,	TANY,
 		0,	RESCC,
 		"	cpl	AL,$0\n", },
 
-/* compare word vs word */
+/* compare word reg vs reg/name/const */
 { OPLOG,	FORCC,
-	SAREG|SNAME|SOREG,	TWORD,
-	SAREG|SCON,		TWORD,
+	SAREG,			TWORD,
+	SAREG|SNAME|SCON,	TWORD,
 		0,	RESCC,
 		"	cp	AL,AR\n", },
 
-/* compare pair vs pair (long/ptr) */
 { OPLOG,	FORCC,
-	SBREG|SNAME|SOREG,	TLONG|TULONG|TPOINT,
-	SBREG|SCON,		TLONG|TULONG|TPOINT,
+	SAREG,	TWORD,
+	SNBA,	TWORD,
+		0,	RESCC,
+		"	cp	AL,AR\n", },
+
+/* compare word mem vs const (immediate-compare form) */
+{ OPLOG,	FORCC,
+	SNAME,	TWORD,
+	SCON,	TWORD,
+		0,	RESCC,
+		"	cp	AL,AR\n", },
+
+{ OPLOG,	FORCC,
+	SNBA,	TWORD,
+	SCON,	TWORD,
+		0,	RESCC,
+		"	cp	AL,AR\n", },
+
+/* compare pair vs pair (long/ptr): left must be a register */
+{ OPLOG,	FORCC,
+	SBREG,			TLONG|TULONG|TPOINT,
+	SBREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
+		0,	RESCC,
+		"	cpl	AL,AR\n", },
+
+{ OPLOG,	FORCC,
+	SBREG,	TLONG|TULONG|TPOINT,
+	SNBA,	TLONG|TULONG|TPOINT,
 		0,	RESCC,
 		"	cpl	AL,AR\n", },
 
 /* compare char vs char (reg operands -> low byte) */
 { OPLOG,	FORCC,
-	SAREG|SNAME|SOREG,	TCHAR|TUCHAR,
-	SAREG|SCON,		TCHAR|TUCHAR,
+	SAREG,			TCHAR|TUCHAR,
+	SAREG|SNAME|SCON,	TCHAR|TUCHAR,
 		0,	RESCC,
 		"	cpb	ZG,ZJ\n", },
+
+{ OPLOG,	FORCC,
+	SAREG,	TCHAR|TUCHAR,
+	SNBA,	TCHAR|TUCHAR,
+		0,	RESCC,
+		"	cpb	ZG,ZJ\n", },
+
+/* compare char mem vs const (immediate-compare form) */
+{ OPLOG,	FORCC,
+	SNAME,	TCHAR|TUCHAR,
+	SCON,	TCHAR|TUCHAR,
+		0,	RESCC,
+		"	cpb	AL,AR\n", },
+
+{ OPLOG,	FORCC,
+	SNBA,	TCHAR|TUCHAR,
+	SCON,	TCHAR|TUCHAR,
+		0,	RESCC,
+		"	cpb	AL,AR\n", },
 
 /*
  * GOTO - unconditional jump.
