@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michal Pleban.
+ * Copyright (c) 2026 Michal Pleban.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

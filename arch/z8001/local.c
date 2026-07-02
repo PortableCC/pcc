@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michal Pleban.
+ * Copyright (c) 2026 Michal Pleban.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,22 +74,40 @@ clocal(NODE *p)
 		switch (q->sclass) {
 		case AUTO:
 		case REGISTER:
-			/*
-			 * Convert auto/register to frame-relative OREG.
-			 * soffset is in bits; divide by SZCHAR to get bytes.
-			 */
-			p->n_op = OREG;
-			slval(p, q->soffset / SZCHAR);
-			p->n_rval = FPREG;
-			break;
-
 		case PARAM:
 			/*
-			 * Parameters arrive above the frame pointer.
-			 * ARGINIT = 32 bits = 4 bytes above R13 for the first arg.
+			 * An aggregate local or parameter (struct, union, or
+			 * array) must stay an addressable object so that member
+			 * access (p.x), indexing (a[i]), array decay and &p all
+			 * work: build a frame structure reference *(r13 + off).
+			 * &(*(r13+off)) then cancels to the lda form rather than
+			 * hitting ADDROF(OREG).  Same idiom as arch/i86.
+			 */
+			if (ISARY(p->n_type) ||
+			    p->n_type == STRTY || p->n_type == UNIONTY) {
+				l = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
+				slval(l, 0);
+				l->n_rval = FPREG;
+				p = stref(block(STREF, l, p, 0, 0, 0));
+				break;
+			}
+			/*
+			 * Scalar auto/param: frame-relative OREG.  soffset is
+			 * in bits; divide by SZCHAR to get bytes.  Parameters
+			 * arrive above the frame pointer (ARGINIT = 4 bytes).
+			 *
+			 * Each argument occupies at least a 16-bit slot (the
+			 * caller promotes char to a pushed word).  On big-endian
+			 * a char value lives in the low-order byte of that slot,
+			 * so a char parameter's access offset is slot start + 1.
 			 */
 			p->n_op = OREG;
-			slval(p, q->soffset / SZCHAR);
+			o = q->soffset / SZCHAR;
+			if (q->sclass == PARAM &&
+			    (p->n_type == CHAR || p->n_type == UCHAR ||
+			     p->n_type == BOOL))
+				o += (SZINT - SZCHAR) / SZCHAR;
+			slval(p, o);
 			p->n_rval = FPREG;
 			break;
 
@@ -344,7 +362,9 @@ extdec(struct symtab *q)
 
 /*
  * Emit an uninitialized (common) data definition.
- * Coherent's assembler uses ".comm <name> <size>" (whitespace separated).
+ * Coherent's assembler S_COMM handler requires ".comm <name>,<size>" with a
+ * COMMA: it does getid(name) then "if (getnb() != ',') qerr()".  A tab makes
+ * getnb() return the size digit instead of ',', so as reports a 'q' error.
  */
 void
 defzero(struct symtab *sp)
@@ -357,9 +377,15 @@ defzero(struct symtab *sp)
 	SETOFF(off, SZCHAR);
 	off /= SZCHAR;
 
+	/* Ensure a data segment is active (see comment above). */
+	if (lastloc != DATA) {
+		setseg(DATA, NULL);
+		lastloc = DATA;
+	}
+
 	if (sp->slevel == 0)
-		printf("\t.comm\t%s\t%d\n", name, off);
+		printf("\t.comm\t%s,%d\n", name, off);
 	else
-		printf("\t.comm\t" LABFMT "\t%d\n", sp->soffset, off);
+		printf("\t.comm\t" LABFMT ",%d\n", sp->soffset, off);
 }
 

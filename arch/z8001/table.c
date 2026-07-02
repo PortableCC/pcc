@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michal Pleban.
+ * Copyright (c) 2026 Michal Pleban.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -120,7 +120,7 @@ struct optab table[] = {
 	SAREG,		TINT,
 	SANY,		TLONG,
 		XSL(B),	RESC1,
-		"	ld	U1,AL\n	ext0l	A1\n", },
+		"	ld	U1,AL\n	exts	A1\n", },
 
 /* unsigned int -> unsigned long: zero-extend word into pair */
 { SCONV,	INBREG,
@@ -134,7 +134,7 @@ struct optab table[] = {
 	SOREG|SNAME,	TINT|TSHORT,
 	SANY,		TLONG,
 		NBREG,	RESC1,
-		"	ld	U1,AL\n	ext0l	A1\n", },
+		"	ld	U1,AL\n	exts	A1\n", },
 
 /* unsigned/ushort from memory -> unsigned long */
 { SCONV,	INBREG,
@@ -162,35 +162,35 @@ struct optab table[] = {
 	SAREG,		TUCHAR,
 	SANY,		TINT|TUNSIGNED,
 		0,	RLEFT,
-		"	andb	AL,$0xff\n", },
+		"	and	AL,$0xff\n", },
 
 /* char from memory -> int */
 { SCONV,	INAREG,
 	SOREG|SNAME,	TCHAR,
 	SANY,		TINT|TUNSIGNED,
 		NAREG,	RESC1,
-		"	ldb	A1,AL\n	extsb	A1\n", },
+		"	ldb	ZH,AL\n	extsb	A1\n", },
 
 /* unsigned char from memory -> (u)int */
 { SCONV,	INAREG,
 	SOREG|SNAME,	TUCHAR,
 	SANY,		TINT|TUNSIGNED,
 		NAREG,	RESC1,
-		"	ldb	A1,AL\n", },
+		"	clr	A1\n	ldb	ZH,AL\n", },
 
 /* char -> long */
 { SCONV,	INBREG,
 	SAREG,		TCHAR,
 	SANY,		TLONG,
 		XSL(B),	RESC1,
-		"	extsb	AL\n	ld	U1,AL\n	ext0l	A1\n", },
+		"	extsb	AL\n	ld	U1,AL\n	exts	A1\n", },
 
 /* unsigned char -> unsigned long */
 { SCONV,	INBREG,
 	SAREG,		TUCHAR,
 	SANY,		TULONG,
 		XSL(B),	RESC1,
-		"	andb	AL,$0xff\n	ld	U1,AL\n	clr	A1\n", },
+		"	and	AL,$0xff\n	ld	U1,AL\n	clr	A1\n", },
 
 /* int -> char: keep low byte (already in register) */
 { SCONV,	INAREG,
@@ -345,19 +345,25 @@ struct optab table[] = {
 		0,	RLEFT|RESCC,
 		"	add	AL,AR\n", },
 
-/* add pair + pair (long) */
+/* add pair + pair (long/ptr); pointer offsets are widened to a pair */
 { PLUS,		INBREG|FOREFF,
-	SBREG,		TLONG|TULONG,
-	SBREG|SOREG|SNAME|SCON,	TLONG|TULONG,
+	SBREG,		TLONG|TULONG|TPOINT,
+	SBREG|SOREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
 		0,	RLEFT,
 		"	addl	AL,AR\n", },
 
-/* pointer + int offset */
-{ PLUS,		INBREG|FOREFF,
-	SBREG,		TPOINT,
-	SAREG|SCON,	TWORD,
-		0,	RLEFT,
-		"	addl	AL,AR\n", },
+/*
+ * Address of a frame object.  ADDROF(OREG(r13,off)) is lowered by the MIP
+ * reader to PLUS(REG r13, ICON off) with pointer type.  Since r13 is a
+ * word register (not SBREG), this falls through the addl rule above; the ZF
+ * escape emits "lda A1,L<n>+off(r13); and A1hi,$32512" using the per-function
+ * frame-base equate (L<n>=SS|framesize), which supplies the stack segment.
+ */
+{ PLUS,		INBREG,
+	SANY,		TPOINT,
+	SCON,		TANY,
+		NBREG,	RESC1,
+		"ZF", },
 
 /*
  * MINUS - integer subtraction.
@@ -391,19 +397,24 @@ struct optab table[] = {
 		0,	RLEFT|RESCC,
 		"	sub	AL,AR\n", },
 
-/* subtract pair (long) */
+/* subtract pair (long/ptr); pointer offsets are widened to a pair */
 { MINUS,	INBREG|FOREFF,
-	SBREG,		TLONG|TULONG,
-	SBREG|SOREG|SNAME|SCON,	TLONG|TULONG,
+	SBREG,		TLONG|TULONG|TPOINT,
+	SBREG|SOREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
 		0,	RLEFT,
 		"	subl	AL,AR\n", },
 
-/* pointer - word offset */
-{ MINUS,	INBREG|FOREFF,
-	SBREG,		TPOINT,
-	SAREG|SCON,	TWORD,
-		0,	RLEFT,
-		"	subl	AL,AR\n", },
+/*
+ * Address of a frame object at a negative offset: &local becomes
+ * MINUS(REG r13, ICON off) via stref/offplus (cf. the PLUS rule above).
+ * The ZF escape emits the same "lda A1,L<n>+off(r13); and A1hi,$32512" using
+ * the frame-base equate.
+ */
+{ MINUS,	INBREG,
+	SANY,		TPOINT,
+	SCON,		TANY,
+		NBREG,	RESC1,
+		"ZF", },
 
 /*
  * MUL - multiplication.
@@ -418,69 +429,95 @@ struct optab table[] = {
 { MUL,		INAREG,
 	SAREG,		TWORD,
 	SAREG|SNAME|SOREG|SCON,	TWORD,
-		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1)),	RLEFT,
+		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
 		"	mult	rr0,AR\n", },
 
-/* long multiply */
+/*
+ * long multiply: multl rq0,src multiplies the low pair (rr2) by src,
+ * leaving the 64-bit product in the rq0 quad (rr0:rr2).  We force the
+ * multiplicand into rr2, clobber the high pair rr0, and reclaim the low
+ * pair rr2 as the long result via RLEFT.
+ */
 { MUL,		INBREG,
 	SBREG,		TLONG|TULONG,
 	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
-		NEEDS(NREG(B, 1), NSL(B), NRES(RR0)),	RESC1,
-		"	multl	AL,AR\n", },
+		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
+		"	multl	rq0,AR\n", },
 
 /*
  * DIV - division.
  */
 
 /*
- * word divide: divs rr0,src divides the 32-bit dividend in rr0 by the
+ * word divide: div r0,src divides the 32-bit dividend in rr0 by the
  * word src, leaving the quotient in r1 (low) and remainder in r0 (high).
  * The dividend word is forced into r1 then sign/zero-extended into rr0.
- * The quotient (r1) is reclaimed as the int result via RLEFT.
+ * The quotient (r1) is reclaimed as the int result via RLEFT.  The Z8001
+ * has only a signed divide (div); unsigned divide zero-extends instead.
  */
 { DIV,		INAREG,
 	SAREG,		TINT,
 	SAREG|SNAME|SOREG|SCON,	TINT,
-		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1)),	RLEFT,
-		"	exts	rr0\n	divs	rr0,AR\n", },
+		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
+		"	exts	rr0\n	div	r0,AR\n", },
 
 /* unsigned word divide */
 { DIV,		INAREG,
 	SAREG,		TUNSIGNED,
 	SAREG|SNAME|SOREG|SCON,	TUNSIGNED,
-		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1)),	RLEFT,
-		"	clr	r0\n	divu	rr0,AR\n", },
+		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
+		"	clr	r0\n	div	r0,AR\n", },
 
-/* signed long divide */
+/*
+ * long divide: dividend forced into low pair rr2, extended into the rq0
+ * quad, divl rr0,src leaves the quotient in rr2 (low) and remainder in
+ * rr0 (high).  Quotient reclaimed via RLEFT.
+ */
 { DIV,		INBREG,
 	SBREG,		TLONG,
 	SBREG|SNAME|SOREG|SCON,	TLONG,
-		NEEDS(NREG(B, 1), NSL(B), NRES(RR0)),	RESC1,
-		"	divsl	AL,AR\n", },
+		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
+		"	extsl	rq0\n	divl	rr0,AR\n", },
 
 /* unsigned long divide */
 { DIV,		INBREG,
 	SBREG,		TULONG,
 	SBREG|SNAME|SOREG|SCON,	TULONG,
-		NEEDS(NREG(B, 1), NSL(B), NRES(RR0)),	RESC1,
-		"	divul	AL,AR\n", },
+		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
+		"	subl	rr0,rr0\n	divl	rr0,AR\n", },
 
 /*
  * MOD - remainder.
- * divs/divu leaves the remainder in r0 (high word).  We copy it down to
- * r1 so the result lands in the same register that RLEFT reclaims.
+ * Word: div leaves the remainder in r0 (high word); copy it down to r1
+ * so the result lands in the register RLEFT reclaims.
  */
 { MOD,		INAREG,
 	SAREG,		TINT,
 	SAREG|SNAME|SOREG|SCON,	TINT,
-		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1)),	RLEFT,
-		"	exts	rr0\n	divs	rr0,AR\n	ld	r1,r0\n", },
+		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
+		"	exts	rr0\n	div	r0,AR\n	ld	r1,r0\n", },
 
 { MOD,		INAREG,
 	SAREG,		TUNSIGNED,
 	SAREG|SNAME|SOREG|SCON,	TUNSIGNED,
-		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1)),	RLEFT,
-		"	clr	r0\n	divu	rr0,AR\n	ld	r1,r0\n", },
+		NEEDS(NLEFT(R1), NEVER(R0), NRES(R1), NORIGHT(R0), NORIGHT(R1)),	RLEFT,
+		"	clr	r0\n	div	r0,AR\n	ld	r1,r0\n", },
+
+/*
+ * Long remainder: divl leaves the remainder in the high pair rr0; copy
+ * it down to rr2 so the result lands in the register RLEFT reclaims.
+ */
+{ MOD,		INBREG,
+	SBREG,		TLONG,
+	SBREG|SNAME|SOREG|SCON,	TLONG,
+		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
+		"	extsl	rq0\n	divl	rr0,AR\n	ldl	rr2,rr0\n", },
+
+{ MOD,		INBREG,
+	SBREG,		TULONG,
+	SBREG|SNAME|SOREG|SCON,	TULONG,
+		NEEDS(NLEFT(RR2), NEVER(RR0), NRES(RR2), NORIGHT(RR0), NORIGHT(RR2)),	RLEFT,
+		"	subl	rr0,rr0\n	divl	rr0,AR\n	ldl	rr2,rr0\n", },
 
 /*
  * Shifts.
@@ -548,7 +585,7 @@ struct optab table[] = {
 	SBREG,		TLONG|TULONG,
 	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
 		0,	RLEFT,
-		"	andl	AL,AR\n", },
+		"ZL", },
 
 /*
  * OR - bitwise or.
@@ -570,7 +607,7 @@ struct optab table[] = {
 	SBREG,		TLONG|TULONG,
 	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
 		0,	RLEFT,
-		"	orl	AL,AR\n", },
+		"ZL", },
 
 /*
  * ER - bitwise exclusive or.
@@ -592,7 +629,7 @@ struct optab table[] = {
 	SBREG,		TLONG|TULONG,
 	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG,
 		0,	RLEFT,
-		"	xorl	AL,AR\n", },
+		"ZL", },
 
 /*
  * ASSIGN - assignments.
@@ -617,7 +654,7 @@ struct optab table[] = {
 	SBREG|SNAME|SOREG,	TLONG|TULONG|TPOINT,
 	SZERO,			TANY,
 		0,	RDEST,
-		"	clrl	AL\n", },
+		"ZQ", },
 
 /* word reg <- reg */
 { ASSIGN,	FOREFF|INAREG|FORCC,
@@ -661,19 +698,19 @@ struct optab table[] = {
 		0,	0,
 		"	ldl	AL,AR\n", },
 
-/* byte/char reg <- reg or mem */
+/* byte/char reg <- reg or mem (dest reg -> low byte; src reg -> low byte) */
 { ASSIGN,	FOREFF|INAREG|FORCC,
 	SAREG,		TCHAR|TUCHAR,
 	SAREG|SNAME|SOREG|SCON,	TCHAR|TUCHAR,
 		0,	RDEST|RESCC,
-		"	ldb	AL,AR\n", },
+		"	ldb	ZG,ZJ\n", },
 
-/* byte mem <- reg */
+/* byte mem <- reg (src reg -> low byte) */
 { ASSIGN,	FOREFF|FORCC,
 	SNAME|SOREG,	TCHAR|TUCHAR,
 	SAREG,		TCHAR|TUCHAR,
 		0,	RESCC,
-		"	ldb	AL,AR\n", },
+		"	ldb	AL,ZJ\n", },
 
 /* byte mem <- const */
 { ASSIGN,	FOREFF,
@@ -682,11 +719,12 @@ struct optab table[] = {
 		0,	0,
 		"	ldb	AL,AR\n", },
 
-/* struct assignment */
+/* struct assignment: block-copy via ldirb.  A1 = dest-address pair,
+ * A2 = byte count; the source pointer (right) is a pair. */
 { STASG,	FOREFF|INAREG,
 	SOREG|SNAME,	TANY,
-	SAREG,		TPTRTO|TANY,
-		NEEDS(NREG(B, 1), NSL(B)),	RDEST,
+	SBREG,		TPTRTO|TANY,
+		NEEDS(NREG(A, 1), NREG(B, 1)),	RDEST,
 		"ZS", },
 
 /*
@@ -715,33 +753,40 @@ struct optab table[] = {
 	SANY,		TANY,
 	SOREG,		TCHAR,
 		XSL(A),	RESC1,
-		"	ldb	A1,AL\n	extsb	A1\n", },
+		"	ldb	ZH,AL\n	extsb	A1\n", },
 
 /* load unsigned char through pair register */
 { UMUL,		INAREG,
 	SANY,		TANY,
 	SOREG,		TUCHAR,
 		XSL(A),	RESC1,
-		"	ldb	A1,AL\n", },
+		"	clr	A1\n	ldb	ZH,AL\n", },
 
 /*
  * Logical/comparison operators.
  * OPLOG covers EQ, NE, LE, GE, LT, GT, ULE, UGE, ULT, UGT.
  */
 
-/* compare word vs zero: use test */
+/*
+ * Compare vs zero.  We must use cp/cpl (a real subtraction), NOT test/testl:
+ * TEST performs "dst OR 0" (Z8000 manual), so it sets S and Z but leaves the
+ * P/V flag as parity rather than signed-overflow.  The signed conditions
+ * lt/ge/gt/le are (S xor V), so after TEST they misfire at the 0 boundary
+ * (e.g. "0 < 0" wrongly taken).  cp/cpl set S, V, C and Z correctly for all
+ * signed and unsigned conditions.
+ */
 { OPLOG,	FORCC,
 	SAREG|SNAME|SOREG,	TWORD,
 	SZERO,	TANY,
 		0,	RESCC,
-		"	test	AL\n", },
+		"	cp	AL,$0\n", },
 
-/* compare pair vs zero: use testl */
+/* compare pair vs zero */
 { OPLOG,	FORCC,
 	SBREG|SNAME|SOREG,	TLONG|TULONG|TPOINT,
 	SZERO,	TANY,
 		0,	RESCC,
-		"	testl	AL\n", },
+		"	cpl	AL,$0\n", },
 
 /* compare word vs word */
 { OPLOG,	FORCC,
@@ -757,12 +802,12 @@ struct optab table[] = {
 		0,	RESCC,
 		"	cpl	AL,AR\n", },
 
-/* compare char vs char */
+/* compare char vs char (reg operands -> low byte) */
 { OPLOG,	FORCC,
 	SAREG|SNAME|SOREG,	TCHAR|TUCHAR,
 	SAREG|SCON,		TCHAR|TUCHAR,
 		0,	RESCC,
-		"	cpb	AL,AR\n", },
+		"	cpb	ZG,ZJ\n", },
 
 /*
  * GOTO - unconditional jump.
@@ -799,26 +844,33 @@ struct optab table[] = {
 		NBREG,	RESC1,
 		"	ldl	A1,AL\n", },
 
+/* char already in a register, or a char constant: copy as a word */
+{ OPLTYPE,	INAREG,
+	SANY,	TANY,
+	SAREG|SCON,	TCHAR|TUCHAR,
+		NAREG,	RESC1,
+		"	ld	A1,AL\n", },
+
 /* load signed char from mem into word register */
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SOREG|SNAME,	TCHAR,
 		NAREG,	RESC1,
-		"	ldb	A1,AL\n	extsb	A1\n", },
+		"	ldb	ZH,AL\n	extsb	A1\n", },
 
 /* load unsigned char from mem into word register */
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SOREG|SNAME,	TUCHAR,
 		NAREG,	RESC1,
-		"	ldb	A1,AL\n", },
+		"	clr	A1\n	ldb	ZH,AL\n", },
 
 /* load address (lda) of SOREG/SNAME into pair register */
 { OPLTYPE,	INBREG,
 	SANY,	TANY,
 	SOREG|SNAME,	TPOINT|TLONG|TULONG,
 		NBREG,	RESC1,
-		"	lda	A1,AL\n", },
+		"	lda	A1,AL\n	and	ZM,$32512\n", },
 
 /*
  * UMINUS - unary negation.
@@ -834,7 +886,7 @@ struct optab table[] = {
 	SBREG,	TLONG|TULONG,
 	SANY,	TANY,
 		0,	RLEFT,
-		"	negl	AL\n", },
+		"ZN", },
 
 /*
  * COMPL - bitwise complement.
@@ -850,7 +902,7 @@ struct optab table[] = {
 	SBREG,	TLONG|TULONG,
 	SANY,	TANY,
 		0,	RLEFT,
-		"	coml	AL\n", },
+		"ZC", },
 
 /*
  * FUNARG - push argument onto stack before a call.
@@ -905,11 +957,12 @@ struct optab table[] = {
 		0,	RNULL,
 		"	push	(rr14),$0\n", },
 
-/* struct argument (by-value struct copy onto stack) */
+/* struct argument (by-value struct copy onto stack) via ldirb.
+ * A1 = scratch dest-address pair, A2 = byte count; n_left = source pair. */
 { STARG,	FOREFF,
 	SBREG,		TPTRTO|TANY,
 	SANY,		TSTRUCT,
-		0,	0,
+		NEEDS(NREG(A, 1), NREG(B, 1)),	0,
 		"ZT", },
 
 /*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michal Pleban.
+ * Copyright (c) 2026 Michal Pleban.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -200,7 +200,8 @@ typedef long long OFFSZ;
 	0,		/* r13 - frame pointer */ \
 	0,		/* r14 - SP high       */ \
 	0,		/* r15 - SP low        */ \
-	SBREG|TEMPREG,	/* rr0  */ \
+	SBREG|TEMPREG,	/* rr0  - valid color (RETREG) but cleared from clregs
+			   in bjobcode so never allocated (RR0 can't be a base) */ \
 	SBREG|TEMPREG,	/* rr2  */ \
 	SBREG|TEMPREG,	/* rr4  */ \
 	SBREG,		/* rr6  - preserved via its words r6/r7  */ \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michal Pleban.
+ * Copyright (c) 2026 Michal Pleban.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -185,11 +185,26 @@ void
 bjobcode(void)
 {
 	extern char *asspace;
+	extern int clregs[];
 
 	astypnames[SHORT]   = astypnames[USHORT]   = "\t.word";
 	astypnames[INT]     = astypnames[UNSIGNED]  = "\t.word";
 	astypnames[LONG]    = astypnames[ULONG]     = "\t.long";
 	asspace = "\t.blkb";
+
+	/*
+	 * RR0 (color 0 of class B) is the long/ptr return register, so it must
+	 * stay a valid color so the MIP call-result coalescing move (regs.c
+	 * moveadd(rv, RETREG)) can be mapped by colfind.  But the Z8000 cannot
+	 * use RR0 as an indirect base "(rr0)", so we must never *allocate* it.
+	 * Clear its bit from class B's selectable-color mask: the allocator
+	 * then picks only rr2..rr10, while color2reg/regK still know RR0.
+	 * (COLORMAP CLASSB is set to 5 accordingly.)
+	 *
+	 * clregs is indexed by class-1; class B is index 1 (CLASSB is a pass2
+	 * macro not visible in this pass1 file, so the literal 1 is used).
+	 */
+	clregs[1] &= ~1;		/* class B: drop color 0 (== RR0) */
 }
 
 /*

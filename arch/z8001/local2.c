@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Michal Pleban.
+ * Copyright (c) 2026 Michal Pleban.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,23 +26,34 @@
 /*
  * pass2 local routines for the Zilog Z8001 / Coherent target.
  *
- * Frame layout (our PCC-compatible model, different from reference compiler):
+ * Frame layout (matches the reference Coherent compiler).
+ *
+ * Node offsets are computed relative to the ENTRY SP (the SP before the frame
+ * is allocated): args positive, autos negative.  But r13 (the frame pointer)
+ * is set to the frame BOTTOM, and every frame slot is addressed in the stack
+ * segment via a per-function equate "L<n> = SS|total":
+ *
+ *          address form            effective address
+ *   arg:   L<n>+off(r13)   -> SS:(total + off + r13),  off = +4,+6,...
+ *   auto:  L<n>+off(r13)   -> SS:(total + off + r13),  off = -2,-4,...
+ * with r13 = entry_SP - total, so EA = SS:(entry_SP + off) = the slot.  The
+ * equate also supplies the SS segment, needed when the address is taken (lda).
  *
  *   high address
- *   [caller args]   at r13+4, r13+6, ...   (ARGINIT=32 bits = 4 bytes)
- *   [return addr]   at r13+0 .. r13+3       (4-byte segmented return addr)
- *   -------------- r13 = entry SP = frame pointer
- *   [locals]        at r13-2, r13-4, ...    (AUTOINIT=0)
- *   [callee saves]  at r13-fsize-2*nsave .. r13-fsize-2
- *   -------------- r15 = current SP
+ *   [caller args]   entry_SP+4, +6, ...    (ARGINIT=32 bits = 4 bytes)
+ *   [return addr]   entry_SP+0 .. +3        (4-byte segmented return addr)
+ *   -------------- entry SP
+ *   [locals]        entry_SP-2, -4, ...     (AUTOINIT=0)
+ *   [callee saves]  bottom .. bottom+2*nsave-1
+ *   -------------- r13 = r15 = current SP = frame bottom
  *   low address
  *
  * Prologue sequence:
- *   dec/sub r15, $total          (total = fsize + 2*nsave)
+ *   L<n> = SS|total              (total = fsize + 2*nsave; framelab)
+ *   dec/sub r15, $total
  *   [ld (rr14), r13             (for nsave == 1)]
  *   [ldm (rr14), rX, $nsave     (for nsave > 1, saves rX..r13)]
- *   ld r13, r15
- *   inc/add r13, $total          (r13 = entry SP)
+ *   ld r13, r15                  (r13 = frame bottom)
  *
  * Note: neither the ld/ldm store nor load forms change r15; the frame is
  *       allocated solely by "dec/sub r15,$total" and reclaimed in the
@@ -72,6 +83,16 @@ deflab(int label)
 {
 	printf(LABFMT ":\n", label);
 }
+
+/*
+ * Per-function frame-base label.  Coherent addresses every frame slot in the
+ * stack segment SS via a symbol "L<n> = SS|<framesize>" and references slots
+ * as "L<n>+off(r13)" (see echo.s: L10001=SS|526, "lda rr0,L10001-512(r13)").
+ * r13 is set to the frame bottom (the SP after allocation), and the equate's
+ * SS|framesize value plus the (entry-SP-relative) node offset reconstructs the
+ * absolute frame offset while carrying the SS segment.  Set in prologue().
+ */
+static int framelab;
 
 /*
  * Emit the function prologue.
@@ -121,6 +142,16 @@ prologue(struct interpass_prolog *ipp)
 	fsize = (p2maxautooff + 1) & ~1;  /* p2maxautooff is bytes; round to word */
 	total = fsize + nsave * 2;
 
+	/*
+	 * Frame-base equate for stack-segment addressing (see framelab above).
+	 * L<n> = SS|total; slots are then addressed "L<n>+off(r13)" with r13 at
+	 * the frame bottom, so EA = SS:(total + off + r13_bottom) recovers the
+	 * absolute frame offset and supplies the SS segment.  total >= 2 always
+	 * (R13 is always saved), so SS|total is never SS|0.
+	 */
+	framelab = getlab2();
+	printf(LABFMT "=SS|%d\n", framelab, total);
+
 	/* Step 1: allocate entire frame */
 	if (total > 0) {
 		if (total <= 16)
@@ -135,16 +166,13 @@ prologue(struct interpass_prolog *ipp)
 	else
 		printf("\tldm\t(rr14),r%d,$%d\n", firstsave, nsave);
 
-	/* Step 3: r13 = current SP */
+	/*
+	 * Step 3: r13 = current SP = frame bottom.  (Native keeps the frame
+	 * pointer at the bottom and reaches slots via the SS|total equate;
+	 * node offsets remain entry-SP-relative and are corrected by the +total
+	 * baked into the equate.)
+	 */
 	printf("\tld\tr13,r15\n");
-
-	/* Step 4: r13 = entry SP (frame pointer for PCC convention) */
-	if (total > 0) {
-		if (total <= 16)
-			printf("\tinc\tr13,$%d\n", total);
-		else
-			printf("\tadd\tr13,$%d\n", total);
-	}
 }
 
 /*
@@ -233,17 +261,168 @@ tlen(NODE *p)
 }
 
 /*
+ * blput: print an operand for a BYTE instruction.
+ *
+ * The Z8001 only has byte registers for r0..r7: in a byte instruction the
+ * register field 8+N names the LOW byte of word register rN ("rlN"), while
+ * field N names the HIGH byte ("rhN").  A char value held in word register rN
+ * lives in its low byte, so byte ops (ldb/andb/cpb/...) must name it "rlN" --
+ * printing the plain word name "rN" would (mis)select the high byte rhN.
+ * Non-register operands (memory, constants) print exactly as adrput.
+ */
+static void
+blput(NODE *p)
+{
+	if (p->n_op == REG) {
+		if (p->n_rval > R7)
+			comperr("blput: byte value in non-byte-addressable "
+			    "register r%d (needs r0-r7)", p->n_rval);
+		printf("rl%d", p->n_rval);
+	} else
+		adrput(stdout, p);
+}
+
+/*
+ * prword: print one 16-bit half of a 32-bit (pair) operand.
+ *
+ * The Z8001 has no 32-bit logical/negate/complement instructions, so long
+ * AND/OR/XOR/COM/NEG are synthesised from two word operations acting on the
+ * high and low halves of the pair.  This prints whichever half is requested.
+ *
+ * Big-endian layout: the high (most significant) word is at the lower
+ * address / the even register Rn; the low word is at offset+2 / Rn+1.
+ *   lo == 0 -> high word, lo == 1 -> low word.
+ */
+static void
+prword(NODE *p, int lo)
+{
+	CONSZ val;
+
+	switch (p->n_op) {
+	case REG:
+		printf("%s", rnames[(p->n_rval - RR0) * 2 + (lo ? 1 : 0)]);
+		break;
+	case OREG:
+	case NAME:
+		if (lo)
+			setlval(p, getlval(p) + 2);
+		adrput(stdout, p);
+		if (lo)
+			setlval(p, getlval(p) - 2);
+		break;
+	case ICON:
+		val = getlval(p);
+		printf("$" CONFMT, lo ? (val & 0xffffLL) : ((val >> 16) & 0xffffLL));
+		break;
+	default:
+		comperr("prword: bad op %d", p->n_op);
+	}
+}
+
+/*
  * zzzcode: handle special escape sequences in instruction templates.
  *
  *   ZB  stack cleanup after call: add/inc r15, $n_qual
- *   ZT  struct argument (not yet implemented)
+ *   ZL  long bitwise (AND/OR/ER): word op on high halves, then low halves
+ *   ZC  long complement: com on each half
+ *   ZN  long negate: complement both halves, then add 1 across the pair
+ *   ZQ  clear a pair (reg or mem): clr on each half
+ *   ZF  frame-address operand "off(reg)" for an lda
+ *   ZM  high (segment) word of result pair, for the post-lda segment mask
+ *   ZS  struct assignment: ldirb block copy
+ *   ZT  struct argument: allocate stack slot + ldirb block copy
  */
 void
 zzzcode(NODE *p, int c)
 {
 	int n;
+	char *op;
 
 	switch (c) {
+	case 'H':	/* byte-register form of the result operand (A1) */
+		blput(getlr(p, '1'));
+		break;
+	case 'G':	/* byte-register form of the left operand (AL) */
+		blput(getlr(p, 'L'));
+		break;
+	case 'J':	/* byte-register form of the right operand (AR) */
+		blput(getlr(p, 'R'));
+		break;
+
+	case 'L':	/* long bitwise: two word ops on the pair halves */
+		switch (p->n_op) {
+		case AND: op = "and"; break;
+		case OR:  op = "or";  break;
+		case ER:  op = "xor"; break;
+		default:  comperr("zzzcode ZL: bad op %d", p->n_op); op = "";
+		}
+		printf("\t%s\t", op);
+		prword(p->n_left, 0);
+		printf(",");
+		prword(p->n_right, 0);
+		printf("\n\t%s\t", op);
+		prword(p->n_left, 1);
+		printf(",");
+		prword(p->n_right, 1);
+		printf("\n");
+		break;
+
+	case 'M':	/* high (segment) word of result pair A1, for the
+			 * post-lda segment-normalising "and rN,$0x7F00" */
+		prword(getlr(p, '1'), 0);
+		break;
+
+	case 'F':	/* &local: segmented pointer to a frame object, exactly
+			 * as native does it -- "lda A1,L<n>+off(r13)" using the
+			 * per-function frame-base equate L<n>=SS|framesize, then
+			 * "and A1hi,$32512" to normalise the segment word (see
+			 * echo.s: "lda rr0,L10001-512(r13); and r0,$32512").
+			 * off is the PLUS/MINUS constant (entry-SP-relative),
+			 * matching the OREG offsets in adrput. */
+	    {
+		NODE *res = getlr(p, '1');
+		CONSZ off = getlval(p->n_right);
+		if (p->n_op == MINUS)
+			off = -off;
+		printf("\tlda\t%s," LABFMT,
+		    rnames[res->n_rval], framelab);
+		if (off > 0)
+			printf("+");
+		if (off != 0)
+			printf(CONFMT, off);
+		printf("(%s)\n", rnames[p->n_left->n_rval]);
+		printf("\tand\t");
+		prword(res, 0);			/* segment (high) word */
+		printf(",$32512\n");
+	    }
+		break;
+
+	case 'Q':	/* clear a pair (reg or mem): clr both halves */
+		printf("\tclr\t");
+		prword(p->n_left, 0);
+		printf("\n\tclr\t");
+		prword(p->n_left, 1);
+		printf("\n");
+		break;
+
+	case 'C':	/* long complement: com both halves */
+		printf("\tcom\t");
+		prword(p->n_left, 0);
+		printf("\n\tcom\t");
+		prword(p->n_left, 1);
+		printf("\n");
+		break;
+
+	case 'N':	/* long negate: ~x then +1 across the full pair */
+		printf("\tcom\t");
+		prword(p->n_left, 0);
+		printf("\n\tcom\t");
+		prword(p->n_left, 1);
+		printf("\n\taddl\t");
+		adrput(stdout, p->n_left);
+		printf(",$1\n");
+		break;
+
 	case 'B':
 		/* Stack cleanup after call: n_qual bytes were pushed as args */
 		n = p->n_qual;
@@ -255,10 +434,59 @@ zzzcode(NODE *p, int c)
 			printf("\tadd\tr15,$%d\n", n);
 		break;
 
-	case 'T':
-		/* Struct argument by value: copy struct onto stack */
-		/* TODO: implement struct-by-value argument passing */
-		comperr("zzzcode ZT: struct arg not supported");
+	case 'S':	/* struct assignment: ldirb (dest),(src),count */
+	    {
+		struct attr *ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		int sz = ap->iarg(0);
+
+		/* Resources are ordered by class: A1 = word (count),
+		 * A2 = pair (dest address).  AR = source pointer (pair).
+		 * The lda-formed dest address needs its segment word
+		 * normalised before use as an ldir base. */
+		expand(p, FOREFF, "\tlda\tA2,AL\n");
+		printf("\tand\t");
+		prword(getlr(p, '2'), 0);
+		printf(",$32512\n");
+		printf("\tld\t");
+		expand(p, FOREFF, "A1");
+		printf(",$%d\n", sz);
+		expand(p, FOREFF, "\tldirb\t(A2),(AR),A1\n");
+	    }
+		break;
+
+	case 'T':	/* struct argument passed by value.
+			 *
+			 * Reserve the argument slot at the top of stack with
+			 * "sub r15,$slot" (PCC's own post-call cleanup reclaims
+			 * exactly this, so it is NOT double-counted), then copy
+			 * the struct into it with ldirb.
+			 *
+			 * The ldirb dest needs a valid segmented pointer to the
+			 * slot.  We do NOT copy rr14: the SP's segment word is
+			 * not a plain data-segment value usable as an indirect
+			 * base.  Instead build A2 = (segment of the source AL) :
+			 * r15 -- AL is a valid pointer to the struct (for a
+			 * stack/local struct it carries the stack segment) and
+			 * r15 is the reserved slot's offset.  A1 = byte count. */
+	    {
+		struct attr *ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		int bytes = ap->iarg(0);		/* exact struct size */
+		int slot = (bytes + 1) & ~1;		/* word-rounded slot */
+
+		printf("\tsub\tr15,$%d\n", slot);
+		/* A2.hi = AL.hi (segment); A2.lo = r15 (slot offset) */
+		printf("\tld\t");
+		prword(getlr(p, '2'), 0);
+		printf(",");
+		prword(getlr(p, 'L'), 0);
+		printf("\n\tld\t");
+		prword(getlr(p, '2'), 1);
+		printf(",r15\n");
+		printf("\tld\t");
+		expand(p, FOREFF, "A1");
+		printf(",$%d\n", bytes);
+		expand(p, FOREFF, "\tldirb\t(A2),(AL),A1\n");
+	    }
 		break;
 
 	default:
@@ -409,9 +637,38 @@ adrput(FILE *io, NODE *p)
 
 	case OREG:
 		val = getlval(p);
-		if (val != 0)
+		if (p->n_rval == R13) {
+			/*
+			 * Frame slot: address in the stack segment via the
+			 * per-function equate, "L<n>+off(r13)".  r13 is a WORD
+			 * register, so this is Indexed (X) addressing: the
+			 * address (L<n>+off) is indexed by the word r13.  (off
+			 * is the entry-SP-relative node offset; CONFMT prints
+			 * the sign for negatives, positives need an explicit
+			 * '+'.)
+			 */
+			fprintf(io, LABFMT, framelab);
+			if (val > 0)
+				fputc('+', io);
+			if (val != 0)
+				fprintf(io, CONFMT, val);
+			fprintf(io, "(%s)", rnames[R13]);
+		} else if (val != 0) {
+			/*
+			 * Pair-register base + displacement: BASED (BA)
+			 * addressing, written "rrN(disp)" -- the base pair
+			 * comes FIRST, the displacement in parens (cf. native
+			 * "lda rr4, rr10(4)").  Writing "disp(rrN)" would be
+			 * parsed as Indexed mode, using the pair as a 16-bit
+			 * word index (its segment half) -> wrong address.
+			 */
+			fprintf(io, "%s(", rnames[p->n_rval]);
 			fprintf(io, CONFMT, val);
-		fprintf(io, "(%s)", rnames[p->n_rval]);
+			fputc(')', io);
+		} else {
+			/* Pair-register base, zero displacement: indirect. */
+			fprintf(io, "(%s)", rnames[p->n_rval]);
+		}
 		return;
 
 	case ICON:
@@ -499,9 +756,9 @@ COLORMAP(int c, int *r)
 		num = r[CLASSA] + 2 * r[CLASSB];
 		return num < 13;
 	case CLASSB:
-		/* each interfering word can block at most one pair */
+		/* 5 allocatable pairs (rr2,rr4,rr6,rr8,rr10; rr0 reserved) */
 		num = r[CLASSB] + r[CLASSA];
-		return num < 6;
+		return num < 5;
 	}
 	return 0;
 }
@@ -530,7 +787,8 @@ argsiz(NODE *p)
 	if (t == DOUBLE || t == LDOUBLE || t == LONGLONG || t == ULONGLONG)
 		return 8;
 	if (t == STRTY || t == UNIONTY)
-		return attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0);
+		/* word-rounded to keep the stack aligned (matches ZT) */
+		return (attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0) + 1) & ~1;
 	return 2;	/* char/short/int promoted to word */
 }
 
