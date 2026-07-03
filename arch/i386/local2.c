@@ -889,8 +889,10 @@ ccbranches[] = {
 void
 cbgen(int o, int lab)
 {
-	if (o < EQ || o > UGT)
+	if (o < EQ || o > UGT) {
 		comperr("bad conditional branch: %s", opst[o]);
+		return; /* not reached */
+	}
 	printf("	%s " LABFMT "\n", ccbranches[o-EQ], lab);
 }
 

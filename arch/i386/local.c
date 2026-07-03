@@ -135,7 +135,6 @@ picsymtab(char *p, char *s, char *s2)
 static P1ND *
 import(P1ND *p)
 {
-	struct attr *ap;
 	P1ND *q;
 	char *name;
 	struct symtab *sp;
@@ -145,7 +144,7 @@ import(P1ND *p)
 	sp = picsymtab("__imp_", name, "");
 	q = xbcon(0, sp, PTR+VOID);
 	q = block(UMUL, q, 0, PTR|VOID, 0, 0);
-	q = block(UMUL, q, 0, p->n_type, p->n_df, p->n_ap);
+	q = block(UMUL, q, 0, p->n_type, p->n_df, p->pss);
 	q->n_sp = p->n_sp; /* for init */
 	p1nfree(p);
 
@@ -162,9 +161,9 @@ static P1ND *
 picext(P1ND *p)
 {
 
-char *name;
-	
-	name = getexname(p->n_sp);
+#if defined(ELFABI) || defined(MACHOABI)
+	char *name = getexname(p->n_sp);
+#endif
 
 #if defined(ELFABI)
 	P1ND *q, *r;
@@ -478,7 +477,7 @@ clocal(P1ND *p)
 #endif
 
 #ifdef PECOFFABI
-			if (attr_find(q->sap, ATTR_i386_SDLLINDIRECT))
+			if (attr_find(q->sap, ATTR_I386_DLLINDIRECT))
 				p = import(p);
 #endif
 #ifdef GCC_COMPAT
@@ -709,10 +708,10 @@ clocal(P1ND *p)
 /*
  * Change CALL references to either direct (static) or PLT.
  */
+#if defined(ELFABI) || defined(MACHOABI)
 static void
 fixnames(P1ND *p, void *arg)
 {
-#if defined(ELFABI) || defined(MACHOABI)
 
 	struct symtab *sp;
 	struct attr *ap;
@@ -772,8 +771,8 @@ fixnames(P1ND *p, void *arg)
 		q->n_ap = ap;
 	}
 
-#endif
 }
+#endif /* ELFABI || MACHOABI */
 
 static void mangle(P1ND *p);
 
@@ -1208,13 +1207,13 @@ mangle(P1ND *p)
 				    r->n_op == CM; r = r->n_left) {
 					t = r->n_type;
 					if (t == STRTY || t == UNIONTY)
-						size += tsize(t, r->n_df, r->n_ap);
+						size += tsize(t, r->n_df, r->pss);
 					else
 						size += szty(t) * SZINT / SZCHAR;
 				}
 				t = r->n_type;
 				if (t == STRTY || t == UNIONTY)
-					size += tsize(t, r->n_df, r->n_ap);
+					size += tsize(t, r->n_df, r->pss);
 				else
 					size += szty(t) * SZINT / SZCHAR;
 			}

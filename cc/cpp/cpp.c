@@ -583,7 +583,7 @@ addidir(register char *idir, register struct incs **ww)
 	if (*ww != NULL) {
 		for (w = *ww; w->next; w = w->next) {
 #ifdef _WIN32
-			if (strcmp(w->dir, idir) == 0)
+			if (strcmp((char *)w->dir, (char *)idir) == 0)
 				return;
 #else
 			if (w->dev == st.st_dev && w->ino == st.st_ino)
@@ -591,7 +591,7 @@ addidir(register char *idir, register struct incs **ww)
 #endif
 		}
 #ifdef _WIN32
-		if (strcmp(w->dir, idir) == 0)
+		if (strcmp((char *)w->dir, (char *)idir) == 0)
 			return;
 #else
 		if (w->dev == st.st_dev && w->ino == st.st_ino)
