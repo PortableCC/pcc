@@ -149,6 +149,17 @@ clocal(NODE *p)
 		l = p->n_left;
 		m = l->n_type;
 
+		/*
+		 * These same-size folds RETYPE the child, which is only a
+		 * bit-level no-op.  Never do it to a FLD: its signedness
+		 * controls how rmfldops extracts the bitfield (sra vs srl),
+		 * so stref's SCONV wrapper must stay and the field keep its
+		 * declared type.  (Seen as: unsigned fields read back
+		 * sign-extended.)
+		 */
+		if (l->n_op == FLD)
+			break;
+
 		/* int/short <-> int/short in same class: no-op */
 		if ((m == INT || m == UNSIGNED || m == SHORT || m == USHORT) &&
 		    (p->n_type == INT || p->n_type == UNSIGNED ||
@@ -170,8 +181,20 @@ clocal(NODE *p)
 	case FORCE:
 		/*
 		 * FORCE ensures the return value is in the correct register.
-		 * On Z8001: int/short in R1, long/ptr in RR0.
+		 * On Z8001: int/short in R1, long/ptr in RR0.  A struct
+		 * value is returned by ADDRESS in RR0 (hidden-pointer ABI);
+		 * efcode() then copies it into the caller's buffer.
 		 */
+		if (p->n_type == STRTY || p->n_type == UNIONTY) {
+			p->n_right = buildtree(ADDROF, p->n_left, NIL);
+			p->n_op = ASSIGN;
+			p->n_type = p->n_right->n_type;
+			p->n_left = block(REG, NIL, NIL, p->n_right->n_type,
+			    p->n_right->n_df, p->n_right->n_ap);
+			slval(p->n_left, 0);
+			regno(p->n_left) = RETREG(p->n_type);
+			break;
+		}
 		p->n_op = ASSIGN;
 		p->n_right = p->n_left;
 		p->n_left = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
@@ -249,6 +272,19 @@ void
 myp2tree(NODE *p)
 {
 	struct symtab *sp;
+
+	/*
+	 * Struct-return calls need ATTR_P2STRUCT in pass 2 (the caller
+	 * reserves the return buffer from it), which p2tree only attaches
+	 * when p->pss is set.  Member access directly on a call result
+	 * ("f().y") retypes the STCALL via pprop and loses pss; restore
+	 * it from the function designator node.  (pss is a C-frontend
+	 * P1ND field; the C++ frontend has its own node layout.)
+	 */
+#ifndef LANG_CXX
+	if ((p->n_op == STCALL || p->n_op == USTCALL) && p->pss == NULL)
+		p->pss = p->n_left->pss;
+#endif
 
 	if (p->n_op != FCON)
 		return;

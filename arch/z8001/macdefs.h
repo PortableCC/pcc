@@ -146,10 +146,14 @@ typedef long long OFFSZ;
  *   long/float/ptr  -> 2  (register pair)
  *   double/longlong -> 4  (register quad)
  */
+/* STRTY/UNIONTY count as 2: a struct value is only ever "in registers"
+ * as the pointer holding its address (hidden-pointer return ABI), so
+ * PCLASS/RETREG must see it as a pair. */
 #define szty(t) ((t) == DOUBLE || (t) == LDOUBLE || \
 		 (t) == LONGLONG || (t) == ULONGLONG ? 4 : \
 		 (t) == LONG || (t) == ULONG || \
-		 (t) == FLOAT || ISPTR(t) ? 2 : 1)
+		 (t) == FLOAT || ISPTR(t) || \
+		 (t) == STRTY || (t) == UNIONTY ? 2 : 1)
 
 /*
  * Register definitions.
@@ -276,6 +280,16 @@ int COLORMAP(int c, int *r);
  * BAOK).  So plain SOREG must not appear in non-load rules; these shapes
  * take its place there.
  */
+/*
+ * Target pass2 attribute: each STCALL/USTCALL carries the offset of its
+ * OWN struct-return buffer in the caller's frame (assigned by myreader()
+ * in local2.c, consumed by the ZR escape).  One shared buffer is not
+ * enough: pass 2 pre-evaluates call-containing arguments into pointer
+ * temps before pushing any argument, so with two struct-returning calls
+ * in one argument list both results are live at the same time.
+ */
+#define	ATTR_P2_TARGET	ATTR_P2_STBUF
+
 #define	SNBA	(MAXSPECIAL+1)	/* OREG encodable in a non-load insn:
 				   frame (X mode) or pair base with zero
 				   displacement (IR mode) */

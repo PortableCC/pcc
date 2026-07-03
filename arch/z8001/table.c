@@ -60,6 +60,21 @@
 #define XSL(c)		NEEDS(NREG(c, 1), NSL(c))
 #define XSR(c)		NEEDS(NREG(c, 1), NSR(c))
 
+/*
+ * Byte-register constraints.  Z8001 byte instructions can only name the
+ * halves of r0-r7 (rh0-rh7/rl0-rl7); r8-r12 have no byte-addressable
+ * halves.  Word instructions (extsb, and, push, ...) operate on any
+ * register, so a char value must sit in r0-r7 only at instructions that
+ * PRINT a byte register name (ldb/cpb via the ZG/ZH/ZJ escapes).
+ * BYTEL/BYTER constrain the left/right operand's live range at such a
+ * use; BYTET keeps the rule's own temp (a ZH destination) out of
+ * r8-r12.  Values under pressure spill instead of misallocating;
+ * blput()'s comperr remains as a backstop.
+ */
+#define BYTEL	NOLEFT(R8), NOLEFT(R9), NOLEFT(R10), NOLEFT(R11), NOLEFT(R12)
+#define BYTER	NORIGHT(R8), NORIGHT(R9), NORIGHT(R10), NORIGHT(R11), NORIGHT(R12)
+#define BYTET	NEVER(R8), NEVER(R9), NEVER(R10), NEVER(R11), NEVER(R12)
+
 struct optab table[] = {
 
 /* First entry must be an empty entry */
@@ -168,15 +183,15 @@ struct optab table[] = {
 { SCONV,	INAREG,
 	SOREG|SNAME,	TCHAR,
 	SANY,		TINT|TUNSIGNED,
-		NAREG,	RESC1,
+		NEEDS(NREG(A, 1), BYTET),	RESC1,
 		"	ldb	ZH,AL\n	extsb	A1\n", },
 
 /* unsigned char from memory -> (u)int */
 { SCONV,	INAREG,
 	SOREG|SNAME,	TUCHAR,
 	SANY,		TINT|TUNSIGNED,
-		NAREG,	RESC1,
-		"	clr	A1\n	ldb	ZH,AL\n", },
+		NEEDS(NREG(A, 1), BYTET),	RESC1,
+		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
 
 /* char -> long */
 { SCONV,	INBREG,
@@ -240,27 +255,59 @@ struct optab table[] = {
 { CALL,		INBREG,
 	SCON,		TANY,
 	SANY,		TLONG|TULONG|TPOINT,
-		XSL(B),	RESC1,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	calr	CL\nZB", },
 
 { UCALL,	INBREG,
 	SCON,		TANY,
 	SANY,		TLONG|TULONG|TPOINT,
-		XSL(B),	RESC1,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	calr	CL\n", },
 
 /* Indirect call (function pointer in pair), long/ptr result */
 { CALL,		INBREG,
 	SBREG,		TANY,
 	SANY,		TLONG|TULONG|TPOINT,
-		XSL(B),	RESC1,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	call	(AL)\nZB", },
 
 { UCALL,	INBREG,
 	SBREG,		TANY,
 	SANY,		TLONG|TULONG|TPOINT,
-		XSL(B),	RESC1,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	call	(AL)\n", },
+
+/*
+ * Struct-return calls (hidden-pointer ABI).  ZR pushes the address of
+ * the frame buffer reserved by myreader() as the hidden argument (its
+ * 4 bytes are included in the ZB cleanup count n_qual); the callee
+ * copies the value there and returns the buffer address in rr0, which
+ * becomes the call's result.  USTCALL needs ZB too: even with no
+ * declared arguments the hidden pointer was pushed.
+ */
+{ STCALL,	INBREG,
+	SCON,		TANY,
+	SANY,		TANY,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
+		"ZR	calr	CL\nZB", },
+
+{ USTCALL,	INBREG,
+	SCON,		TANY,
+	SANY,		TANY,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
+		"ZR	calr	CL\nZB", },
+
+{ STCALL,	INBREG,
+	SBREG,		TANY,
+	SANY,		TANY,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
+		"ZR	call	(AL)\nZB", },
+
+{ USTCALL,	INBREG,
+	SBREG,		TANY,
+	SANY,		TANY,
+		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
+		"ZR	call	(AL)\nZB", },
 
 /* Named call, for effect only (void return) */
 { CALL,		FOREFF,
@@ -288,30 +335,32 @@ struct optab table[] = {
 		0,	0,
 		"	call	(AL)\n", },
 
-/* Struct call (result by hidden pointer) */
-{ STCALL,	INAREG,
-	SCON,		TANY,
-	SANY,		TANY,
-		XSL(A),	RESC1,
-		"	calr	CL\nZB", },
-
-{ USTCALL,	INAREG,
-	SCON,		TANY,
-	SANY,		TANY,
-		XSL(A),	RESC1,
-		"	calr	CL\n", },
-
+/* Struct calls for effect only (result ignored): the hidden pointer
+ * must STILL be pushed (ZR) - the callee unconditionally writes the
+ * returned value through it - and ZB must clean it up. */
 { STCALL,	FOREFF,
 	SCON,		TANY,
 	SANY,		TANY,
 		0,	0,
-		"	calr	CL\nZB", },
+		"ZR	calr	CL\nZB", },
 
 { USTCALL,	FOREFF,
 	SCON,		TANY,
 	SANY,		TANY,
 		0,	0,
-		"	calr	CL\n", },
+		"ZR	calr	CL\nZB", },
+
+{ STCALL,	FOREFF,
+	SBREG,		TANY,
+	SANY,		TANY,
+		0,	0,
+		"ZR	call	(AL)\nZB", },
+
+{ USTCALL,	FOREFF,
+	SBREG,		TANY,
+	SANY,		TANY,
+		0,	0,
+		"ZR	call	(AL)\nZB", },
 
 /*
  * PLUS - integer addition.
@@ -787,11 +836,11 @@ struct optab table[] = {
 		0,	RDEST|RESCC,
 		"	ld	AL,AR\n", },
 
-/* word mem <- reg */
-{ ASSIGN,	FOREFF|FORCC,
+/* word mem <- reg (INAREG: the stored value stays available in AR) */
+{ ASSIGN,	FOREFF|INAREG|FORCC,
 	SNAME|SOREG,	TWORD,
 	SAREG,		TWORD,
-		0,	RESCC,
+		0,	RDEST|RESCC,
 		"	ld	AL,AR\n", },
 
 /* word mem <- const (ld dst,#imm takes IR/DA/X - no BA; a BA dest falls
@@ -816,10 +865,10 @@ struct optab table[] = {
 		"	ldl	AL,AR\n", },
 
 /* pair mem <- pair reg (long/ptr) */
-{ ASSIGN,	FOREFF,
+{ ASSIGN,	FOREFF|INBREG,
 	SNAME|SOREG,	TLONG|TULONG|TPOINT,
 	SBREG,		TLONG|TULONG|TPOINT,
-		0,	0,
+		0,	RDEST,
 		"	ldl	AL,AR\n", },
 
 /* pair mem <- const long: there is NO direct rule on purpose.  The
@@ -831,14 +880,14 @@ struct optab table[] = {
 { ASSIGN,	FOREFF|INAREG|FORCC,
 	SAREG,		TCHAR|TUCHAR,
 	SAREG|SNAME|SOREG|SCON,	TCHAR|TUCHAR,
-		0,	RDEST|RESCC,
+		NEEDS(BYTEL, BYTER),	RDEST|RESCC,
 		"	ldb	ZG,ZJ\n", },
 
 /* byte mem <- reg (src reg -> low byte) */
-{ ASSIGN,	FOREFF|FORCC,
+{ ASSIGN,	FOREFF|INAREG|FORCC,
 	SNAME|SOREG,	TCHAR|TUCHAR,
 	SAREG,		TCHAR|TUCHAR,
-		0,	RESCC,
+		NEEDS(BYTER),	RDEST|RESCC,
 		"	ldb	AL,ZJ\n", },
 
 /* byte mem <- const (ldb dst,#imm takes IR/DA/X - no BA) */
@@ -855,11 +904,15 @@ struct optab table[] = {
 		"	ldb	AL,AR\n", },
 
 /* struct assignment: block-copy via ldirb.  A1 = dest-address pair,
- * A2 = byte count; the source pointer (right) is a pair. */
+ * A2 = byte count; the source pointer (right) is a pair.  NORIGHT(RR0)
+ * keeps the source out of rr0 - it becomes an ldirb indirect base, and
+ * rr0 cannot be one.  A struct-call result coalesces with the
+ * precolored rr0 (bypassing the clregs mask), so without this the
+ * copy-out of a struct return emits "ldirb ...,(rr0)". */
 { STASG,	FOREFF|INAREG,
 	SOREG|SNAME,	TANY,
 	SBREG,		TPTRTO|TANY,
-		NEEDS(NREG(A, 1), NREG(B, 1)),	RDEST,
+		NEEDS(NREG(A, 1), NREG(B, 1), NORIGHT(RR0)),	RDEST,
 		"ZS", },
 
 /*
@@ -887,15 +940,15 @@ struct optab table[] = {
 { UMUL,		INAREG,
 	SANY,		TANY,
 	SOREG,		TCHAR,
-		XSL(A),	RESC1,
+		NEEDS(NREG(A, 1), NSL(A), BYTET),	RESC1,
 		"	ldb	ZH,AL\n	extsb	A1\n", },
 
 /* load unsigned char through pair register */
 { UMUL,		INAREG,
 	SANY,		TANY,
 	SOREG,		TUCHAR,
-		XSL(A),	RESC1,
-		"	clr	A1\n	ldb	ZH,AL\n", },
+		NEEDS(NREG(A, 1), NSL(A), BYTET),	RESC1,
+		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
 
 /*
  * Logical/comparison operators.
@@ -980,13 +1033,13 @@ struct optab table[] = {
 { OPLOG,	FORCC,
 	SAREG,			TCHAR|TUCHAR,
 	SAREG|SNAME|SCON,	TCHAR|TUCHAR,
-		0,	RESCC,
+		NEEDS(BYTEL, BYTER),	RESCC,
 		"	cpb	ZG,ZJ\n", },
 
 { OPLOG,	FORCC,
 	SAREG,	TCHAR|TUCHAR,
 	SNBA,	TCHAR|TUCHAR,
-		0,	RESCC,
+		NEEDS(BYTEL),	RESCC,
 		"	cpb	ZG,ZJ\n", },
 
 /* compare char mem vs const (immediate-compare form) */
@@ -1048,15 +1101,15 @@ struct optab table[] = {
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SOREG|SNAME,	TCHAR,
-		NAREG,	RESC1,
+		NEEDS(NREG(A, 1), BYTET),	RESC1,
 		"	ldb	ZH,AL\n	extsb	A1\n", },
 
 /* load unsigned char from mem into word register */
 { OPLTYPE,	INAREG,
 	SANY,	TANY,
 	SOREG|SNAME,	TUCHAR,
-		NAREG,	RESC1,
-		"	clr	A1\n	ldb	ZH,AL\n", },
+		NEEDS(NREG(A, 1), BYTET),	RESC1,
+		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
 
 /* load address (lda) of SOREG/SNAME into pair register */
 { OPLTYPE,	INBREG,
@@ -1151,11 +1204,12 @@ struct optab table[] = {
 		"	push	(rr14),$0\n", },
 
 /* struct argument (by-value struct copy onto stack) via ldirb.
- * A1 = scratch dest-address pair, A2 = byte count; n_left = source pair. */
+ * A1 = scratch dest-address pair, A2 = byte count; n_left = source pair.
+ * NOLEFT(RR0): the source becomes an ldirb indirect base (see STASG). */
 { STARG,	FOREFF,
 	SBREG,		TPTRTO|TANY,
 	SANY,		TSTRUCT,
-		NEEDS(NREG(A, 1), NREG(B, 1)),	0,
+		NEEDS(NREG(A, 1), NREG(B, 1), NOLEFT(RR0)),	0,
 		"ZT", },
 
 /*

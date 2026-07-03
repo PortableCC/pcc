@@ -437,20 +437,56 @@ zzzcode(NODE *p, int c)
 	case 'S':	/* struct assignment: ldirb (dest),(src),count */
 	    {
 		struct attr *ap = attr_find(p->n_ap, ATTR_P2STRUCT);
+		NODE *l = p->n_left;
 		int sz = ap->iarg(0);
 
 		/* Resources are ordered by class: A1 = word (count),
 		 * A2 = pair (dest address).  AR = source pointer (pair).
 		 * The lda-formed dest address needs its segment word
-		 * normalised before use as an ldir base. */
-		expand(p, FOREFF, "\tlda\tA2,AL\n");
-		printf("\tand\t");
-		prword(getlr(p, '2'), 0);
-		printf(",$32512\n");
+		 * normalised before use as an ldir base.
+		 *
+		 * lda has no IR mode, so a pair-based dest OREG cannot go
+		 * through "lda A2,(rrN)": at displacement 0 just copy the
+		 * pair (segment already clean); otherwise use the BA form
+		 * rrN(disp), which lda does accept. */
+		if (l->n_op == OREG && l->n_rval >= RR0) {
+			if (getlval(l) == 0) {
+				expand(p, FOREFF, "\tldl\tA2,");
+				printf("%s\n", rnames[l->n_rval]);
+			} else {
+				expand(p, FOREFF, "\tlda\tA2,");
+				printf("%s(" CONFMT ")\n",
+				    rnames[l->n_rval], getlval(l));
+				printf("\tand\t");
+				prword(getlr(p, '2'), 0);
+				printf(",$32512\n");
+			}
+		} else {
+			expand(p, FOREFF, "\tlda\tA2,AL\n");
+			printf("\tand\t");
+			prword(getlr(p, '2'), 0);
+			printf(",$32512\n");
+		}
 		printf("\tld\t");
 		expand(p, FOREFF, "A1");
 		printf(",$%d\n", sz);
 		expand(p, FOREFF, "\tldirb\t(A2),(AR),A1\n");
+	    }
+		break;
+
+	case 'R':	/* struct-return call setup: push the address of this
+			 * call's own frame buffer (assigned by myreader(),
+			 * carried in ATTR_P2_STBUF) as the hidden argument.
+			 * rr0 is free here: it is caller-saved and anything
+			 * live across the call already excludes it. */
+	    {
+		struct attr *ap = attr_find(p->n_ap, ATTR_P2_STBUF);
+
+		if (ap == NULL)
+			comperr("ZR: struct call without buffer attribute");
+		printf("\tlda\trr0," LABFMT "-%d(r13)\n", framelab, ap->iarg(0));
+		printf("\tand\tr0,$32512\n");
+		printf("\tpushl\t(rr14),rr0\n");
 	    }
 		break;
 
@@ -806,11 +842,14 @@ lastcall(NODE *p)
 	if (p->n_op != CALL && p->n_op != FORTCALL && p->n_op != STCALL &&
 	    p->n_op != UCALL && p->n_op != USTCALL)
 		return;
-	if (p->n_right == NIL)
-		return;		/* no arguments */
-	for (p = p->n_right; p->n_op == CM; p = p->n_left)
-		size += argsiz(p->n_right);
-	size += argsiz(p);
+	/* the ZR escape pushes the hidden struct-return pointer */
+	if (p->n_op == STCALL || p->n_op == USTCALL)
+		size = 4;
+	if (p->n_right != NIL) {
+		for (p = p->n_right; p->n_op == CM; p = p->n_left)
+			size += argsiz(p->n_right);
+		size += argsiz(p);
+	}
 	op->n_qual = size;
 }
 
@@ -873,9 +912,51 @@ myoptim(struct interpass *ip)
 {
 }
 
+/*
+ * Struct-return support: every STCALL/USTCALL gets its OWN buffer in
+ * the caller's frame for the returned value (its address is pushed as
+ * the hidden argument by the ZR escape).  The offset is attached to the
+ * call node as ATTR_P2_STBUF.  Buffers must be distinct per call, not
+ * shared: pass 2 pre-evaluates call-containing arguments into pointer
+ * temps before pushing any argument, so f(g(), h()) has both results
+ * live at once.  Reserved below the pass-1 autos; bumping p2autooff
+ * here (myreader runs before code generation) keeps later spill temps
+ * below them.
+ */
+static void
+findstcall(NODE *p, void *arg)
+{
+	int *offp = arg;
+	struct attr *ap;
+	int sz;
+
+	if (p->n_op != STCALL && p->n_op != USTCALL)
+		return;
+	if ((ap = attr_find(p->n_ap, ATTR_P2STRUCT)) == NULL)
+		comperr("findstcall: struct call without size attribute");
+	sz = (ap->iarg(0) + 1) & ~1;
+	*offp += sz;
+	ap = attr_new(ATTR_P2_STBUF, 1);
+	ap->iarg(0) = *offp;
+	p->n_ap = attr_add(p->n_ap, ap);
+}
+
 void
 myreader(struct interpass *ip)
 {
+	struct interpass *ip2;
+	int off = p2autooff;
+
+	DLIST_FOREACH(ip2, ip, qelem) {
+		if (ip2->type != IP_NODE)
+			continue;
+		walkf(ip2->ip_node, findstcall, &off);
+	}
+	if (off > p2autooff) {
+		p2autooff = off;
+		if (p2autooff > p2maxautooff)
+			p2maxautooff = p2autooff;
+	}
 }
 
 void

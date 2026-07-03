@@ -105,50 +105,89 @@ defloc(struct symtab *sp)
 }
 
 /*
- * End-of-function code.
- * For struct/union return, Coherent uses a hidden first argument:
- * the caller passes a pointer to the result area, and the callee
- * copies the return value there, then returns the pointer in rr0.
- * PCC handles the caller side automatically; here we just need to
- * copy the local struct to the hidden pointer and load rr0 with it.
+ * Struct/union return, hidden-pointer ABI (invented here: the Coherent
+ * K&R compiler has no struct-by-value at all, so this only has to be
+ * self-consistent).  The caller reserves a buffer in its frame and
+ * pushes its address LAST, so it sits at the first-argument slot
+ * (+ARGINIT); all declared arguments are one pointer higher (bfcode
+ * shifts them).  On "return expr", clocal(FORCE) puts &expr in rr0;
+ * efcode copies *rr0 into the caller's buffer and returns the buffer
+ * address in rr0.
  */
+int strtemp;	/* pass1 temp holding the incoming hidden pointer */
+
 void
 efcode(void)
 {
+	extern NODE *cftnod;
 	NODE *p, *q;
+	TWORD t;
+	int i;
 
 	if (cftnsp->stype != STRTY+FTN && cftnsp->stype != UNIONTY+FTN)
 		return;
+	t = DECREF(cftnsp->stype);
 
-	/*
-	 * The hidden pointer arrives as the first argument.
-	 * Build: *hidden_ptr = return_value; rr0 = hidden_ptr.
-	 */
-	q = block(REG, NIL, NIL, INCREF(cftnsp->stype - FTN),
-	    cftnsp->sdf, cftnsp->sap);
-	slval(q, 0);
-	regno(q) = RR0;
+	if (cftnod != NIL) {
+		/* *(hidden pointer) = *(rr0): copy the returned value out.
+		 * If the function never executed "return expr" (cftnod
+		 * unset), rr0 is garbage - skip the copy.
+		 *
+		 * rr0 must first move into a temp: rr0 cannot be an
+		 * indirect base on the Z8001, and a literal REG rr0 node
+		 * as the STASG source would end up as "ldirb ...,(rr0)". */
+		q = block(REG, NIL, NIL, INCREF(t),
+		    cftnsp->sdf, cftnsp->sap);
+		slval(q, 0);
+		regno(q) = RR0;
+		p = tempnode(0, INCREF(t), cftnsp->sdf, cftnsp->sap);
+		i = regno(p);
+		ecomp(buildtree(ASSIGN, p, q));
 
-	p = buildtree(UMUL, tcopy(q), NIL);
-	p = buildtree(ASSIGN, p,
-	    block(REG, NIL, NIL, cftnsp->stype - FTN,
-	        cftnsp->sdf, cftnsp->sap));
-	ecomp(p);
+		q = tempnode(i, INCREF(t), cftnsp->sdf, cftnsp->sap);
+		q = buildtree(UMUL, q, NIL);
+		p = tempnode(strtemp, INCREF(t), cftnsp->sdf, cftnsp->sap);
+		p = buildtree(UMUL, p, NIL);
+		ecomp(buildtree(ASSIGN, p, q));
+	}
 
-	/* return the pointer in rr0 (already there from the hidden arg) */
+	/* return the caller's buffer address in rr0 */
+	p = block(REG, NIL, NIL, INCREF(t), cftnsp->sdf, cftnsp->sap);
+	slval(p, 0);
+	regno(p) = RR0;
+	q = tempnode(strtemp, INCREF(t), cftnsp->sdf, cftnsp->sap);
+	ecomp(buildtree(ASSIGN, p, q));
 }
 
 /*
  * Beginning-of-function code.
- * Z8001 ABI is pure stack-based (no argument registers), so there
- * is nothing to do here unless we are optimising args into temps.
+ * Z8001 ABI is pure stack-based (no argument registers), so apart from
+ * the struct-return hidden pointer there is nothing to do here unless
+ * we are optimising args into temps.
  */
 void
 bfcode(struct symtab **sp, int cnt)
 {
 	struct symtab *sp2;
-	NODE *n;
+	NODE *n, *p;
 	int i;
+
+	if (cftnsp->stype == STRTY+FTN || cftnsp->stype == UNIONTY+FTN) {
+		/*
+		 * The hidden pointer occupies the first-argument slot, so
+		 * every declared argument really sits one pointer (32 bits)
+		 * higher than pass 1 assigned it.  Fix the offsets, then
+		 * save the hidden pointer in a temp for efcode().
+		 */
+		for (i = 0; i < cnt; i++)
+			sp[i]->soffset += SZPOINT(CHAR);
+		n = tempnode(0, INCREF(CHAR), 0, 0);
+		p = block(OREG, NIL, NIL, INCREF(CHAR), 0, 0);
+		slval(p, ARGINIT/SZCHAR);
+		regno(p) = FPREG;
+		strtemp = regno(n);
+		ecomp(buildtree(ASSIGN, n, p));
+	}
 
 	if (xtemps == 0)
 		return;
