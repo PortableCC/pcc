@@ -207,10 +207,18 @@ bfcode(struct symtab **sp, int cnt)
 
 /*
  * Called just before compiler exits.
+ * If the unit used floating point, emit an undefined reference to
+ * _dtoa_ (defined in libc's crt/dtefg.o next to the real _dtefg
+ * printf formatter) so the linker picks the real FP formatter over
+ * the "No floating point!" dummy in gen/sdtoa.o (see zfpused).
  */
 void
 ejobcode(int flag)
 {
+	extern int zfpused;
+
+	if (zfpused)
+		printf("\t.globl\t_dtoa_\n");
 }
 
 /*

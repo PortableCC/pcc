@@ -30,10 +30,11 @@
  * Register model:
  *   SAREG (class A) - 16-bit word registers r0..r12
  *   SBREG (class B) - 32-bit register pairs rr0,rr2,rr4,rr6,rr8,rr10
+ *   SCREG (class C) - 64-bit register quads rq0,rq4,rq8 (doubles)
  *
  * Key calling convention facts:
  *   - Pure stack, right-to-left push, caller cleans
- *   - int result in r1; long/ptr result in rr0 (r0:r1)
+ *   - int result in r1; long/ptr/float result in rr0; double in rq0
  *   - Stack pointer is the 32-bit pair rr14 (r14:r15)
  *   - Frame pointer is r13
  *
@@ -53,6 +54,8 @@
 /* Type groupings */
 #define TWORD	(TINT|TUNSIGNED)
 #define TLNG	(TLONG|TULONG)
+#define TFLT	TFLOAT
+#define TDBL	(TDOUBLE|TLDOUBLE)
 
 /* Convenience NEEDS shorthands (new-style) */
 #define NAREG		NEEDS(NREG(A, 1))
@@ -98,12 +101,16 @@ struct optab table[] = {
 		XSL(B),	RESC1,
 		"	ldl	A1,AL\n", },
 
-/* word reg to pointer pair (zero-extend) */
+/* word reg to pointer pair: value into the low (offset) word, clear
+ * the high (segment) word.  (ZM names the high word explicitly; a bare
+ * "clr A1" would print the pair name, which Coherent as encodes as the
+ * high word by symbol-value luck - and the old "ld A1,AL; clr U1" form
+ * had it backwards: value into the segment, offset cleared.) */
 { PCONV,	INBREG,
 	SAREG,		TWORD,
 	SANY,		TPOINT,
 		XSL(B),	RESC1,
-		"	ld	A1,AL\n	clr	U1\n", },
+		"	ld	U1,AL\n	clr	ZM\n", },
 
 /*
  * SCONVs - scalar type conversions.
@@ -130,33 +137,34 @@ struct optab table[] = {
 		0,	RLEFT,
 		"", },
 
-/* int -> long: sign-extend word into pair */
+/* int -> (u)long: sign-extend word into pair (the SOURCE type picks
+ * sign- vs zero-extension; the result signedness is bit-identical) */
 { SCONV,	INBREG,
 	SAREG,		TINT,
-	SANY,		TLONG,
+	SANY,		TLNG,
 		XSL(B),	RESC1,
 		"	ld	U1,AL\n	exts	A1\n", },
 
-/* unsigned int -> unsigned long: zero-extend word into pair */
+/* unsigned int -> (u)long: zero-extend word into pair */
 { SCONV,	INBREG,
 	SAREG,		TUNSIGNED,
-	SANY,		TULONG,
+	SANY,		TLNG,
 		XSL(B),	RESC1,
-		"	ld	U1,AL\n	clr	A1\n", },
+		"	ld	U1,AL\n	clr	ZM\n", },
 
-/* int/short from memory -> long */
+/* int/short from memory -> (u)long */
 { SCONV,	INBREG,
 	SOREG|SNAME,	TINT|TSHORT,
-	SANY,		TLONG,
+	SANY,		TLNG,
 		NBREG,	RESC1,
 		"	ld	U1,AL\n	exts	A1\n", },
 
-/* unsigned/ushort from memory -> unsigned long */
+/* unsigned/ushort from memory -> (u)long */
 { SCONV,	INBREG,
 	SOREG|SNAME,	TUNSIGNED|TUSHORT,
-	SANY,		TULONG,
+	SANY,		TLNG,
 		NBREG,	RESC1,
-		"	ld	U1,AL\n	clr	A1\n", },
+		"	ld	U1,AL\n	clr	ZM\n", },
 
 /* long/ptr pair -> int: take low word of pair */
 { SCONV,	INAREG,
@@ -193,19 +201,19 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), BYTET),	RESC1,
 		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
 
-/* char -> long */
+/* char -> (u)long */
 { SCONV,	INBREG,
 	SAREG,		TCHAR,
-	SANY,		TLONG,
+	SANY,		TLNG,
 		XSL(B),	RESC1,
 		"	extsb	AL\n	ld	U1,AL\n	exts	A1\n", },
 
-/* unsigned char -> unsigned long */
+/* unsigned char -> (u)long */
 { SCONV,	INBREG,
 	SAREG,		TUCHAR,
-	SANY,		TULONG,
+	SANY,		TLNG,
 		XSL(B),	RESC1,
-		"	and	AL,$0xff\n	ld	U1,AL\n	clr	A1\n", },
+		"	and	AL,$0xff\n	ld	U1,AL\n	clr	ZM\n", },
 
 /* int -> char: keep low byte (already in register) */
 { SCONV,	INAREG,
@@ -213,6 +221,43 @@ struct optab table[] = {
 	SANY,		TCHAR|TUCHAR,
 		0,	RLEFT,
 		"", },
+
+/*
+ * Floating-point conversions.  Integer<->fp conversions are rewritten
+ * into runtime calls by fixfloatops() in local2.c; only the same-size
+ * no-ops and the register-based float<->double pack helpers remain as
+ * table rules.  dfpack takes a float in rr0 and returns a double in
+ * rq0 (clobbering r5); fdpack takes rq0 and returns rr0 (its scratch,
+ * r2/r3, lies inside the consumed rq0).
+ */
+
+/* double <-> double: no-op */
+{ SCONV,	INCREG,
+	SCREG,		TDBL,
+	SANY,		TDBL,
+		0,	RLEFT,
+		"", },
+
+/* float <-> float: no-op */
+{ SCONV,	INBREG,
+	SBREG,		TFLT,
+	SANY,		TFLT,
+		0,	RLEFT,
+		"", },
+
+/* float -> double: dfpack, rr0 -> rq0 */
+{ SCONV,	INCREG,
+	SBREG,		TFLT,
+	SANY,		TDBL,
+		NEEDS(NREG(C, 1), NLEFT(RR0), NRES(RQ0), NEVER(R5)),	RESC1,
+		"	calr	dfpack\n", },
+
+/* double -> float: fdpack, rq0 -> rr0 */
+{ SCONV,	INBREG,
+	SCREG,		TDBL,
+	SANY,		TFLT,
+		NEEDS(NREG(B, 1), NLEFT(RQ0), NRES(RR0)),	RESC1,
+		"	calr	fdpack\n", },
 
 /*
  * Subroutine calls.
@@ -251,30 +296,56 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	call	(AL)\n", },
 
-/* Named call, result is long/ptr in SBREG */
+/* Named call, result is long/ptr/float in SBREG */
 { CALL,		INBREG,
 	SCON,		TANY,
-	SANY,		TLONG|TULONG|TPOINT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
 		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	calr	CL\nZB", },
 
 { UCALL,	INBREG,
 	SCON,		TANY,
-	SANY,		TLONG|TULONG|TPOINT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
 		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	calr	CL\n", },
 
-/* Indirect call (function pointer in pair), long/ptr result */
+/* Indirect call (function pointer in pair), long/ptr/float result */
 { CALL,		INBREG,
 	SBREG,		TANY,
-	SANY,		TLONG|TULONG|TPOINT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
 		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
 		"	call	(AL)\nZB", },
 
 { UCALL,	INBREG,
 	SBREG,		TANY,
-	SANY,		TLONG|TULONG|TPOINT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
 		NEEDS(NREG(B, 1), NSL(B), NEVER(RR0)),	RESC1,
+		"	call	(AL)\n", },
+
+/* Call with a double result in a quad (rq0 per the native convention;
+ * doubles are never indirect bases, so coalescing with rq0 is fine) */
+{ CALL,		INCREG,
+	SCON,		TANY,
+	SANY,		TDBL,
+		NEEDS(NREG(C, 1), NSL(C)),	RESC1,
+		"	calr	CL\nZB", },
+
+{ UCALL,	INCREG,
+	SCON,		TANY,
+	SANY,		TDBL,
+		NEEDS(NREG(C, 1), NSL(C)),	RESC1,
+		"	calr	CL\n", },
+
+{ CALL,		INCREG,
+	SBREG,		TANY,
+	SANY,		TDBL,
+		NEEDS(NREG(C, 1), NSL(C)),	RESC1,
+		"	call	(AL)\nZB", },
+
+{ UCALL,	INCREG,
+	SBREG,		TANY,
+	SANY,		TDBL,
+		NEEDS(NREG(C, 1), NSL(C)),	RESC1,
 		"	call	(AL)\n", },
 
 /*
@@ -857,19 +928,34 @@ struct optab table[] = {
 		0,	0,
 		"	ld	AL,AR\n", },
 
-/* pair reg <- pair reg or mem (long/ptr) */
+/* pair reg <- pair reg or mem (long/ptr/float) */
 { ASSIGN,	FOREFF|INBREG,
-	SBREG,		TLONG|TULONG|TPOINT,
-	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG|TPOINT,
+	SBREG,		TLONG|TULONG|TPOINT|TFLT,
+	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG|TPOINT|TFLT,
 		0,	RDEST,
 		"	ldl	AL,AR\n", },
 
-/* pair mem <- pair reg (long/ptr) */
+/* pair mem <- pair reg (long/ptr/float) */
 { ASSIGN,	FOREFF|INBREG,
-	SNAME|SOREG,	TLONG|TULONG|TPOINT,
-	SBREG,		TLONG|TULONG|TPOINT,
+	SNAME|SOREG,	TLONG|TULONG|TPOINT|TFLT,
+	SBREG,		TLONG|TULONG|TPOINT|TFLT,
 		0,	RDEST,
 		"	ldl	AL,AR\n", },
+
+/* double: quad reg <- quad reg or mem, and mem <- quad reg.  ZD picks
+ * ldm for frame/name memory and two ldl (IR/BA) for pair-based memory,
+ * ordering the halves so a base pair inside the target quad survives. */
+{ ASSIGN,	FOREFF|INCREG,
+	SCREG,		TDBL,
+	SCREG|SNAME|SOREG,	TDBL,
+		0,	RDEST,
+		"ZD", },
+
+{ ASSIGN,	FOREFF|INCREG,
+	SNAME|SOREG,	TDBL,
+	SCREG,		TDBL,
+		0,	RDEST,
+		"ZD", },
 
 /* pair mem <- const long: there is NO direct rule on purpose.  The
  * hardware has no "ldl mem,#imm" form (Coherent as mchld: only word/byte
@@ -929,12 +1015,22 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	ld	A1,AL\n", },
 
-/* load long/ptr through pair register */
+/* load long/ptr/float through pair register */
 { UMUL,		INBREG,
 	SANY,		TANY,
-	SOREG,		TLONG|TULONG|TPOINT,
+	SOREG,		TLONG|TULONG|TPOINT|TFLT,
 		XSL(B),	RESC1,
 		"	ldl	A1,AL\n", },
+
+/* load double through pair register.  No NSL: the result quad spans
+ * two pairs and ZE's ordered two-ldl only protects the base pair's own
+ * half; keeping the temp disjoint from the left operand is the safe
+ * default (the base may also be a regw-less OREG). */
+{ UMUL,		INCREG,
+	SANY,		TANY,
+	SOREG,		TDBL,
+		NEEDS(NREG(C, 1)),	RESC1,
+		"ZE", },
 
 /* load signed char through pair register */
 { UMUL,		INAREG,
@@ -1083,12 +1179,21 @@ struct optab table[] = {
 		NAREG,	RESC1,
 		"	ld	A1,AL\n", },
 
-/* load long/ptr constant/name/oreg into pair register */
+/* load long/ptr/float constant/name/oreg into pair register */
 { OPLTYPE,	INBREG,
 	SANY,	TANY,
-	SBREG|SCON|SOREG|SNAME,	TLONG|TULONG|TPOINT,
+	SBREG|SCON|SOREG|SNAME,	TLONG|TULONG|TPOINT|TFLT,
 		NBREG,	RESC1,
 		"	ldl	A1,AL\n", },
+
+/* load double from memory (or move a quad) into a quad register.
+ * No double constants reach pass 2: myp2tree materializes FCONs into
+ * the data segment as NAMEs. */
+{ OPLTYPE,	INCREG,
+	SANY,	TANY,
+	SCREG|SOREG|SNAME,	TDBL,
+		NEEDS(NREG(C, 1)),	RESC1,
+		"ZE", },
 
 /* char already in a register, or a char constant: copy as a word */
 { OPLTYPE,	INAREG,
@@ -1134,6 +1239,20 @@ struct optab table[] = {
 		0,	RLEFT,
 		"ZN", },
 
+/* fp negation is an inline sign-bit flip on the high word (native:
+ * "xor r0,$-32768" in modf.s), not a runtime call */
+{ UMINUS,	INCREG|FOREFF,
+	SCREG,	TDBL,
+	SANY,	TANY,
+		0,	RLEFT,
+		"	xor	ZW,$-32768\n", },
+
+{ UMINUS,	INBREG|FOREFF,
+	SBREG,	TFLT,
+	SANY,	TANY,
+		0,	RLEFT,
+		"	xor	ZW,$-32768\n", },
+
 /*
  * COMPL - bitwise complement.
  */
@@ -1175,19 +1294,35 @@ struct optab table[] = {
 		NAREG,	RNULL,
 		"	ld	A1,AL\n	push	(rr14),A1\n", },
 
-/* push long/ptr pair register */
+/* push long/ptr/float pair register */
 { FUNARG,	FOREFF,
-	SBREG,		TLONG|TULONG|TPOINT,
-	SANY,		TLONG|TULONG|TPOINT,
+	SBREG,		TLONG|TULONG|TPOINT|TFLT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
 		0,	RNULL,
 		"	pushl	(rr14),AL\n", },
 
-/* push long/ptr from memory or constant */
+/* push long/ptr/float from memory or constant */
 { FUNARG,	FOREFF,
-	SCON|SNAME|SOREG,	TLONG|TULONG|TPOINT,
-	SANY,			TLONG|TULONG|TPOINT,
+	SCON|SNAME|SOREG,	TLONG|TULONG|TPOINT|TFLT,
+	SANY,			TLONG|TULONG|TPOINT|TFLT,
 		NBREG,	RNULL,
 		"	ldl	A1,AL\n	pushl	(rr14),A1\n", },
+
+/* push a double (8 bytes): low pair first so the sign+exponent word
+ * lands at the lower address (native: "pushl rr2; pushl rr0").  Name
+ * and frame memory push directly (pushl src is R/IM/IR/DA/X - no BA,
+ * so pair-based OREGs go through a quad register instead). */
+{ FUNARG,	FOREFF,
+	SCREG,		TDBL,
+	SANY,		TDBL,
+		0,	RNULL,
+		"ZP", },
+
+{ FUNARG,	FOREFF,
+	SNAME|SFRAME,	TDBL,
+	SANY,		TDBL,
+		0,	RNULL,
+		"ZP", },
 
 /* push char (promoted to word) */
 { FUNARG,	FOREFF,

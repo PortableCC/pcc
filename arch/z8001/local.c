@@ -57,6 +57,16 @@
  *   - Locals:  negative OREG offsets from R13  (AUTOINIT=0)
  *   - Params:  positive OREG offsets from R13  (ARGINIT=32 bits = 4 bytes)
  */
+/*
+ * Set when the compilation unit uses any floating point.  Coherent's
+ * libc has two definitions of the printf FP formatter _dtefg: the real
+ * one in crt/dtefg.o (which also defines _dtoa/ecvt/fcvt) and a dummy
+ * in gen/sdtoa.o that aborts with "No floating point!" so non-FP
+ * programs stay small.  ejobcode() emits an undefined reference to
+ * _dtoa_ so the linker pulls the real module in first.
+ */
+int zfpused;
+
 NODE *
 clocal(NODE *p)
 {
@@ -64,6 +74,10 @@ clocal(NODE *p)
 	NODE *l;
 	int o;
 	TWORD m;
+
+	m = p->n_type;
+	if (m == FLOAT || m == DOUBLE || m == LDOUBLE)
+		zfpused = 1;
 
 	switch (o = p->n_op) {
 
@@ -237,7 +251,9 @@ exname(char *p)
  *
  * On Z8001: char, short, int fit in a word register (SAREG).
  * long, float, and pointers fit in a pair register (SBREG).
- * double and long long require 4 word registers — not supported.
+ * double lives in a quad (SCREG) transiently, but with only 3 quads and
+ * every FP operation being a helper call, register-resident doubles buy
+ * nothing: keep them memory-resident (matches the native compiler).
  */
 int
 cisreg(TWORD t)
@@ -257,11 +273,33 @@ cisreg(TWORD t)
 /*
  * ninval: emit an initializer for a data item.
  * Returns 1 if handled here, 0 to let the generic code handle it.
+ *
+ * Floating-point values are done here: the generic inval() emits them
+ * as astypnames[INT] units assuming soft_toush() returns SZINT-sized
+ * chunks, but it returns uint32_t chunks (least significant first) -
+ * on a 16-bit-int target that prints 32-bit values as ".word" in the
+ * wrong positions.  Emit big-endian 16-bit words explicitly.
  */
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	return 0;	/* let generic inval() handle all types */
+#ifndef LANG_CXX	/* n_scon is a C-frontend node field */
+	TWORD t = p->n_type;
+	uint32_t *ufp;
+	int nbits, i;
+
+	if (t != FLOAT && t != DOUBLE && t != LDOUBLE)
+		return 0;	/* generic inval() handles integers fine */
+
+	ufp = soft_toush(p->n_scon, t, &nbits);
+	for (i = nbits/32 - 1; i >= 0; i--) {
+		printf("\t.word\t%u\n", (unsigned)((ufp[i] >> 16) & 0xffff));
+		printf("\t.word\t%u\n", (unsigned)(ufp[i] & 0xffff));
+	}
+	return 1;
+#else
+	return 0;
+#endif
 }
 
 /*
@@ -291,14 +329,19 @@ myp2tree(NODE *p)
 
 	sp = isinlining ? permalloc(sizeof(struct symtab))
 	                : tmpalloc(sizeof(struct symtab));
+	/*
+	 * Zero the whole struct: the "#define sap sss" compat macro above
+	 * makes the real attribute-list field unnameable here, and leaving
+	 * it as tmpalloc garbage sends locctr()'s attr_find() down a wild
+	 * pointer (crashed layout-dependently on the first FCON in any
+	 * function after one containing FP helper calls).
+	 */
+	memset(sp, 0, sizeof(struct symtab));
 	sp->sclass  = STATIC;
-	sp->sap     = 0;
 	sp->slevel  = 1;		/* fake numeric label */
 	sp->soffset = getlab();
-	sp->sflags  = 0;
 	sp->stype   = p->n_type;
 	sp->squal   = (CON >> TSHIFT);
-	sp->sname   = NULL;
 
 	locctr(DATA, sp);
 	defloc(sp);

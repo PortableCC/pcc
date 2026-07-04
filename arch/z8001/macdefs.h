@@ -145,6 +145,11 @@ typedef long long OFFSZ;
  *   char/short/int  -> 1
  *   long/float/ptr  -> 2  (register pair)
  *   double/longlong -> 4  (register quad)
+ *
+ * A float value in registers is the raw 32-bit IEEE bit pattern in a
+ * pair; all float ARITHMETIC is done in double via the runtime helpers
+ * (K&R style, matching the native compiler, which has no float helpers
+ * at all - see fixfloatops() in local2.c).
  */
 /* STRTY/UNIONTY count as 2: a struct value is only ever "in registers"
  * as the pointer holding its address (hidden-pointer return ABI), so
@@ -165,6 +170,8 @@ typedef long long OFFSZ;
  * Register classes:
  *   A (SAREG) - 16-bit word registers: r0-r12
  *   B (SBREG) - 32-bit register pairs: rr0,rr2,rr4,rr6,rr8,rr10
+ *   C (SCREG) - 64-bit register quads: rq0,rq4,rq8 (doubles; native
+ *               soft-FP convention keeps a double value in rq0)
  */
 #define	R0	0	/* scratch, low half of rr0, return word (int) */
 #define	R1	1	/* scratch, high half of rr0, return value (int) */
@@ -190,7 +197,11 @@ typedef long long OFFSZ;
 #define	RR8	20	/* r8:r9  - callee-saved pair */
 #define	RR10	21	/* r10:r11 - callee-saved pair */
 
-#define	MAXREGS	22
+#define	RQ0	22	/* r0-r3   - scratch quad, return value (double) */
+#define	RQ4	23	/* r4-r7   - scratch quad (r6/r7 saved when used) */
+#define	RQ8	24	/* r8-r11  - callee-saved quad */
+
+#define	MAXREGS	25
 
 /*
  * RSTATUS: register class membership and caller/callee-saved flags.
@@ -219,43 +230,51 @@ typedef long long OFFSZ;
 	SBREG|TEMPREG,	/* rr4  */ \
 	SBREG,		/* rr6  - preserved via its words r6/r7  */ \
 	SBREG,		/* rr8  - preserved via its words r8/r9  */ \
-	SBREG,		/* rr10 - preserved via its words r10/r11 */
+	SBREG,		/* rr10 - preserved via its words r10/r11 */ \
+	SCREG|TEMPREG,	/* rq0  - caller-saved, double RETREG */ \
+	SCREG|TEMPREG,	/* rq4  - r6/r7 half saved by prologue when used */ \
+	SCREG,		/* rq8  - preserved via its words r8-r11 */
 
 /*
  * ROVERLAP: which other registers each register aliases.
- * A pair RRn aliases the two word registers Rn and R(n+1).
+ * A pair RRn aliases the two word registers Rn and R(n+1); a quad RQn
+ * aliases four words and two pairs.
  */
 #define	ROVERLAP \
-	{ RR0,  -1 },		/* r0  */ \
-	{ RR0,  -1 },		/* r1  */ \
-	{ RR2,  -1 },		/* r2  */ \
-	{ RR2,  -1 },		/* r3  */ \
-	{ RR4,  -1 },		/* r4  */ \
-	{ RR4,  -1 },		/* r5  */ \
-	{ RR6,  -1 },		/* r6  */ \
-	{ RR6,  -1 },		/* r7  */ \
-	{ RR8,  -1 },		/* r8  */ \
-	{ RR8,  -1 },		/* r9  */ \
-	{ RR10, -1 },		/* r10 */ \
-	{ RR10, -1 },		/* r11 */ \
+	{ RR0,  RQ0, -1 },	/* r0  */ \
+	{ RR0,  RQ0, -1 },	/* r1  */ \
+	{ RR2,  RQ0, -1 },	/* r2  */ \
+	{ RR2,  RQ0, -1 },	/* r3  */ \
+	{ RR4,  RQ4, -1 },	/* r4  */ \
+	{ RR4,  RQ4, -1 },	/* r5  */ \
+	{ RR6,  RQ4, -1 },	/* r6  */ \
+	{ RR6,  RQ4, -1 },	/* r7  */ \
+	{ RR8,  RQ8, -1 },	/* r8  */ \
+	{ RR8,  RQ8, -1 },	/* r9  */ \
+	{ RR10, RQ8, -1 },	/* r10 */ \
+	{ RR10, RQ8, -1 },	/* r11 */ \
 	{ -1 },			/* r12 - no pair */ \
 	{ -1 },			/* r13 - reserved */ \
 	{ -1 },			/* r14 - reserved */ \
 	{ -1 },			/* r15 - reserved */ \
-	{ R0,  R1,  -1 },	/* rr0  */ \
-	{ R2,  R3,  -1 },	/* rr2  */ \
-	{ R4,  R5,  -1 },	/* rr4  */ \
-	{ R6,  R7,  -1 },	/* rr6  */ \
-	{ R8,  R9,  -1 },	/* rr8  */ \
-	{ R10, R11, -1 },	/* rr10 */
+	{ R0,  R1,  RQ0, -1 },	/* rr0  */ \
+	{ R2,  R3,  RQ0, -1 },	/* rr2  */ \
+	{ R4,  R5,  RQ4, -1 },	/* rr4  */ \
+	{ R6,  R7,  RQ4, -1 },	/* rr6  */ \
+	{ R8,  R9,  RQ8, -1 },	/* rr8  */ \
+	{ R10, R11, RQ8, -1 },	/* rr10 */ \
+	{ R0, R1, R2, R3, RR0, RR2, -1 },	/* rq0 */ \
+	{ R4, R5, R6, R7, RR4, RR6, -1 },	/* rq4 */ \
+	{ R8, R9, R10, R11, RR8, RR10, -1 },	/* rq8 */
 
 /* Return the register class for a node's type */
-#define PCLASS(p) (szty((p)->n_type) == 2 ? SBREG : SAREG)
+#define PCLASS(p) (szty((p)->n_type) == 4 ? SCREG : \
+		   szty((p)->n_type) == 2 ? SBREG : SAREG)
 
-#define	NUMCLASS	2	/* two register classes: A (word) and B (pair) */
+#define	NUMCLASS	3	/* classes: A (word), B (pair), C (quad) */
 
 int COLORMAP(int c, int *r);
-#define	GCLASS(x)	((x) < 16 ? CLASSA : CLASSB)
+#define	GCLASS(x)	((x) < 16 ? CLASSA : (x) < 22 ? CLASSB : CLASSC)
 #define DECRA(x,y)	(((x) >> ((y)*5)) & 31)	/* decode register from n_reg */
 #define	ENCRD(x)	(x)			/* encode dest register */
 #define ENCRA1(x)	((x) << 5)
@@ -263,11 +282,14 @@ int COLORMAP(int c, int *r);
 #define ENCRA(x,y)	((x) << (5+(y)*5))	/* encode source register */
 
 /*
- * Return register for each type:
+ * Return register for each type (matches the native Coherent compiler:
+ * factor.s reads int results from r1, long results from rr0, and double
+ * results from rq0; the FP runtime's ifix returns int in r1 too):
  *   int/short/char  -> r1
  *   long/ptr/float  -> rr0 (r0:r1)
+ *   double          -> rq0 (r0-r3)
  */
-#define	RETREG(x)	(szty(x) == 2 ? RR0 : R1)
+#define	RETREG(x)	(szty(x) == 4 ? RQ0 : szty(x) == 2 ? RR0 : R1)
 
 #define FPREG	R13	/* frame pointer */
 #define STKREG	R15	/* stack pointer (low word of rr14) */

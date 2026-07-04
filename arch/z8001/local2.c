@@ -68,15 +68,35 @@ void mygenregs(struct interpass *ip);
 
 /*
  * Register names indexed by PCC register number.
- * r0-r15 are 16-bit word registers; rr0,rr2,...,rr10 are 32-bit pairs.
- * Indices: 0-15 = r0-r15, 16=rr0, 17=rr2, 18=rr4, 19=rr6, 20=rr8, 21=rr10.
+ * r0-r15 are 16-bit word registers; rr0,rr2,...,rr10 are 32-bit pairs;
+ * rq0,rq4,rq8 are 64-bit quads (doubles).
+ * Indices: 0-15 = r0-r15, 16=rr0 .. 21=rr10, 22=rq0, 23=rq4, 24=rq8.
  */
 char *rnames[] = {
 	"r0",  "r1",  "r2",  "r3",  "r4",  "r5",
 	"r6",  "r7",  "r8",  "r9",  "r10", "r11",
 	"r12", "r13", "r14", "r15",
-	"rr0", "rr2", "rr4", "rr6", "rr8", "rr10"
+	"rr0", "rr2", "rr4", "rr6", "rr8", "rr10",
+	"rq0", "rq4", "rq8"
 };
+
+/*
+ * The component pieces of a quad register: qword(q) is the index of its
+ * first (most significant) word register, qpair(q, lo) names its high
+ * (lo=0) or low (lo=1) pair.  Big-endian: the high pair/word holds the
+ * IEEE sign+exponent.
+ */
+static int
+qword(int q)
+{
+	return (q - RQ0) * 4;
+}
+
+static char *
+qpair(int q, int lo)
+{
+	return rnames[RR0 + (q - RQ0) * 2 + (lo ? 1 : 0)];
+}
 
 void
 deflab(int label)
@@ -127,6 +147,12 @@ firstsavereg(void)
 				firstsave = base;
 		}
 	}
+	/* A used quad clobbers its callee-saved words: rq4 = r6/r7,
+	 * rq8 = r8-r11.  (rq0 is all scratch.) */
+	if (TESTBIT(p2env.p_regs, RQ4) && R6 < firstsave)
+		firstsave = R6;
+	if (TESTBIT(p2env.p_regs, RQ8) && R8 < firstsave)
+		firstsave = R8;
 	return firstsave;
 }
 
@@ -320,6 +346,81 @@ prword(NODE *p, int lo)
 }
 
 /*
+ * prmem: print a memory operand displaced by "plus" bytes.
+ * Used for the second halves of multi-word accesses; adrput picks the
+ * right encoding (X for frame, DA for names, IR/BA for pair bases).
+ */
+static void
+prmem(NODE *p, CONSZ plus)
+{
+	setlval(p, getlval(p) + plus);
+	adrput(stdout, p);
+	setlval(p, getlval(p) - plus);
+}
+
+/*
+ * quadmem: move a quad register to/from memory (a 64-bit double).
+ *
+ * Memory forms and their instructions:
+ *   NAME (DA) or frame OREG r13 (X):  single "ldm rN,mem,$4" - the form
+ *     the native compiler uses (ldm's operand may be IR/DA/X, never BA).
+ *   pair-base OREG: two ldl using IR/BA ("(rrN)" / "rrN(d)").  ldm is
+ *     avoided here even at displacement 0: if the base pair lies inside
+ *     the target quad, ldm would overwrite the base mid-transfer.  For
+ *     the two-ldl load the half containing the base is loaded LAST; its
+ *     own ldl is safe because the destination write follows the address
+ *     read.  (The register allocator cannot exclude this aliasing: an
+ *     OREG base has no regw node, so addedge_r never sees it.)
+ */
+static void
+quadmem(NODE *mem, int q, int store)
+{
+	int base, hi;
+
+	if (mem->n_op == OREG && mem->n_rval >= RR0) {
+		base = mem->n_rval;
+		/* which half's pair equals the base? -1 if none */
+		hi = (RR0 + (q - RQ0) * 2 == base) ? 0 :
+		     (RR0 + (q - RQ0) * 2 + 1 == base) ? 1 : -1;
+		if (store && hi >= 0)
+			comperr("quadmem: store base %s inside quad %s",
+			    rnames[base], rnames[q]);
+		if (store) {
+			printf("\tldl\t");
+			prmem(mem, 0);
+			printf(",%s\n\tldl\t", qpair(q, 0));
+			prmem(mem, 4);
+			printf(",%s\n", qpair(q, 1));
+		} else if (hi == 0) {
+			/* base is the high pair: load low half first */
+			printf("\tldl\t%s,", qpair(q, 1));
+			prmem(mem, 4);
+			printf("\n\tldl\t%s,", qpair(q, 0));
+			prmem(mem, 0);
+			printf("\n");
+		} else {
+			printf("\tldl\t%s,", qpair(q, 0));
+			prmem(mem, 0);
+			printf("\n\tldl\t%s,", qpair(q, 1));
+			prmem(mem, 4);
+			printf("\n");
+		}
+	} else if (mem->n_op == NAME || (mem->n_op == OREG &&
+	    mem->n_rval == R13)) {
+		printf("\tldm\t");
+		if (store) {
+			prmem(mem, 0);
+			printf(",r%d,$4\n", qword(q));
+		} else {
+			printf("r%d,", qword(q));
+			prmem(mem, 0);
+			printf(",$4\n");
+		}
+	} else
+		comperr("quadmem: bad mem op %d", mem->n_op);
+}
+
+/*
  * zzzcode: handle special escape sequences in instruction templates.
  *
  *   ZB  stack cleanup after call: add/inc r15, $n_qual
@@ -331,6 +432,10 @@ prword(NODE *p, int lo)
  *   ZM  high (segment) word of result pair, for the post-lda segment mask
  *   ZS  struct assignment: ldirb block copy
  *   ZT  struct argument: allocate stack slot + ldirb block copy
+ *   ZD  double assignment: quad reg <-> quad reg/memory
+ *   ZE  double load: memory/quad reg -> result quad A1
+ *   ZP  double argument push: two pushl (low pair first)
+ *   ZW  high (sign+exponent) word of the left operand's quad/pair
  */
 void
 zzzcode(NODE *p, int c)
@@ -487,6 +592,78 @@ zzzcode(NODE *p, int c)
 		printf("\tlda\trr0," LABFMT "-%d(r13)\n", framelab, ap->iarg(0));
 		printf("\tand\tr0,$32512\n");
 		printf("\tpushl\t(rr14),rr0\n");
+	    }
+		break;
+
+	case 'D':	/* double assignment: left <- right, one side a quad */
+	    {
+		NODE *l = p->n_left, *r = p->n_right;
+
+		if (l->n_op == REG && r->n_op == REG) {
+			printf("\tldl\t%s,%s\n",
+			    qpair(l->n_rval, 0), qpair(r->n_rval, 0));
+			printf("\tldl\t%s,%s\n",
+			    qpair(l->n_rval, 1), qpair(r->n_rval, 1));
+		} else if (l->n_op == REG)
+			quadmem(r, l->n_rval, 0);
+		else if (r->n_op == REG)
+			quadmem(l, r->n_rval, 1);
+		else
+			comperr("ZD: no quad register operand");
+	    }
+		break;
+
+	case 'E':	/* double load: AL (leaf or quad reg) -> quad A1 */
+	    {
+		NODE *l = getlr(p, 'L');
+		int q = getlr(p, '1')->n_rval;
+
+		if (l->n_op == REG) {
+			printf("\tldl\t%s,%s\n",
+			    qpair(q, 0), qpair(l->n_rval, 0));
+			printf("\tldl\t%s,%s\n",
+			    qpair(q, 1), qpair(l->n_rval, 1));
+		} else
+			quadmem(l, q, 0);
+	    }
+		break;
+
+	case 'P':	/* push a double argument: low pair first, so the
+			 * high (sign+exponent) pair lands at the lower
+			 * address (native: "pushl rr2; pushl rr0").
+			 * Memory sources push directly; pushl accepts
+			 * DA/X sources (proven: "pushl (rr14),L+4(r13)"
+			 * in factor.s) but not BA, so pair-based OREGs
+			 * are excluded by the rule shapes. */
+	    {
+		NODE *l = getlr(p, 'L');
+
+		if (l->n_op == REG) {
+			printf("\tpushl\t(rr14),%s\n", qpair(l->n_rval, 1));
+			printf("\tpushl\t(rr14),%s\n", qpair(l->n_rval, 0));
+		} else {
+			printf("\tpushl\t(rr14),");
+			prmem(l, 4);
+			printf("\n\tpushl\t(rr14),");
+			prmem(l, 0);
+			printf("\n");
+		}
+	    }
+		break;
+
+	case 'W':	/* high (sign+exponent) word of the left operand's
+			 * register, for the sign-flip UMINUS "xor ,$-32768"
+			 * (native negates doubles this way: modf.s
+			 * "xor r0,$-32768") */
+	    {
+		NODE *l = getlr(p, 'L');
+
+		if (l->n_op != REG)
+			comperr("ZW: not a register");
+		if (l->n_rval >= RQ0)
+			printf("r%d", qword(l->n_rval));
+		else
+			prword(l, 0);
 	    }
 		break;
 
@@ -760,7 +937,11 @@ rmove(int s, int d, TWORD t)
 {
 	if (s == d)
 		return;
-	if (szty(t) == 2) {
+	if (szty(t) == 4) {
+		/* 64-bit quad move: two pair moves (quads never overlap) */
+		printf("\tldl\t%s,%s\n", qpair(d, 0), qpair(s, 0));
+		printf("\tldl\t%s,%s\n", qpair(d, 1), qpair(s, 1));
+	} else if (szty(t) == 2) {
 		/* 32-bit pair move */
 		printf("\tldl\t%s,%s\n", rnames[d], rnames[s]);
 	} else {
@@ -779,7 +960,9 @@ rmove(int s, int d, TWORD t)
  * r is indexed by class (r[CLASSA], r[CLASSB]) - NOT by register number.
  *
  * Class A holds 13 word registers (r0-r12).  Class B holds 6 register
- * pairs (rr0,rr2,rr4,rr6,rr8,rr10); each pair overlaps two word registers.
+ * pairs (each overlapping two words; rr0 is reserved, so 5 selectable).
+ * Class C holds 3 quads (rq0,rq4,rq8), each overlapping 4 words / 2
+ * pairs.  Worst-case (conservative) blocking counts.
  */
 int
 COLORMAP(int c, int *r)
@@ -788,26 +971,32 @@ COLORMAP(int c, int *r)
 
 	switch (c) {
 	case CLASSA:
-		/* each interfering pair blocks two word registers */
-		num = r[CLASSA] + 2 * r[CLASSB];
+		/* a pair blocks 2 words, a quad blocks 4 */
+		num = r[CLASSA] + 2 * r[CLASSB] + 4 * r[CLASSC];
 		return num < 13;
 	case CLASSB:
-		/* 5 allocatable pairs (rr2,rr4,rr6,rr8,rr10; rr0 reserved) */
-		num = r[CLASSB] + r[CLASSA];
+		/* 5 allocatable pairs (rr2..rr10; rr0 reserved);
+		 * a word or pair neighbour blocks 1 pair, a quad blocks 2 */
+		num = r[CLASSB] + r[CLASSA] + 2 * r[CLASSC];
 		return num < 5;
+	case CLASSC:
+		/* any neighbour blocks at most 1 of the 3 quads */
+		num = r[CLASSA] + r[CLASSB] + r[CLASSC];
+		return num < 3;
 	}
 	return 0;
 }
 
 /*
  * Return the register class suitable for a value of type t.
- * Consistent with PCLASS in macdefs.h: 32-bit values (long/ptr/float)
- * use class B (pairs), everything else uses class A (words).
+ * Consistent with PCLASS in macdefs.h: 64-bit values (double) use class
+ * C (quads), 32-bit values (long/ptr/float) class B (pairs), everything
+ * else class A (words).
  */
 int
 gclass(TWORD t)
 {
-	return szty(t) == 2 ? CLASSB : CLASSA;
+	return szty(t) == 4 ? CLASSC : szty(t) == 2 ? CLASSB : CLASSA;
 }
 
 /*
@@ -913,6 +1102,195 @@ myoptim(struct interpass *ip)
 }
 
 /*
+ * Software floating point.
+ *
+ * The Z8001 in the Commodore 900 has no FPU; the native Coherent
+ * compiler lowers all floating-point operations to calls into the libc
+ * runtime (libc/crt/{dadd,dcmp,dmul,ddiv,dtoi,itod,dtof,ftod}.s).  We
+ * follow the exact same convention (ground truth: the compiler-emitted
+ * call sites in factor.s/modf.s and the helper sources themselves):
+ *
+ *   value/arg convention: a double travels in rq0 (r0=sign+exponent),
+ *     and is pushed "pushl rr2; pushl rr0" (8 bytes, caller pops);
+ *   dradd/drsub/drmul/drdiv(da, db): both by value, result in rq0
+ *     (the dl* variants taking &db are just a size optimization);
+ *   drcmp(da, db): three-way result in r1 (1/0/-1), compared against 0;
+ *   diflt/duflt/dlflt/dvflt(i): int/unsigned/long/ulong -> double, rq0;
+ *   ifix/ufix(d) -> r1, lfix/vfix(d) -> rr0: double -> integer;
+ *   dfpack: float rr0 -> double rq0, fdpack: double rq0 -> float rr0
+ *     (register-based, no stack args; handled as table SCONV rules);
+ *   negation is inline: "xor <hiword>,$-32768" (table UMINUS rules).
+ *
+ * Float arithmetic is computed in double (K&R style - the runtime has
+ * no float helpers), converting operands in and the result back out.
+ *
+ * The rewrite runs from myreader(), before canon/sucomp, so the created
+ * CALL nodes get the full standard treatment (argument FUNARG pushes,
+ * n_qual cleanup via lastcall, pre-evaluation into temps when several
+ * calls appear in one tree).
+ */
+
+#define	ISFPT(t)	((t) == FLOAT || (t) == DOUBLE || (t) == LDOUBLE)
+
+/* rewrite a unary node into a one-argument helper call */
+static void
+mkcall(NODE *p, char *name)
+{
+	p->n_op = CALL;
+	p->n_right = mkunode(FUNARG, p->n_left, 0, p->n_left->n_type);
+	p->n_left = mklnode(ICON, 0, 0, FTN|p->n_type);
+	p->n_left->n_name = name;
+}
+
+/* rewrite a binary node into a two-argument helper call; the CM chain
+ * is evaluated rightmost-first (gencode), so the left operand is pushed
+ * last and lands in the first-argument slot */
+static void
+mkcall2(NODE *p, char *name)
+{
+	p->n_op = CALL;
+	p->n_right = mkunode(FUNARG, p->n_right, 0, p->n_right->n_type);
+	p->n_left = mkunode(FUNARG, p->n_left, 0, p->n_left->n_type);
+	p->n_right = mkbinode(CM, p->n_left, p->n_right, INT);
+	p->n_left = mklnode(ICON, 0, 0, FTN|p->n_type);
+	p->n_left->n_name = name;
+}
+
+/* wrap p's current contents in a new child node and make p an SCONV
+ * to type t */
+static void
+wrapsconv(NODE *p, TWORD t)
+{
+	NODE *q = talloc();
+
+	*q = *p;
+	p->n_op = SCONV;
+	p->n_left = q;
+	p->n_type = t;
+}
+
+static NODE *
+mksconv(NODE *p, TWORD t)
+{
+	return mkunode(SCONV, p, 0, t);
+}
+
+static void
+fixfloatops(NODE *p, void *arg)
+{
+	NODE *l, *r;
+	TWORD t = p->n_type, lt;
+	char *fn;
+
+	switch (p->n_op) {
+	case PLUS:
+	case MINUS:
+	case MUL:
+	case DIV:
+		if (!ISFPT(t))
+			return;
+		fn = p->n_op == PLUS ? "dradd" : p->n_op == MINUS ? "drsub" :
+		    p->n_op == MUL ? "drmul" : "drdiv";
+		if (t == FLOAT) {
+			/* compute in double, round the result back */
+			p->n_left = mksconv(p->n_left, DOUBLE);
+			p->n_right = mksconv(p->n_right, DOUBLE);
+			p->n_type = DOUBLE;
+			mkcall2(p, fn);
+			wrapsconv(p, FLOAT);
+		} else
+			mkcall2(p, fn);
+		break;
+
+	case EQ:
+	case NE:
+	case LE:
+	case LT:
+	case GE:
+	case GT:
+		lt = p->n_left->n_type;
+		if (!ISFPT(lt))
+			return;
+		l = p->n_left;
+		r = p->n_right;
+		if (lt == FLOAT) {
+			l = mksconv(l, DOUBLE);
+			r = mksconv(r, DOUBLE);
+		}
+		/* r1 = drcmp(a, b) = 1/0/-1; keep the relational op and
+		 * compare that against 0 (native: "calr drcmp; test r1;
+		 * jr cc" - our SZERO rule emits cp, same flags) */
+		l = mkunode(FUNARG, l, 0, DOUBLE);
+		r = mkunode(FUNARG, r, 0, DOUBLE);
+		r = mkbinode(CM, l, r, INT);
+		l = mklnode(ICON, 0, 0, FTN|INT);
+		l->n_name = "drcmp";
+		p->n_left = mkbinode(CALL, l, r, INT);
+		p->n_right = mklnode(ICON, 0, 0, INT);
+		break;
+
+	case SCONV:
+		l = p->n_left;
+		lt = l->n_type;
+		if (ISFPT(t) && ISFPT(lt))
+			return;		/* dfpack/fdpack table rules */
+		if (ISFPT(t)) {
+			/* integer -> fp; helpers take int/unsigned/long/
+			 * ulong, so widen narrow types first */
+			switch (lt) {
+			case CHAR: case SHORT: case BOOL:
+				p->n_left = mksconv(l, INT);
+				lt = INT;
+				break;
+			case UCHAR: case USHORT:
+				p->n_left = mksconv(l, UNSIGNED);
+				lt = UNSIGNED;
+				break;
+			}
+			if (lt == INT)
+				fn = "diflt";
+			else if (lt == UNSIGNED)
+				fn = "duflt";
+			else if (lt == LONG)
+				fn = "dlflt";
+			else
+				fn = "dvflt";	/* ulong, pointers */
+			if (t == FLOAT) {
+				p->n_type = DOUBLE;
+				mkcall(p, fn);
+				wrapsconv(p, FLOAT);
+			} else
+				mkcall(p, fn);
+		} else if (ISFPT(lt)) {
+			/* fp -> integer; helpers take a double and return
+			 * int in r1 / long in rr0, narrow types truncate
+			 * from the int result afterwards */
+			TWORD rt;
+
+			if (lt == FLOAT)
+				p->n_left = mksconv(p->n_left, DOUBLE);
+			switch (t) {
+			case CHAR: case SHORT: case BOOL: case INT:
+				rt = INT; fn = "ifix"; break;
+			case UCHAR: case USHORT: case UNSIGNED:
+				rt = UNSIGNED; fn = "ufix"; break;
+			case LONG:
+				rt = LONG; fn = "lfix"; break;
+			default:
+				rt = ULONG; fn = "vfix"; break;
+			}
+			if (rt != t) {
+				p->n_type = rt;
+				mkcall(p, fn);
+				wrapsconv(p, t);
+			} else
+				mkcall(p, fn);
+		}
+		break;
+	}
+}
+
+/*
  * Struct-return support: every STCALL/USTCALL gets its OWN buffer in
  * the caller's frame for the returned value (its address is pushed as
  * the hidden argument by the ZR escape).  The offset is attached to the
@@ -950,6 +1328,7 @@ myreader(struct interpass *ip)
 	DLIST_FOREACH(ip2, ip, qelem) {
 		if (ip2->type != IP_NODE)
 			continue;
+		walkf(ip2->ip_node, fixfloatops, 0);
 		walkf(ip2->ip_node, findstcall, &off);
 	}
 	if (off > p2autooff) {
