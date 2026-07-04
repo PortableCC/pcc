@@ -97,6 +97,14 @@ extern	int	escln;	/* escaped newlines, to be added */
 #define C_DIGIT	0100		/* [0-9] */
 #define C_ESTR	0200		/* [\0\n\\\'\"] */
 
+extern char cppmap[];
+enum { F_STR = 1, F_SLASH, F_NUM, F_LU, F_ID0, F_BID };
+#define F_TYP(x)  cppmap[(unsigned char)x]
+#define F_ISID0(x) (F_TYP(x) == F_LU || F_TYP(x) == F_ID0)
+#define F_ISID(x) (F_TYP(x) == F_NUM || F_TYP(x) == F_LU || F_TYP(x) == F_ID0)
+#define F_ISWS(x) ((x) == ' ' || (x) == '\t')
+#define F_ISWSNL(x) (F_ISWS(x) || (x) == '\n')
+
 extern short spechr[];
 
 #define ISSPEC(x)	(spechr[(int)(x)] & (C_SPEC))
@@ -128,6 +136,16 @@ extern struct vspace ibspc;
 #endif
 
 /*
+ * struct used to keep track of a line and where in a line we currently are.
+ */
+struct rdline {
+	FILE *fp;
+	char *line;
+	char *curpos;
+	size_t len;
+};
+
+/*
  * definition for include file info
  */
 struct includ {
@@ -135,12 +153,12 @@ struct includ {
 	const usch *fname;	/* current fn, changed if #line found */
 	const usch *orgfn;	/* current fn, not changed */
 	int lineno;
-	FILE *ifp;		/* file to read from */
 	int opend, oinp;
 	usch *opbeg;
 	int maxend;
 	int idx;
 	void *incs;
+	struct rdline *rdp;
 };
 #define INCINC 0
 #define SYSINC 1
@@ -197,6 +215,11 @@ void define(void);
 void include(void);
 void include_next(void);
 void line(void);
+
+/* tempfile functions */
+struct rdline *templine(struct rdline *rdl);
+struct rdline *tempfile(void);
+void tempclose(struct rdline *);
 
 void pushfile(FILE *fp, const usch *fn, int idx, void *incs);
 void prtline(int nl);

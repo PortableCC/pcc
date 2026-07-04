@@ -1834,7 +1834,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	register struct iobuf *ab;
 	register int c, i, j, plev, narg, ellips = 0;
 	int argary[MAXARGS+1];
-	FILE *ifp;
+	struct rdline *rdp;
 
 	DPRINT(("readargs: in %p\n", in));
 	narg = sp->narg;
@@ -1844,12 +1844,12 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	opbeg = opend = oinp = 0;
 #endif
 
-	ifp = ifiles->ifp;
+	rdp = ifiles->rdp;
 	if (in) {
 		oinp = inp;
 		opend = pend;
 		opbeg = pbeg;
-		ifiles->ifp = NULL;
+		ifiles->rdp = NULL;
 		pbeg = in->buf;
 		inp = pbeg + in->cptr;
 		pend = pbeg + in->bsz;
@@ -1986,7 +1986,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 	for (j = 0; j < i; j++)
 		args[j] = ab->buf + argary[j];
 
-	ifiles->ifp = ifp;
+	ifiles->rdp = rdp;
 	if (in) {
 		in->cptr = inp - pbeg;
 		inp = oinp;

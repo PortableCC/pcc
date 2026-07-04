@@ -116,7 +116,7 @@ usch *pbeg, *inp, *pend;
 /* used by yylex() buffer expansion */
 static struct iobuf *lb;
 static usch *lpbeg, *lpend, *linp;
-static FILE *lifp;
+static struct rdline *lifp;
 
 static void ucn(int ch, FILE *ifp, FILE *ofp);
 static void fastcmnt2(int);
@@ -180,18 +180,6 @@ short spechr[256] = {
 
 #define	INFLIRD	(CPPBUF-ENDFREE)
 
-static usch *
-addch(int len)
-{
-	if (len == ifiles->maxend)
-		pbeg = realloc(pbeg, ifiles->maxend += 5);
-	return pbeg;
-}
-#define	ADDCH(ninp, len, ch)	{			\
-	if (len == ifiles->maxend) ninp = addch(len);	\
-	ninp[len++] = ch;				\
-}
-
 /*
  * fill up the input buffer
  * n tells how nany chars at least.  0 == standard.
@@ -200,29 +188,20 @@ addch(int len)
 int
 inpbuf(void)
 {
-	register usch *ninp;
-	register int len, ch;
+	struct rdline *rdp = ifiles->rdp;
 
-	if (ifiles->ifp == NULL)
+	if (rdp == NULL)
 		return 0;
 
 	if (inp < pend)
 		error("inp < pend");
 
-	ninp = pbeg;
+	if (templine(ifiles->rdp) == NULL)
+		return 0;
 
-	for (len = 0;;) {
-		if ((ch = getc(ifiles->ifp)) < 0)
-			break;
-		ADDCH(ninp, len, ch);
-		if (ch == '\n')
-			break;
-	}
-
-	ADDCH(ninp, len, 0);
-	inp = pbeg;
-	pend = ninp + len - 1;
-	return len-1;
+	inp = (usch *)rdp->curpos;
+	pend = inp + rdp->len;
+	return rdp->len;
 }
 
 /*
@@ -234,15 +213,20 @@ qcchar(void)
 {
 	register int ch;
 
-newone:	if (ISCQ(ch = *inp++) == 0)
+newone:	ch = *inp++;
+	if (ISCQ(ch) == 0)
 		return ch;
 
 	switch (ch) {
+	case '\n':
+		*--inp = 0;
+		return ch;
+
 	case 0:
 		inp--;
 		if (lb) {
 			pend = lpend, pbeg = lpbeg, inp = linp;
-			ifiles->ifp = lifp;
+			ifiles->rdp = lifp;
 			bufree(lb);
 			lb = 0;
 			goto newone;
@@ -796,7 +780,7 @@ ident:		if (ISID0(t) == 0)
 				if ((ob = kfind(nl))) {
 					ob->buf[ob->cptr] = 0;
 					lpbeg = pbeg, lpend = pend, linp = inp;
-					lifp = ifiles->ifp, ifiles->ifp = 0;
+					lifp = ifiles->rdp, ifiles->rdp = 0;
 					lb = ob;
 					inp = pbeg = ob->buf,
 					    pend = pbeg + ob->cptr;
@@ -878,6 +862,7 @@ cleanup(FILE *ifd)
 		}
 		putc(ch, ofd);
 		if (ch == '\n') {
+			beginning = 1;
 			while (numlf) {
 				fputc('\n', ofd);
 				numlf--;
@@ -896,16 +881,18 @@ void
 pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 {
 	struct includ ibuf;
+	struct rdline rdline;
 	register struct includ *ic;
 	register int otrulvl;
+	struct rdline *rdp = &rdline;
 
-	ifp = cleanup(ifp);
+	rdp->fp = cleanup(ifp);
 
 	ic = &ibuf;
 	ic->next = ifiles;
 	ifiles = ic;
 
-	ic->ifp = ifp;
+	ic->rdp = rdp;
 	ic->orgfn = ic->fname = file;
 
 	ic->opend = pend - pbeg;

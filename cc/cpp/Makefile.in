@@ -54,6 +54,9 @@ cpc.o: $(srcdir)/cpc.c
 token.o: $(srcdir)/token.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(srcdir)/token.c
 
+tempfile.o: $(srcdir)/tempfile.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $(srcdir)/tempfile.c
+
 $(DEST): $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) -o $@ $(LIBS)
 
