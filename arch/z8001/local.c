@@ -57,16 +57,6 @@
  *   - Locals:  negative OREG offsets from R13  (AUTOINIT=0)
  *   - Params:  positive OREG offsets from R13  (ARGINIT=32 bits = 4 bytes)
  */
-/*
- * Set when the compilation unit uses any floating point.  Coherent's
- * libc has two definitions of the printf FP formatter _dtefg: the real
- * one in crt/dtefg.o (which also defines _dtoa/ecvt/fcvt) and a dummy
- * in gen/sdtoa.o that aborts with "No floating point!" so non-FP
- * programs stay small.  ejobcode() emits an undefined reference to
- * _dtoa_ so the linker pulls the real module in first.
- */
-int zfpused;
-
 NODE *
 clocal(NODE *p)
 {
@@ -74,10 +64,6 @@ clocal(NODE *p)
 	NODE *l;
 	int o;
 	TWORD m;
-
-	m = p->n_type;
-	if (m == FLOAT || m == DOUBLE || m == LDOUBLE)
-		zfpused = 1;
 
 	switch (o = p->n_op) {
 
@@ -90,39 +76,23 @@ clocal(NODE *p)
 		case REGISTER:
 		case PARAM:
 			/*
-			 * An aggregate local or parameter (struct, union, or
-			 * array) must stay an addressable object so that member
-			 * access (p.x), indexing (a[i]), array decay and &p all
-			 * work: build a frame structure reference *(r13 + off).
-			 * &(*(r13+off)) then cancels to the lda form rather than
-			 * hitting ADDROF(OREG).  Same idiom as arch/i86.
-			 */
-			if (ISARY(p->n_type) ||
-			    p->n_type == STRTY || p->n_type == UNIONTY) {
-				l = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
-				slval(l, 0);
-				l->n_rval = FPREG;
-				p = stref(block(STREF, l, p, 0, 0, 0));
-				break;
-			}
-			/*
-			 * Scalar auto/param: frame-relative OREG.  soffset is
-			 * in bits; divide by SZCHAR to get bytes.  Parameters
-			 * arrive above the frame pointer (ARGINIT = 4 bytes).
+			 * Every local and parameter - scalar or aggregate -
+			 * becomes a frame structure reference *(r13 + off),
+			 * the arch/i86 idiom.  Pass 2's canon folds the plain
+			 * accesses back into OREG(r13) (identical code), while
+			 * &x cancels ADDROF(UMUL) in buildtree instead of
+			 * hitting "unacceptable operand of &" - a direct OREG
+			 * here broke &scalar-local whenever the variable was
+			 * not an xtemps TEMP (always, for doubles).
 			 *
-			 * Each argument occupies at least a 16-bit slot (the
-			 * caller promotes char to a pushed word).  On big-endian
-			 * a char value lives in the low-order byte of that slot,
-			 * so a char parameter's access offset is slot start + 1.
+			 * The big-endian char-parameter byte correction
+			 * (value in the low byte of the pushed word slot)
+			 * is applied once to soffset in bfcode(), not here.
 			 */
-			p->n_op = OREG;
-			o = q->soffset / SZCHAR;
-			if (q->sclass == PARAM &&
-			    (p->n_type == CHAR || p->n_type == UCHAR ||
-			     p->n_type == BOOL))
-				o += (SZINT - SZCHAR) / SZCHAR;
-			slval(p, o);
-			p->n_rval = FPREG;
+			l = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
+			slval(l, 0);
+			l->n_rval = FPREG;
+			p = stref(block(STREF, l, p, 0, 0, 0));
 			break;
 
 		case STATIC:

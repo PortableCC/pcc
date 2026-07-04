@@ -189,6 +189,20 @@ bfcode(struct symtab **sp, int cnt)
 		ecomp(buildtree(ASSIGN, n, p));
 	}
 
+	/*
+	 * A char argument is pushed as a word; on big-endian its value
+	 * lives in the LOW byte of that slot, one byte past the slot
+	 * start.  Adjust the offset once here so every access - including
+	 * &param - sees the true byte address (clocal used to add the
+	 * correction per-access, which the stref/&-able rewrite can't).
+	 */
+	for (i = 0; i < cnt; i++) {
+		TWORD t = sp[i]->stype;
+
+		if (t == CHAR || t == UCHAR || t == BOOL)
+			sp[i]->soffset += SZINT - SZCHAR;
+	}
+
 	if (xtemps == 0)
 		return;
 
@@ -207,18 +221,18 @@ bfcode(struct symtab **sp, int cnt)
 
 /*
  * Called just before compiler exits.
- * If the unit used floating point, emit an undefined reference to
- * _dtoa_ (defined in libc's crt/dtefg.o next to the real _dtefg
- * printf formatter) so the linker picks the real FP formatter over
- * the "No floating point!" dummy in gen/sdtoa.o (see zfpused).
+ *
+ * NB: programs that print floating point must be linked with
+ * "ld -u _dtoa_" so the real _dtefg printf formatter (libc
+ * crt/dtefg.o) is pulled in instead of the "No floating point!"
+ * dummy (gen/sdtoa.o).  That is a link-time policy - the native
+ * "cc -f" flag - and deliberately NOT emitted by the compiler:
+ * it would drag the formatter into every FP program whether or
+ * not it prints, and would tie generated code to one libc layout.
  */
 void
 ejobcode(int flag)
 {
-	extern int zfpused;
-
-	if (zfpused)
-		printf("\t.globl\t_dtoa_\n");
 }
 
 /*
