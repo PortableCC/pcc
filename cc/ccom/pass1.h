@@ -702,6 +702,20 @@ void dwarf_end(void);
 #error int size unknown
 #endif
 
+/*
+ * Type of a sizeof/offsetof result and of a pointer difference.
+ * Both default to the pointer-sized integer, but a target may override
+ * them in macdefs.h: ABIs built around a K&R libc pass sizes and counts
+ * as plain (16-bit) ints even where pointers are wider, so sizeof
+ * results fed to unprototyped functions must not widen.
+ */
+#ifndef SIZET
+#define SIZET	INTPTR
+#endif
+#ifndef PTRDIFFT
+#define PTRDIFFT	INTPTR
+#endif
+
 /* Generate a bitmask from a given type size */
 #define SZMASK(y) ((((1LL << ((y)-1))-1) << 1) | 1)
 

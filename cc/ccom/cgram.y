@@ -1234,7 +1234,7 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 				$$ = $5;
 			}
 			$$ = biop(ADDROF, $$, NULL);
-			$3 = block(NAME, NULL, NULL, ENUNSIGN(INTPTR), 0, 0);
+			$3 = block(NAME, NULL, NULL, ENUNSIGN(SIZET), 0, 0);
 			$$ = biop(CAST, $3, $$);
 		}
 		|  C_ICON { $$ = bdty(ICON, &($1)); }
@@ -1925,6 +1925,7 @@ olddecl(P1ND *p, P1ND *a)
 
 	s->stype = p->n_type;
 	s->sdf = p->n_df;
+	s->sss = p->pss;
 	s->sap = p->n_ap;
 	if (a)
 		attr_add(s->sap, gcc_attr_wrapper(a));

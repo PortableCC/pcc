@@ -1460,6 +1460,13 @@ oconvert(register P1ND *p)
 	case MINUS:
 		p->n_type = INTPTR;
 		p = (clocal(VBLOCK(p, bpsize(p->n_left), INT, 0, 0)));
+		/*
+		 * The subtraction and the element-size division stay
+		 * pointer-sized; only the result narrows to the target's
+		 * pointer-difference type.
+		 */
+		if (PTRDIFFT != INTPTR)
+			p = clocal(makety(p, mkqtyp(PTRDIFFT)));
 		return( p );
 		}
 
@@ -1980,8 +1987,8 @@ doszof(P1ND *p)
 		df++;
 		ty = DECREF(ty);
 	}
-	rv = buildtree(MUL, rv, 
-	    xbcon(tsize(ty, p->n_df, p->pss)/SZCHAR, NULL, INTPTR));
+	rv = buildtree(MUL, rv,
+	    xbcon(tsize(ty, p->n_df, p->pss)/SZCHAR, NULL, SIZET));
 	p1tfree(p);
 	return rv;
 }
