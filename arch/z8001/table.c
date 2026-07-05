@@ -497,9 +497,12 @@ struct optab table[] = {
  * word register (not SBREG), this falls through the addl rule above; the ZF
  * escape emits "lda A1,L<n>+off(r13); and A1hi,$32512" using the per-function
  * frame-base equate (L<n>=SS|framesize), which supplies the stack segment.
+ * The left shape must be SR13 (REG r13 exactly), NOT SANY: SANY also gives
+ * a direct match for NAME/OREG pointers (global_ptr + 1), stealing them
+ * from the addl rule (which needs a rewrite) and feeding garbage to ZF.
  */
 { PLUS,		INBREG,
-	SANY,		TPOINT,
+	SR13,		TPOINT,
 	SCON,		TANY,
 		NBREG,	RESC1,
 		"ZF", },
@@ -565,10 +568,11 @@ struct optab table[] = {
  * Address of a frame object at a negative offset: &local becomes
  * MINUS(REG r13, ICON off) via stref/offplus (cf. the PLUS rule above).
  * The ZF escape emits the same "lda A1,L<n>+off(r13); and A1hi,$32512" using
- * the frame-base equate.
+ * the frame-base equate.  SR13 left shape for the same reason as the PLUS
+ * rule: SANY would steal global_ptr - 1 from the subl rule.
  */
 { MINUS,	INBREG,
-	SANY,		TPOINT,
+	SR13,		TPOINT,
 	SCON,		TANY,
 		NBREG,	RESC1,
 		"ZF", },
@@ -886,12 +890,22 @@ struct optab table[] = {
 		0,	0,
 		"	clr	AL\n", },
 
-/* pair <- zero (long); ZQ clears both halves (off and off+2), so the
- * memory form is name/frame only */
+/* pair reg <- zero (long); RDEST valid: the cleared pair IS the value */
 { ASSIGN,	FOREFF|INBREG,
-	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SBREG,		TLONG|TULONG|TPOINT,
 	SZERO,		TANY,
 		0,	RDEST,
+		"ZQ", },
+
+/* pair in memory <- zero; FOREFF ONLY.  ZQ clears the two memory words
+ * and leaves NO register holding the value, so this must not offer
+ * INBREG+RDEST: a chained assignment (chars = words = lines = 0) would
+ * reclaim an uninitialized pair as the inner assignment's value.  The
+ * chained case falls back to the reg path (ldl rrN,$0; ldl mem,rrN). */
+{ ASSIGN,	FOREFF,
+	SNAME,		TLONG|TULONG|TPOINT,
+	SZERO,		TANY,
+		0,	0,
 		"ZQ", },
 
 { ASSIGN,	FOREFF,

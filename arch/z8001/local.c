@@ -426,6 +426,28 @@ defzero(struct symtab *sp)
 	SETOFF(off, SZCHAR);
 	off /= SZCHAR;
 
+	if (sp->sclass == STATIC || sp->sclass == USTATIC) {
+		/*
+		 * Statics must NOT use .comm: Coherent commons are
+		 * linker-global, so a static would leak into the global
+		 * namespace, and same-numbered L labels from two modules
+		 * would be merged into one shared common.  Reserve zeroed
+		 * .bssd storage under the label instead, like the native
+		 * compiler (".bssd; .even; L85: .blkb 4").
+		 */
+		if (lastloc != UDATA) {
+			setseg(UDATA, NULL);
+			lastloc = UDATA;
+		}
+		printf("\t.even\n");
+		if (sp->slevel == 0)
+			printf("%s:\n", name);
+		else
+			printf(LABFMT ":\n", sp->soffset);
+		printf("\t.blkb\t%d\n", off);
+		return;
+	}
+
 	/* Ensure a data segment is active (see comment above). */
 	if (lastloc != DATA) {
 		setseg(DATA, NULL);

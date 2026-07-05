@@ -224,16 +224,31 @@ typedef long long OFFSZ;
 	0,		/* r13 - frame pointer */ \
 	0,		/* r14 - SP high       */ \
 	0,		/* r15 - SP low        */ \
-	SBREG|TEMPREG,	/* rr0  - valid color (RETREG) but cleared from clregs
+	SBREG,		/* rr0  - valid color (RETREG) but cleared from clregs
 			   in bjobcode so never allocated (RR0 can't be a base) */ \
-	SBREG|TEMPREG,	/* rr2  */ \
-	SBREG|TEMPREG,	/* rr4  */ \
+	SBREG,		/* rr2  */ \
+	SBREG,		/* rr4  */ \
 	SBREG,		/* rr6  - preserved via its words r6/r7  */ \
 	SBREG,		/* rr8  - preserved via its words r8/r9  */ \
 	SBREG,		/* rr10 - preserved via its words r10/r11 */ \
-	SCREG|TEMPREG,	/* rq0  - caller-saved, double RETREG */ \
-	SCREG|TEMPREG,	/* rq4  - r6/r7 half saved by prologue when used */ \
+	SCREG,		/* rq0  - caller-saved, double RETREG */ \
+	SCREG,		/* rq4  - r6/r7 half saved by prologue when used */ \
 	SCREG,		/* rq8  - preserved via its words r8-r11 */
+/*
+ * Only the word registers r0-r5 carry TEMPREG.  tempregs[] is consumed in
+ * exactly one place (regs.c call handling: addalledges of every listed
+ * register at each call site), and marking the caller-saved pairs/quads
+ * there as well is both redundant and costly:
+ *  - redundant because AssignColors excludes overlapped colors through
+ *    aliasmap(): a pair/quad temp live across a call already conflicts
+ *    with precolored r0-r5, which maps to rr0/rr2/rr4 in class B and
+ *    rq0/rq4 in class C;
+ *  - costly because listing rq4 (r4-r7) makes every call exclude the
+ *    callee-saved words r6/r7 (and pair rr6) from values that live
+ *    across it, so cross-call words lost r6/r7 and cross-call pairs
+ *    lost rr6 for no reason.  Found compiling wc.c: every register
+ *    local spilled to the frame.
+ */
 
 /*
  * ROVERLAP: which other registers each register aliases.
@@ -319,6 +334,23 @@ int COLORMAP(int c, int *r);
 				   that access both pair halves at off and
 				   off+2 (ZL/ZQ), where a pair-base OREG
 				   would need BA for the second half */
+#define	SR13	(MAXSPECIAL+3)	/* REG node that is exactly r13: the frame
+				   pointer as a bare word register, produced
+				   only by the reader lowering &frameobj to
+				   PLUS/MINUS(REG r13, ICON off) */
+
+/*
+ * sizeof and pointer-difference results are plain 16-bit integers, NOT
+ * pointer-sized: the Coherent libc is K&R and unprototyped, and its
+ * functions declare sizes and counts as int/unsigned words -
+ * qsort(base, nel, width, compar) "unsigned nel, width", malloc(size)
+ * "unsigned int size", fread "int size, nitems".  The native compiler
+ * pushes them as words (ls.s qsort call: "push (rr14),$38").  With the
+ * pcc default (INTPTR = LONG, since pointers are 32-bit), every
+ * malloc(n*sizeof(x)) would push 4 bytes where libc reads 2.
+ */
+#define	SIZET		UNSIGNED
+#define	PTRDIFFT	INT
 
 /* Soft-float: big-endian IEEE binary32 and binary64 */
 #define	USE_IEEEFP_32
