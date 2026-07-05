@@ -69,16 +69,31 @@ void mygenregs(struct interpass *ip);
 /*
  * Register names indexed by PCC register number.
  * r0-r15 are 16-bit word registers; rr0,rr2,...,rr10 are 32-bit pairs;
- * rq0,rq4,rq8 are 64-bit quads (doubles).
- * Indices: 0-15 = r0-r15, 16=rr0 .. 21=rr10, 22=rq0, 23=rq4, 24=rq8.
+ * rq0,rq4,rq8 are 64-bit quads (doubles); rl0-rl7 are the 8-bit byte
+ * registers (low halves of r0-r7, register class D for char values).
+ * Indices: 0-15 = r0-r15, 16=rr0 .. 21=rr10, 22=rq0 .. 24=rq8,
+ * 25=rl0 .. 32=rl7.
  */
 char *rnames[] = {
 	"r0",  "r1",  "r2",  "r3",  "r4",  "r5",
 	"r6",  "r7",  "r8",  "r9",  "r10", "r11",
 	"r12", "r13", "r14", "r15",
 	"rr0", "rr2", "rr4", "rr6", "rr8", "rr10",
-	"rq0", "rq4", "rq8"
+	"rq0", "rq4", "rq8",
+	"rl0", "rl1", "rl2", "rl3", "rl4", "rl5", "rl6", "rl7"
 };
+
+/*
+ * dword: the word register containing byte register b.  Byte values are
+ * operated on with WORD instructions (extsb, and, neg, push, ld) whenever
+ * the byte-register field encoding would not do: word ops work on any
+ * register and only the low byte carries the value.
+ */
+static int
+dword(int b)
+{
+	return b - RL0;
+}
 
 /*
  * The component pieces of a quad register: qword(q) is the index of its
@@ -153,6 +168,11 @@ firstsavereg(void)
 		firstsave = R6;
 	if (TESTBIT(p2env.p_regs, RQ8) && R8 < firstsave)
 		firstsave = R8;
+	/* A used byte register rl6/rl7 lives inside callee-saved r6/r7 */
+	if (TESTBIT(p2env.p_regs, RL6) && R6 < firstsave)
+		firstsave = R6;
+	if (TESTBIT(p2env.p_regs, RL7) && R7 < firstsave)
+		firstsave = R7;
 	return firstsave;
 }
 
@@ -302,25 +322,17 @@ tlen(NODE *p)
 }
 
 /*
- * blput: print an operand for a BYTE instruction.
- *
- * The Z8001 only has byte registers for r0..r7: in a byte instruction the
- * register field 8+N names the LOW byte of word register rN ("rlN"), while
- * field N names the HIGH byte ("rhN").  A char value held in word register rN
- * lives in its low byte, so byte ops (ldb/andb/cpb/...) must name it "rlN" --
- * printing the plain word name "rN" would (mis)select the high byte rhN.
- * Non-register operands (memory, constants) print exactly as adrput.
+ * bwput: print the WORD register containing a class-D byte-register
+ * operand, for the word instructions that implement char conversions
+ * and arithmetic (extsb/and/neg/push/ld work on any word register and
+ * the char value lives in its low byte).
  */
 static void
-blput(NODE *p)
+bwput(NODE *p)
 {
-	if (p->n_op == REG) {
-		if (p->n_rval > R7)
-			comperr("blput: byte value in non-byte-addressable "
-			    "register r%d (needs r0-r7)", p->n_rval);
-		printf("rl%d", p->n_rval);
-	} else
-		adrput(stdout, p);
+	if (p->n_op != REG || p->n_rval < RL0)
+		comperr("bwput: not a byte register (op %d)", p->n_op);
+	printf("%s", rnames[dword(p->n_rval)]);
 }
 
 /*
@@ -445,6 +457,12 @@ quadmem(NODE *mem, int q, int store)
  *   ZQ  clear a pair (reg or mem): clr on each half
  *   ZF  frame-address operand "off(reg)" for an lda
  *   ZM  high (segment) word of result pair, for the post-lda segment mask
+ *   ZG  word register containing the class-D (byte) LEFT operand
+ *   ZH  word register containing the class-D (byte) result A1
+ *   ZK  byte -> word conversion move: "ld A1,<word of left>", omitted
+ *       when A1 already is that word (NSL sharing)
+ *   ZI  word -> byte conversion move: "ld <word of A1>,AL", omitted
+ *       when AL already is A1's word (NSL sharing)
  *   ZS  struct assignment: ldirb block copy
  *   ZT  struct argument: allocate stack slot + ldirb block copy
  *   ZD  double assignment: quad reg <-> quad reg/memory
@@ -455,18 +473,44 @@ quadmem(NODE *mem, int q, int store)
 void
 zzzcode(NODE *p, int c)
 {
+	NODE *l;
 	int n;
 	char *op;
 
 	switch (c) {
-	case 'H':	/* byte-register form of the result operand (A1) */
-		blput(getlr(p, '1'));
+	case 'G':	/* word register containing the byte left operand */
+		bwput(getlr(p, 'L'));
 		break;
-	case 'G':	/* byte-register form of the left operand (AL) */
-		blput(getlr(p, 'L'));
+	case 'H':	/* word register containing the byte result A1 */
+		bwput(getlr(p, '1'));
 		break;
-	case 'J':	/* byte-register form of the right operand (AR) */
-		blput(getlr(p, 'R'));
+
+	case 'K':	/* byte -> word: copy the byte's containing word
+			 * into the class-A result A1, whose low byte the
+			 * following extsb/and then extends in place.  With
+			 * NSL sharing A1 often IS that word: emit nothing. */
+		l = getlr(p, 'L');
+		if (l->n_op != REG || l->n_rval < RL0)
+			comperr("ZK: left not a byte register");
+		n = getlr(p, '1')->n_rval;
+		if (n != dword(l->n_rval))
+			printf("\tld\t%s,%s\n",
+			    rnames[n], rnames[dword(l->n_rval)]);
+		break;
+
+	case 'I':	/* word -> byte: copy the word into the byte result
+			 * A1's containing word; A1 (its low byte) then holds
+			 * the truncated char.  The word's high byte is dead
+			 * space - a live class-D value in rlN conflicts with
+			 * any class-A value in rN via ROVERLAP.  With NSL
+			 * sharing the words often coincide: emit nothing. */
+		l = getlr(p, 'L');
+		if (l->n_op != REG || l->n_rval >= RL0)
+			comperr("ZI: left not a word register");
+		n = getlr(p, '1')->n_rval;
+		if (dword(n) != l->n_rval)
+			printf("\tld\t%s,%s\n",
+			    rnames[dword(n)], rnames[l->n_rval]);
 		break;
 
 	case 'L':	/* long bitwise: two word ops on the pair halves */
@@ -557,8 +601,9 @@ zzzcode(NODE *p, int c)
 	case 'S':	/* struct assignment: ldirb (dest),(src),count */
 	    {
 		struct attr *ap = attr_find(p->n_ap, ATTR_P2STRUCT);
-		NODE *l = p->n_left;
 		int sz = ap->iarg(0);
+
+		l = p->n_left;
 
 		/* Resources are ordered by class: A1 = word (count),
 		 * A2 = pair (dest address).  AR = source pointer (pair).
@@ -612,8 +657,9 @@ zzzcode(NODE *p, int c)
 
 	case 'D':	/* double assignment: left <- right, one side a quad */
 	    {
-		NODE *l = p->n_left, *r = p->n_right;
+		NODE *r = p->n_right;
 
+		l = p->n_left;
 		if (l->n_op == REG && r->n_op == REG) {
 			printf("\tldl\t%s,%s\n",
 			    qpair(l->n_rval, 0), qpair(r->n_rval, 0));
@@ -630,9 +676,9 @@ zzzcode(NODE *p, int c)
 
 	case 'E':	/* double load: AL (leaf or quad reg) -> quad A1 */
 	    {
-		NODE *l = getlr(p, 'L');
 		int q = getlr(p, '1')->n_rval;
 
+		l = getlr(p, 'L');
 		if (l->n_op == REG) {
 			printf("\tldl\t%s,%s\n",
 			    qpair(q, 0), qpair(l->n_rval, 0));
@@ -650,9 +696,7 @@ zzzcode(NODE *p, int c)
 			 * DA/X sources (proven: "pushl (rr14),L+4(r13)"
 			 * in factor.s) but not BA, so pair-based OREGs
 			 * are excluded by the rule shapes. */
-	    {
-		NODE *l = getlr(p, 'L');
-
+		l = getlr(p, 'L');
 		if (l->n_op == REG) {
 			printf("\tpushl\t(rr14),%s\n", qpair(l->n_rval, 1));
 			printf("\tpushl\t(rr14),%s\n", qpair(l->n_rval, 0));
@@ -663,23 +707,19 @@ zzzcode(NODE *p, int c)
 			prmem(l, 0);
 			printf("\n");
 		}
-	    }
 		break;
 
 	case 'W':	/* high (sign+exponent) word of the left operand's
 			 * register, for the sign-flip UMINUS "xor ,$-32768"
 			 * (native negates doubles this way: modf.s
 			 * "xor r0,$-32768") */
-	    {
-		NODE *l = getlr(p, 'L');
-
+		l = getlr(p, 'L');
 		if (l->n_op != REG)
 			comperr("ZW: not a register");
 		if (l->n_rval >= RQ0)
 			printf("r%d", qword(l->n_rval));
 		else
 			prword(l, 0);
-	    }
 		break;
 
 	case 'T':	/* struct argument passed by value.
@@ -952,7 +992,12 @@ rmove(int s, int d, TWORD t)
 {
 	if (s == d)
 		return;
-	if (szty(t) == 4) {
+	if (s >= RL0 || d >= RL0) {
+		/* byte (class D) move; both sides are byte registers */
+		if (s < RL0 || d < RL0)
+			comperr("rmove: mixed byte/word %d -> %d", s, d);
+		printf("\tldb\t%s,%s\n", rnames[d], rnames[s]);
+	} else if (szty(t) == 4) {
 		/* 64-bit quad move: two pair moves (quads never overlap) */
 		printf("\tldl\t%s,%s\n", qpair(d, 0), qpair(s, 0));
 		printf("\tldl\t%s,%s\n", qpair(d, 1), qpair(s, 1));
@@ -977,7 +1022,9 @@ rmove(int s, int d, TWORD t)
  * Class A holds 13 word registers (r0-r12).  Class B holds 6 register
  * pairs (each overlapping two words; rr0 is reserved, so 5 selectable).
  * Class C holds 3 quads (rq0,rq4,rq8), each overlapping 4 words / 2
- * pairs.  Worst-case (conservative) blocking counts.
+ * pairs.  Class D holds the 8 byte registers rl0-rl7, each overlapping
+ * one word (and through it one pair / one quad).  Worst-case
+ * (conservative) blocking counts.
  */
 int
 COLORMAP(int c, int *r)
@@ -986,31 +1033,38 @@ COLORMAP(int c, int *r)
 
 	switch (c) {
 	case CLASSA:
-		/* a pair blocks 2 words, a quad blocks 4 */
-		num = r[CLASSA] + 2 * r[CLASSB] + 4 * r[CLASSC];
+		/* a pair blocks 2 words, a quad blocks 4, a byte 1 */
+		num = r[CLASSA] + 2 * r[CLASSB] + 4 * r[CLASSC] + r[CLASSD];
 		return num < 13;
 	case CLASSB:
-		/* 5 allocatable pairs (rr2..rr10; rr0 reserved);
-		 * a word or pair neighbour blocks 1 pair, a quad blocks 2 */
-		num = r[CLASSB] + r[CLASSA] + 2 * r[CLASSC];
+		/* 5 allocatable pairs (rr2..rr10; rr0 reserved); a word,
+		 * pair or byte neighbour blocks 1 pair, a quad blocks 2 */
+		num = r[CLASSB] + r[CLASSA] + 2 * r[CLASSC] + r[CLASSD];
 		return num < 5;
 	case CLASSC:
 		/* any neighbour blocks at most 1 of the 3 quads */
-		num = r[CLASSA] + r[CLASSB] + r[CLASSC];
+		num = r[CLASSA] + r[CLASSB] + r[CLASSC] + r[CLASSD];
 		return num < 3;
+	case CLASSD:
+		/* a word neighbour blocks (at most) its own byte register,
+		 * a pair blocks 2 bytes, a quad blocks 4 */
+		num = r[CLASSD] + r[CLASSA] + 2 * r[CLASSB] + 4 * r[CLASSC];
+		return num < 8;
 	}
 	return 0;
 }
 
 /*
  * Return the register class suitable for a value of type t.
- * Consistent with PCLASS in macdefs.h: 64-bit values (double) use class
- * C (quads), 32-bit values (long/ptr/float) class B (pairs), everything
- * else class A (words).
+ * Consistent with PCLASS in macdefs.h: char uses class D (byte
+ * registers), 64-bit values (double) class C (quads), 32-bit values
+ * (long/ptr/float) class B (pairs), everything else class A (words).
  */
 int
 gclass(TWORD t)
 {
+	if (t == CHAR || t == UCHAR)
+		return CLASSD;
 	return szty(t) == 4 ? CLASSC : szty(t) == 2 ? CLASSB : CLASSA;
 }
 

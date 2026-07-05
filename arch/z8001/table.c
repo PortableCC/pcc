@@ -31,6 +31,7 @@
  *   SAREG (class A) - 16-bit word registers r0..r12
  *   SBREG (class B) - 32-bit register pairs rr0,rr2,rr4,rr6,rr8,rr10
  *   SCREG (class C) - 64-bit register quads rq0,rq4,rq8 (doubles)
+ *   SDREG (class D) - 8-bit byte registers rl0..rl7 (char values)
  *
  * Key calling convention facts:
  *   - Pure stack, right-to-left push, caller cleans
@@ -60,23 +61,25 @@
 /* Convenience NEEDS shorthands (new-style) */
 #define NAREG		NEEDS(NREG(A, 1))
 #define NBREG		NEEDS(NREG(B, 1))
+#define NDREG		NEEDS(NREG(D, 1))
 #define XSL(c)		NEEDS(NREG(c, 1), NSL(c))
 #define XSR(c)		NEEDS(NREG(c, 1), NSR(c))
 
 /*
- * Byte-register constraints.  Z8001 byte instructions can only name the
- * halves of r0-r7 (rh0-rh7/rl0-rl7); r8-r12 have no byte-addressable
- * halves.  Word instructions (extsb, and, push, ...) operate on any
- * register, so a char value must sit in r0-r7 only at instructions that
- * PRINT a byte register name (ldb/cpb via the ZG/ZH/ZJ escapes).
- * BYTEL/BYTER constrain the left/right operand's live range at such a
- * use; BYTET keeps the rule's own temp (a ZH destination) out of
- * r8-r12.  Values under pressure spill instead of misallocating;
- * blput()'s comperr remains as a backstop.
+ * Char values live in register class D (the byte registers rl0-rl7,
+ * i.e. the low halves of r0-r7), so the "byte instructions can only
+ * name r0-r7's halves" hardware restriction is enforced by register
+ * class membership - byte rules need no NOLEFT/NORIGHT/NEVER
+ * constraints (whose addalledges clobber semantics used to poison
+ * r8-r12 for everything live near a char access).
+ *
+ * Conversions between class D and the word/pair classes exploit the
+ * fact that WORD instructions (ld/extsb/and/neg/push) work on any
+ * register and a char value sits in its containing word's low byte:
+ * they move the containing word (ZG/ZH print it, ZK/ZI move it with
+ * NSL sharing usually reducing the move to nothing) and extend with
+ * word ops.  No fixed registers, no constraints.
  */
-#define BYTEL	NOLEFT(R8), NOLEFT(R9), NOLEFT(R10), NOLEFT(R11), NOLEFT(R12)
-#define BYTER	NORIGHT(R8), NORIGHT(R9), NORIGHT(R10), NORIGHT(R11), NORIGHT(R12)
-#define BYTET	NEVER(R8), NEVER(R9), NEVER(R10), NEVER(R11), NEVER(R12)
 
 struct optab table[] = {
 
@@ -173,54 +176,64 @@ struct optab table[] = {
 		XSL(A),	RESC1,
 		"	ld	A1,UL\n", },
 
-/* char in reg -> int (sign-extend) */
-{ SCONV,	INAREG,
-	SAREG,		TCHAR,
-	SANY,		TINT|TUNSIGNED,
-		0,	RLEFT,
-		"	extsb	AL\n", },
-
-/* unsigned char in reg -> (u)int (zero-extend) */
-{ SCONV,	INAREG,
-	SAREG,		TUCHAR,
-	SANY,		TINT|TUNSIGNED,
-		0,	RLEFT,
-		"	and	AL,$0xff\n", },
-
-/* char from memory -> int */
-{ SCONV,	INAREG,
-	SOREG|SNAME,	TCHAR,
-	SANY,		TINT|TUNSIGNED,
-		NEEDS(NREG(A, 1), BYTET),	RESC1,
-		"	ldb	ZH,AL\n	extsb	A1\n", },
-
-/* unsigned char from memory -> (u)int */
-{ SCONV,	INAREG,
-	SOREG|SNAME,	TUCHAR,
-	SANY,		TINT|TUNSIGNED,
-		NEEDS(NREG(A, 1), BYTET),	RESC1,
-		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
-
-/* char -> (u)long */
-{ SCONV,	INBREG,
-	SAREG,		TCHAR,
-	SANY,		TLNG,
-		XSL(B),	RESC1,
-		"	extsb	AL\n	ld	U1,AL\n	exts	A1\n", },
-
-/* unsigned char -> (u)long */
-{ SCONV,	INBREG,
-	SAREG,		TUCHAR,
-	SANY,		TLNG,
-		XSL(B),	RESC1,
-		"	and	AL,$0xff\n	ld	U1,AL\n	clr	ZM\n", },
-
-/* int -> char: keep low byte (already in register) */
-{ SCONV,	INAREG,
-	SAREG,		TWORD,
+/* char <-> char: same byte register either way */
+{ SCONV,	INDREG,
+	SDREG,		TCHAR|TUCHAR,
 	SANY,		TCHAR|TUCHAR,
 		0,	RLEFT,
 		"", },
+
+/* char (byte reg) -> int: copy the containing word (ZK, elided when
+ * NSL sharing makes A1 that word), then sign-extend its low byte in
+ * place - extsb is a word op, legal on any register.  Memory chars are
+ * first materialized into a byte register by the OPLTYPE rule; with the
+ * shared A1 the pair is "ldb rlN,mem; extsb rN", same as a fused rule. */
+{ SCONV,	INAREG,
+	SDREG,		TCHAR,
+	SANY,		TWORD,
+		NEEDS(NREG(A, 1), NSL(A)),	RESC1,
+		"ZK	extsb	A1\n", },
+
+/* unsigned char (byte reg) -> (u)int: zero-extend via word and */
+{ SCONV,	INAREG,
+	SDREG,		TUCHAR,
+	SANY,		TWORD,
+		NEEDS(NREG(A, 1), NSL(A)),	RESC1,
+		"ZK	and	A1,$0xff\n", },
+
+/* char -> (u)long: word-copy the containing word into the pair's low
+ * word, extend byte->word->pair.  No NSL: "ld U1,ZG" writes U1 before
+ * the (word-op) extensions, so A1 must stay disjoint from the source. */
+{ SCONV,	INBREG,
+	SDREG,		TCHAR,
+	SANY,		TLNG,
+		NBREG,	RESC1,
+		"	ld	U1,ZG\n	extsb	U1\n	exts	A1\n", },
+
+/* unsigned char -> (u)long */
+{ SCONV,	INBREG,
+	SDREG,		TUCHAR,
+	SANY,		TLNG,
+		NBREG,	RESC1,
+		"	ld	U1,ZG\n	and	U1,$0xff\n	clr	ZM\n", },
+
+/* int -> char: word-copy into the result's containing word (ZI, elided
+ * when NSL sharing makes them coincide); the low byte IS the truncated
+ * char, the high byte is dead space. */
+{ SCONV,	INDREG,
+	SAREG,		TWORD,
+	SANY,		TCHAR|TUCHAR,
+		NEEDS(NREG(D, 1), NSL(D)),	RESC1,
+		"ZI", },
+
+/* (u)long/ptr -> char: word-copy the LOW word (UL) into the result's
+ * containing word; works for any pair (rr8/rr10 included) and for
+ * memory (low word at offset+2), unlike a byte-register ldb. */
+{ SCONV,	INDREG,
+	SBREG|SOREG|SNAME,	TLNG|TPOINT,
+	SANY,		TCHAR|TUCHAR,
+		NDREG,	RESC1,
+		"	ld	ZH,UL\n", },
 
 /*
  * Floating-point conversions.  Integer<->fp conversions are rewritten
@@ -270,30 +283,56 @@ struct optab table[] = {
  * ZB expands to the stack adjustment after the call (via zzzcode 'B').
  */
 
-/* Named call, result is word (int/short/char/ptr-lo) in SAREG */
+/* Named call, result is word (int/short) in SAREG */
 { CALL,		INAREG,
 	SCON,		TANY,
-	SANY,		TWORD|TCHAR|TUCHAR,
+	SANY,		TWORD,
 		XSL(A),	RESC1,
 		"	calr	CL\nZB", },
 
 { UCALL,	INAREG,
 	SCON,		TANY,
-	SANY,		TWORD|TCHAR|TUCHAR,
+	SANY,		TWORD,
 		XSL(A),	RESC1,
 		"	calr	CL\n", },
 
 /* Indirect call (function pointer in pair), word result */
 { CALL,		INAREG,
 	SBREG,		TANY,
-	SANY,		TWORD|TCHAR|TUCHAR,
+	SANY,		TWORD,
 		XSL(A),	RESC1,
 		"	call	(AL)\nZB", },
 
 { UCALL,	INAREG,
 	SBREG,		TANY,
-	SANY,		TWORD|TCHAR|TUCHAR,
+	SANY,		TWORD,
 		XSL(A),	RESC1,
+		"	call	(AL)\n", },
+
+/* Call with a char result: the value comes back in rl1 (RETREG(CHAR),
+ * the class-D face of the native "int result in r1" convention) */
+{ CALL,		INDREG,
+	SCON,		TANY,
+	SANY,		TCHAR|TUCHAR,
+		XSL(D),	RESC1,
+		"	calr	CL\nZB", },
+
+{ UCALL,	INDREG,
+	SCON,		TANY,
+	SANY,		TCHAR|TUCHAR,
+		XSL(D),	RESC1,
+		"	calr	CL\n", },
+
+{ CALL,		INDREG,
+	SBREG,		TANY,
+	SANY,		TCHAR|TUCHAR,
+		XSL(D),	RESC1,
+		"	call	(AL)\nZB", },
+
+{ UCALL,	INDREG,
+	SBREG,		TANY,
+	SANY,		TCHAR|TUCHAR,
+		XSL(D),	RESC1,
 		"	call	(AL)\n", },
 
 /* Named call, result is long/ptr/float in SBREG */
@@ -976,19 +1015,19 @@ struct optab table[] = {
  * have the LDI store path), so the constant is materialized into a pair
  * register (OPLTYPE ldl $imm) and stored via the mem <- pair rule above. */
 
-/* byte/char reg <- reg or mem (dest reg -> low byte; src reg -> low byte) */
-{ ASSIGN,	FOREFF|INAREG|FORCC,
-	SAREG,		TCHAR|TUCHAR,
-	SAREG|SNAME|SOREG|SCON,	TCHAR|TUCHAR,
-		NEEDS(BYTEL, BYTER),	RDEST|RESCC,
-		"	ldb	ZG,ZJ\n", },
+/* byte/char reg <- reg, mem or const (byte registers print as rlN) */
+{ ASSIGN,	FOREFF|INDREG|FORCC,
+	SDREG,		TCHAR|TUCHAR,
+	SDREG|SNAME|SOREG|SCON,	TCHAR|TUCHAR,
+		0,	RDEST|RESCC,
+		"	ldb	AL,AR\n", },
 
-/* byte mem <- reg (src reg -> low byte) */
-{ ASSIGN,	FOREFF|INAREG|FORCC,
+/* byte mem <- reg */
+{ ASSIGN,	FOREFF|INDREG|FORCC,
 	SNAME|SOREG,	TCHAR|TUCHAR,
-	SAREG,		TCHAR|TUCHAR,
-		NEEDS(BYTER),	RDEST|RESCC,
-		"	ldb	AL,ZJ\n", },
+	SDREG,		TCHAR|TUCHAR,
+		0,	RDEST|RESCC,
+		"	ldb	AL,AR\n", },
 
 /* byte mem <- const (ldb dst,#imm takes IR/DA/X - no BA) */
 { ASSIGN,	FOREFF,
@@ -1046,19 +1085,16 @@ struct optab table[] = {
 		NEEDS(NREG(C, 1)),	RESC1,
 		"ZE", },
 
-/* load signed char through pair register */
-{ UMUL,		INAREG,
+/* load char through pair register into a byte register.  No extension
+ * here: promotion to int is a separate SCONV (usually fused back to
+ * "ldb rlN,(rrM); extsb rN" by NSL sharing).  A single ldb reads its
+ * address before writing the destination, so even a destination whose
+ * word lies inside the base pair is safe. */
+{ UMUL,		INDREG,
 	SANY,		TANY,
-	SOREG,		TCHAR,
-		NEEDS(NREG(A, 1), NSL(A), BYTET),	RESC1,
-		"	ldb	ZH,AL\n	extsb	A1\n", },
-
-/* load unsigned char through pair register */
-{ UMUL,		INAREG,
-	SANY,		TANY,
-	SOREG,		TUCHAR,
-		NEEDS(NREG(A, 1), NSL(A), BYTET),	RESC1,
-		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
+	SOREG,		TCHAR|TUCHAR,
+		NDREG,	RESC1,
+		"	ldb	A1,AL\n", },
 
 /*
  * Logical/comparison operators.
@@ -1139,18 +1175,18 @@ struct optab table[] = {
 		0,	RESCC,
 		"	cpl	AL,AR\n", },
 
-/* compare char vs char (reg operands -> low byte) */
+/* compare char vs char (byte registers print as rlN) */
 { OPLOG,	FORCC,
-	SAREG,			TCHAR|TUCHAR,
-	SAREG|SNAME|SCON,	TCHAR|TUCHAR,
-		NEEDS(BYTEL, BYTER),	RESCC,
-		"	cpb	ZG,ZJ\n", },
+	SDREG,			TCHAR|TUCHAR,
+	SDREG|SNAME|SCON,	TCHAR|TUCHAR,
+		0,	RESCC,
+		"	cpb	AL,AR\n", },
 
 { OPLOG,	FORCC,
-	SAREG,	TCHAR|TUCHAR,
+	SDREG,	TCHAR|TUCHAR,
 	SNBA,	TCHAR|TUCHAR,
-		NEEDS(BYTEL),	RESCC,
-		"	cpb	ZG,ZJ\n", },
+		0,	RESCC,
+		"	cpb	AL,AR\n", },
 
 /* compare char mem vs const (immediate-compare form) */
 { OPLOG,	FORCC,
@@ -1209,26 +1245,14 @@ struct optab table[] = {
 		NEEDS(NREG(C, 1)),	RESC1,
 		"ZE", },
 
-/* char already in a register, or a char constant: copy as a word */
-{ OPLTYPE,	INAREG,
+/* materialize a char leaf (reg, mem or constant) into a byte register.
+ * No extension here: byte registers hold raw bytes, promotion is an
+ * SCONV.  ldb rlN,$imm is the byte immediate-load form. */
+{ OPLTYPE,	INDREG,
 	SANY,	TANY,
-	SAREG|SCON,	TCHAR|TUCHAR,
-		NAREG,	RESC1,
-		"	ld	A1,AL\n", },
-
-/* load signed char from mem into word register */
-{ OPLTYPE,	INAREG,
-	SANY,	TANY,
-	SOREG|SNAME,	TCHAR,
-		NEEDS(NREG(A, 1), BYTET),	RESC1,
-		"	ldb	ZH,AL\n	extsb	A1\n", },
-
-/* load unsigned char from mem into word register */
-{ OPLTYPE,	INAREG,
-	SANY,	TANY,
-	SOREG|SNAME,	TUCHAR,
-		NEEDS(NREG(A, 1), BYTET),	RESC1,
-		"	ldb	ZH,AL\n	and	A1,$0xff\n", },
+	SDREG|SOREG|SNAME|SCON,	TCHAR|TUCHAR,
+		NDREG,	RESC1,
+		"	ldb	A1,AL\n", },
 
 /* load address (lda) of SOREG/SNAME into pair register */
 { OPLTYPE,	INBREG,
@@ -1242,10 +1266,18 @@ struct optab table[] = {
  */
 
 { UMINUS,	INAREG|FOREFF,
-	SAREG,	TWORD|TCHAR|TUCHAR,
+	SAREG,	TWORD,
 	SANY,	TANY,
 		0,	RLEFT,
 		"	neg	AL\n", },
+
+/* negate a char: neg its containing word (a word op, any register);
+ * the low byte is the two's-complement byte result */
+{ UMINUS,	INDREG|FOREFF,
+	SDREG,	TCHAR|TUCHAR,
+	SANY,	TANY,
+		0,	RLEFT,
+		"	neg	ZG\n", },
 
 { UMINUS,	INBREG|FOREFF,
 	SBREG,	TLONG|TULONG,
@@ -1338,12 +1370,14 @@ struct optab table[] = {
 		0,	RNULL,
 		"ZP", },
 
-/* push char (promoted to word) */
+/* push char: push its containing word (the value is in the low byte of
+ * the word-sized argument slot; the high byte is don't-care, exactly as
+ * with the old word-register convention) */
 { FUNARG,	FOREFF,
-	SAREG,		TCHAR|TUCHAR,
+	SDREG,		TCHAR|TUCHAR,
 	SANY,		TCHAR|TUCHAR,
 		0,	RNULL,
-		"	push	(rr14),AL\n", },
+		"	push	(rr14),ZG\n", },
 
 /* push zero word */
 { FUNARG,	FOREFF,

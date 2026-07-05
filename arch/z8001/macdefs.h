@@ -172,6 +172,20 @@ typedef long long OFFSZ;
  *   B (SBREG) - 32-bit register pairs: rr0,rr2,rr4,rr6,rr8,rr10
  *   C (SCREG) - 64-bit register quads: rq0,rq4,rq8 (doubles; native
  *               soft-FP convention keeps a double value in rq0)
+ *   D (SDREG) - 8-bit byte registers rl0-rl7 (the low bytes of r0-r7)
+ *
+ * Class D exists because Z8001 byte instructions (ldb/cpb/...) can only
+ * name the halves of r0-r7; r8-r12 have no byte-addressable halves.
+ * Making char values their own class (the arch/i86 model) lets the
+ * allocator enforce that structurally, through ROVERLAP/aliasmap,
+ * instead of via per-rule NOLEFT/NORIGHT/NEVER word-register constraints
+ * - NEVER in particular is clobber semantics (addalledges), which gave
+ * r8-r12 interference edges to EVERY value live near a char access and
+ * starved cross-call values out of rr8/rr10.  Only the LOW halves exist
+ * as registers here (no rh0-rh7): a char held in a word register lives
+ * in its low byte everywhere in this ABI (big-endian argument slots,
+ * memory loads, extsb), so high-byte registers would break that
+ * convention at every conversion or store.
  */
 #define	R0	0	/* scratch, low half of rr0, return word (int) */
 #define	R1	1	/* scratch, high half of rr0, return value (int) */
@@ -201,7 +215,16 @@ typedef long long OFFSZ;
 #define	RQ4	23	/* r4-r7   - scratch quad (r6/r7 saved when used) */
 #define	RQ8	24	/* r8-r11  - callee-saved quad */
 
-#define	MAXREGS	25
+#define	RL0	25	/* low byte of r0 - scratch */
+#define	RL1	26	/* low byte of r1 - scratch, return value (char) */
+#define	RL2	27	/* low byte of r2 - scratch */
+#define	RL3	28	/* low byte of r3 - scratch */
+#define	RL4	29	/* low byte of r4 - scratch */
+#define	RL5	30	/* low byte of r5 - scratch */
+#define	RL6	31	/* low byte of r6 - callee-saved (via word r6) */
+#define	RL7	32	/* low byte of r7 - callee-saved (via word r7) */
+
+#define	MAXREGS	33
 
 /*
  * RSTATUS: register class membership and caller/callee-saved flags.
@@ -233,8 +256,20 @@ typedef long long OFFSZ;
 	SBREG,		/* rr10 - preserved via its words r10/r11 */ \
 	SCREG,		/* rq0  - caller-saved, double RETREG */ \
 	SCREG,		/* rq4  - r6/r7 half saved by prologue when used */ \
-	SCREG,		/* rq8  - preserved via its words r8-r11 */
+	SCREG,		/* rq8  - preserved via its words r8-r11 */ \
+	SDREG,		/* rl0  - caller-saved via its word r0 */ \
+	SDREG,		/* rl1  - caller-saved, char RETREG */ \
+	SDREG,		/* rl2  - caller-saved via its word r2 */ \
+	SDREG,		/* rl3  - caller-saved via its word r3 */ \
+	SDREG,		/* rl4  - caller-saved via its word r4 */ \
+	SDREG,		/* rl5  - caller-saved via its word r5 */ \
+	SDREG,		/* rl6  - preserved via its word r6 */ \
+	SDREG,		/* rl7  - preserved via its word r7 */
 /*
+ * The byte registers carry no TEMPREG either: a char live across a call
+ * conflicts with the precolored r0-r5 edges added there, and aliasmap
+ * turns those into rl0-rl5 exclusions in class D automatically.
+ *
  * Only the word registers r0-r5 carry TEMPREG.  tempregs[] is consumed in
  * exactly one place (regs.c call handling: addalledges of every listed
  * register at each call site), and marking the caller-saved pairs/quads
@@ -253,17 +288,18 @@ typedef long long OFFSZ;
 /*
  * ROVERLAP: which other registers each register aliases.
  * A pair RRn aliases the two word registers Rn and R(n+1); a quad RQn
- * aliases four words and two pairs.
+ * aliases four words and two pairs; a byte register RLn aliases its
+ * containing word Rn and, transitively, that word's pair and quad.
  */
 #define	ROVERLAP \
-	{ RR0,  RQ0, -1 },	/* r0  */ \
-	{ RR0,  RQ0, -1 },	/* r1  */ \
-	{ RR2,  RQ0, -1 },	/* r2  */ \
-	{ RR2,  RQ0, -1 },	/* r3  */ \
-	{ RR4,  RQ4, -1 },	/* r4  */ \
-	{ RR4,  RQ4, -1 },	/* r5  */ \
-	{ RR6,  RQ4, -1 },	/* r6  */ \
-	{ RR6,  RQ4, -1 },	/* r7  */ \
+	{ RL0,  RR0,  RQ0, -1 },	/* r0  */ \
+	{ RL1,  RR0,  RQ0, -1 },	/* r1  */ \
+	{ RL2,  RR2,  RQ0, -1 },	/* r2  */ \
+	{ RL3,  RR2,  RQ0, -1 },	/* r3  */ \
+	{ RL4,  RR4,  RQ4, -1 },	/* r4  */ \
+	{ RL5,  RR4,  RQ4, -1 },	/* r5  */ \
+	{ RL6,  RR6,  RQ4, -1 },	/* r6  */ \
+	{ RL7,  RR6,  RQ4, -1 },	/* r7  */ \
 	{ RR8,  RQ8, -1 },	/* r8  */ \
 	{ RR8,  RQ8, -1 },	/* r9  */ \
 	{ RR10, RQ8, -1 },	/* r10 */ \
@@ -272,39 +308,54 @@ typedef long long OFFSZ;
 	{ -1 },			/* r13 - reserved */ \
 	{ -1 },			/* r14 - reserved */ \
 	{ -1 },			/* r15 - reserved */ \
-	{ R0,  R1,  RQ0, -1 },	/* rr0  */ \
-	{ R2,  R3,  RQ0, -1 },	/* rr2  */ \
-	{ R4,  R5,  RQ4, -1 },	/* rr4  */ \
-	{ R6,  R7,  RQ4, -1 },	/* rr6  */ \
+	{ R0,  R1,  RL0, RL1, RQ0, -1 },	/* rr0  */ \
+	{ R2,  R3,  RL2, RL3, RQ0, -1 },	/* rr2  */ \
+	{ R4,  R5,  RL4, RL5, RQ4, -1 },	/* rr4  */ \
+	{ R6,  R7,  RL6, RL7, RQ4, -1 },	/* rr6  */ \
 	{ R8,  R9,  RQ8, -1 },	/* rr8  */ \
 	{ R10, R11, RQ8, -1 },	/* rr10 */ \
-	{ R0, R1, R2, R3, RR0, RR2, -1 },	/* rq0 */ \
-	{ R4, R5, R6, R7, RR4, RR6, -1 },	/* rq4 */ \
-	{ R8, R9, R10, R11, RR8, RR10, -1 },	/* rq8 */
+	{ R0, R1, R2, R3, RL0, RL1, RL2, RL3, RR0, RR2, -1 },	/* rq0 */ \
+	{ R4, R5, R6, R7, RL4, RL5, RL6, RL7, RR4, RR6, -1 },	/* rq4 */ \
+	{ R8, R9, R10, R11, RR8, RR10, -1 },	/* rq8 */ \
+	{ R0, RR0, RQ0, -1 },	/* rl0 */ \
+	{ R1, RR0, RQ0, -1 },	/* rl1 */ \
+	{ R2, RR2, RQ0, -1 },	/* rl2 */ \
+	{ R3, RR2, RQ0, -1 },	/* rl3 */ \
+	{ R4, RR4, RQ4, -1 },	/* rl4 */ \
+	{ R5, RR4, RQ4, -1 },	/* rl5 */ \
+	{ R6, RR6, RQ4, -1 },	/* rl6 */ \
+	{ R7, RR6, RQ4, -1 },	/* rl7 */
 
 /* Return the register class for a node's type */
-#define PCLASS(p) (szty((p)->n_type) == 4 ? SCREG : \
+#define PCLASS(p) ((p)->n_type == CHAR || (p)->n_type == UCHAR ? SDREG : \
+		   szty((p)->n_type) == 4 ? SCREG : \
 		   szty((p)->n_type) == 2 ? SBREG : SAREG)
 
-#define	NUMCLASS	3	/* classes: A (word), B (pair), C (quad) */
+#define	NUMCLASS	4	/* classes: A (word), B (pair), C (quad), D (byte) */
 
 int COLORMAP(int c, int *r);
-#define	GCLASS(x)	((x) < 16 ? CLASSA : (x) < 22 ? CLASSB : CLASSC)
-#define DECRA(x,y)	(((x) >> ((y)*5)) & 31)	/* decode register from n_reg */
+#define	GCLASS(x)	((x) < 16 ? CLASSA : (x) < 22 ? CLASSB : \
+			 (x) < 25 ? CLASSC : CLASSD)
+/* 6-bit register fields: MAXREGS is 33, three regs packed in n_reg */
+#define DECRA(x,y)	(((x) >> ((y)*6)) & 63)	/* decode register from n_reg */
 #define	ENCRD(x)	(x)			/* encode dest register */
-#define ENCRA1(x)	((x) << 5)
-#define ENCRA2(x)	((x) << 10)
-#define ENCRA(x,y)	((x) << (5+(y)*5))	/* encode source register */
+#define ENCRA1(x)	((x) << 6)
+#define ENCRA2(x)	((x) << 12)
+#define ENCRA(x,y)	((x) << (6+(y)*6))	/* encode source register */
 
 /*
  * Return register for each type (matches the native Coherent compiler:
  * factor.s reads int results from r1, long results from rr0, and double
  * results from rq0; the FP runtime's ifix returns int in r1 too):
- *   int/short/char  -> r1
+ *   char            -> rl1 (the low byte of r1; the class-D view of the
+ *                      native word convention - a caller wanting an int
+ *                      re-extends, one reading a char takes rl1 as is)
+ *   int/short       -> r1
  *   long/ptr/float  -> rr0 (r0:r1)
  *   double          -> rq0 (r0-r3)
  */
-#define	RETREG(x)	(szty(x) == 4 ? RQ0 : szty(x) == 2 ? RR0 : R1)
+#define	RETREG(x)	((x) == CHAR || (x) == UCHAR ? RL1 : \
+			 szty(x) == 4 ? RQ0 : szty(x) == 2 ? RR0 : R1)
 
 #define FPREG	R13	/* frame pointer */
 #define STKREG	R15	/* stack pointer (low word of rr14) */
