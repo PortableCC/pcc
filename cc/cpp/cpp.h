@@ -228,6 +228,7 @@ void cunput(int);
 int yyparse(void);
 void putch(int);
 void putstr(const usch *s);
+void putblk(const char *s, const char *e);
 usch *sheap(const char *fmt, ...);
 struct iobuf *bsheap(struct iobuf *, const char *fmt, ...);
 struct iobuf *strtobuf(const usch *str, struct iobuf *iob);

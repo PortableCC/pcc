@@ -50,25 +50,30 @@
  * 5.1.1.2 Translation phases:
  *	1) Convert UCN to UTF-8 which is what pcc uses internally (chkucn).
  *	   Remove \r (unwanted)
- *	2) Remove \\\n.  Need extra care for identifiers and #line.
+ *	2) Remove \\\n.	 Need extra care for identifiers and #line.
  *	3) Tokenize.
  *	   Remove comments (fastcmnt)
+ *
+ * Handling of newline:
+ *	- In a define with \\n, print out \n when found and inc lineno.
+ *	- While expanding a macro whose args spans multiple lines, 
+ *	  save in escln.
  */
-/*  (low address)                                             (high address)
- *  pbeg                                                                pend
- *  |                                                                     |
+/*  (low address)					      (high address)
+ *  pbeg								pend
+ *  |									  |
  *  _______________________________________________________________________
  * |_______________________________________________________________________|
- *          |               |               |
- *          |<-- waiting -->|               |<-- waiting -->
- *          |    to be      |<-- current -->|    to be
- *          |    written    |    token      |    scanned
- *          |               |               |
- *          outp            inp             p
+ *	    |		    |		    |
+ *	    |<-- waiting -->|		    |<-- waiting -->
+ *	    |	 to be	    |<-- current -->|	 to be
+ *	    |	 written    |	 token	    |	 scanned
+ *	    |		    |		    |
+ *	    outp	    inp		    p
  *
  *  *outp   first char not yet written to output file
  *  *inp    first char of current token
- *  *p      first char not yet scanned
+ *  *p	    first char not yet scanned
  */
 
 #ifndef pdp11
@@ -101,7 +106,7 @@ static void undefstmt(void);
 static void pragmastmt(void);
 static void elifstmt(void);
 
-#define	unch(x)	*--inp = x
+#define unch(x) *--inp = x
 
 /* protection against recursion in #include */
 #define MAX_INCLEVEL	100
@@ -130,15 +135,15 @@ static int chktg(int ch);
 #define C_NBS	(C_SPEC|C_Q|C_PACK|C_ESTR)
 
 #define FIRST_128							\
-	C_NBS,	0,	0,	0,	C_SPEC,	C_SPEC,	0,	0,	\
-	0,	C_WSNL,	C_NL,	0,	0,	C_PACK, 0,	0,	\
+	C_NBS,	0,	0,	0,	C_SPEC, C_SPEC, 0,	0,	\
+	0,	C_WSNL, C_NL,	0,	0,	C_PACK, 0,	0,	\
 	0,	0,	0,	0,	0,	0,	0,	0,	\
 	0,	0,	0,	0,	0,	0,	0,	0,	\
 	\
-	C_WSNL,	C_2,	C_SPEC|C_ESTR, 0, 0,	0,	C_2,	C_SPEC|C_ESTR, \
+	C_WSNL, C_2,	C_SPEC|C_ESTR, 0, 0,	0,	C_2,	C_SPEC|C_ESTR, \
 	0,	0,	0,	C_2,	0,	C_2,	0,	C_SPEC|C_Q, \
 	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	\
-	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_PACK,	\
+	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_PACK, \
 	\
 	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
@@ -176,9 +181,52 @@ short spechr[256] = {
 	FIRST_128 LAST_128
 };
 
-#define	ENDFREE	4	/* space left at end of buffer */
+char cppmap[256] = {
+	0,	0,	0,	0,	F_BID,	F_BID,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
 
-#define	INFLIRD	(CPPBUF-ENDFREE)
+	0,	0,	F_STR,	0,	0,	0,	0,	F_STR,
+	0,	0,	0,	0,	0,	0,	F_NUM,	F_SLASH,
+	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,
+	F_NUM,	F_NUM,	0,	0,	0,	0,	0,	0,
+
+	0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_LU,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_LU,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	0,	0,	0,	0,	F_ID0,
+
+	0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_LU,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	0,	0,	0,	0,	0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+};
+
+
+#define ENDFREE 4	/* space left at end of buffer */
+
+#define INFLIRD (CPPBUF-ENDFREE)
 
 /*
  * fill up the input buffer
@@ -213,7 +261,7 @@ qcchar(void)
 {
 	register int ch;
 
-newone:	ch = *inp++;
+newone: ch = *inp++;
 	if (ISCQ(ch) == 0)
 		return ch;
 
@@ -330,7 +378,7 @@ ucn(register int ch, FILE *ifp, FILE *ofp)
 	while (n-- > 0) {
 		if ((ch = fgetc(ifp)) < 0 ||
 		    (ISDIGIT(ch) || ((ch|040) >= 'a' && (ch|040) <= 'f')) == 0) {
-#if 0 			/* leave untouched */
+#if 0			/* leave untouched */
 			warning("invalid universal character name");
 #endif
 			return;
@@ -472,164 +520,133 @@ fastscan(void)
 	struct iobuf *ob;
 	struct symtab *nl;
 	register int ch, c2;
-	register usch *p;
+	struct rdline *rdp = ifiles->rdp;
+	char *s, *p, *lastw;
 
-	goto run;
-
+	/*
+	 * An outer and an inner loop.
+	 * The outer loop reads in lines (terminated by \n), the inner loop
+	 * checks each character.
+	 * lastw is the last char written to the output buffer, and either
+	 * when a macro is found or when the whole line is read the chars
+	 * between s and lastw are written out.
+	 */
 	for (;;) {
-		/* tight loop to find special chars */
-		/* should use getchar/putchar here */
-		for (;;) {
-			if (inp < pend)
-				ch = *inp++;
-			else
-				ch = qcchar();
+		while (escln > 0) {
+			ifiles->lineno++;
+			putch('\n'), escln--;
+		}
+		if (templine(rdp) == NULL)
+			return;
+		s = lastw = rdp->curpos;
+		// XXX compat
+		inp = (usch *)rdp->curpos;
+		pend = inp + rdp->len;
+		// XXX end compat
 
-			if ((ISSPEC(ch)) != 0)
-				break;
-			putch(ch);
+		if (*s == '#') {
+			inp++;
+			ppdir();
+			escln++;
+			continue;
 		}
 
-		switch (ch) {
-		case 0:
-			return;
-
-		case WARN:
-		case CONC:
-			error("bad char passed");
-			break;
-
-		case '/': /* Comments */
-			incmnt++;
-			ch = qcchar();
-			incmnt--;
-			if (ch  == '/' || ch == '*') {
-				if (Cflag == 0) {
-					int n = ifiles->lineno;
-					fastcmnt2(ch);
-					if (n == ifiles->lineno)
-						putch(' '); /* 5.1.1.2 p3 */
-				} else {
-					ob = getobuf(BNORMAL);
-					Ccmnt2(ob, ch);
-					ob->buf[ob->cptr] = 0;
-					putstr(ob->buf);
-					bufree(ob);
+		/*
+		 * Loop over string. Search for:
+		 * - strings
+		 * - Character constants
+		 * - Comments (if Cflag)
+		 * - cpp numbers
+		 * - identifiers
+		 *
+		 * A continue statement will fetch next char for parsing.
+		 * A break will:
+		 * - flush unwritten parts of the input to output.
+		 * - add the \n to the output.
+		 * - write eventual saved \n to the output.
+		 */
+		for (;;) {
+			ch = *s++;
+			switch (F_TYP(ch)) {
+			case 0:
+				if (ch == '\n') {
+					s--;
+					break;
 				}
-			} else {
-				putch('/');
-				unch(ch);
-			}
-			break;
+				continue;
 
-		case '\n': /* newlines, for pp directives */
-			/* take care of leftover \n */
-			while (escln > 0) {
-				putch('\n');
-				escln--;
-				ifiles->lineno++;
-			}
-			putch('\n');
-			ifiles->lineno++;
+			case F_STR:
+				while ((c2 = *s) && c2 != ch) {
+					if (c2 == '\n') {
+						warning("unterminated literal");
+						break;
+					}
+					if (c2 == '\\')
+						s++;
+					s++;
+				}
+				continue;
 
-			/* search for a # */
-run:			while ((ch = qcchar()) == '\t' || ch == ' ')
-				putch(ch);
-			if (ch == 0)
-				return;
-			if (ch  == '#')
-				ppdir();
-			else
-				unch(ch);
-			break;
-
-		case '\'': /* character constant */
-			if (tflag) {
-				putch(ch);
-				break;	/* character constants ignored */
-			}
-			/* FALLTHROUGH */
-		case '\"': /* strings */
-			if (skpows)
-				cntline();
-			p = inp;
-			*--inp = ch;
-			for (;;) {
-				while (ISESTR(*p++) == 0)
-					;
-				if ((c2 = *--p) == 0) {
-					putstr(inp);
-					inp = p;
-					inpbuf();
-					p = inp-1;
-				} else if (c2 == '\\') {
-					p++;
-				} else if (c2 == '\n') {
-					warning("unterminated literal");
-					p--;
+			case F_SLASH:
+				if (*s == '/') { /* C++-style comment */
+					s--; /* skip first / */
 					break;
-				} else if (c2 == ch) 
-					break;
-				p++;
-			}
-			while (inp <= p)
-				putch(*inp++);
-			break;
-
-		case '0': case '1': case '2': case '3': case '4':
-		case '5': case '6': case '7': case '8': case '9':
-			if (skpows)
-				cntline();
-			for (;;) {
-				putch(ch);
-				if (*inp == 0 || *inp == '\\')
-					ch = qcchar();
-				else
-					ch = *inp++;
-				if (ch == 0)
-					break;
-				if ((ISID(ch)) == 0 && ch != '.')
-					break;
-				if ((ch|040) == 'e' || (ch|040) == 'p') {
-					if ((c2 = qcchar()) == '-' || c2 == '+') {
-						putch(ch);
-						ch = c2;
+				}
+				if (*s != '*')
+					continue;
+				s++;
+				while (*s != '*' || s[1] != '/') {
+					if (*s == '\n') {
+						ifiles->lineno++;
+						putch('\n');
+						if (templine(rdp) == NULL)
+							error("rdcmnt()");
+						s = lastw = rdp->curpos;
+						// XXX compat
+						inp = (usch *)rdp->curpos;
+						pend = inp + rdp->len;
+						// XXX end compat
 					} else
-						unch(c2);
+						s++;
 				}
-			}
-			*--inp = ch;
-			break;
-
-		case 'L':
-		case 'U':
-		case 'u':
-			if (*inp == 0)
-				inpbuf();
-			if ((c2 = *inp) == '\"' || c2 == '\'') {
-				putch(ch);
 				break;
-			}
-			if (c2 == '8' && ch == 'u') {
-				if (inp[1] == 0)
-					inpbuf();
-				if (inp[1] == '\"') {
-					inp++;
-					putstr((usch *)"u8");
+
+			case F_NUM:
+				for (;;) {
+					ch = *s++;
+					if ((F_ISID(ch)) == 0 && ch != '.')
+						break;
+					if ((ch|040) == 'e' || (ch|040) == 'p') 
+{
+						if ((c2 = *s) == '-' || c2 == '+')
+							s++;
+					}
+				}
+				s--;
+				continue;
+
+			case F_LU:
+				if (*s == '\"' || *s == '\'')
+					break;
+				if (ch == 'u' && *s == '8' && s[1] == '\"') {
+					s++;
 					break;
 				}
-			}
-			/* FALLTHROUGH */
-		default:
-#ifdef PCC_DEBUG
-			if ((ISID(ch)) == 0)
-				error("fastscan");
-#endif
-			if (flslvl)
-				error("fastscan flslvl");
+				/* FALLTHROUGH */
 
-			p = readid(ch);
-			if ((nl = lookup(p, FIND)) != NULL) {
+			case F_ID0:
+				/*
+				 * Search for identifier (quick look).
+				 */
+				p = s-1;
+				while (F_ISID(*s))
+					s++;
+				if ((nl = lookup((usch *)p, FIND)) == NULL)
+					continue;
+				putblk(lastw, p);
+				lastw = p;
+				rdp->curpos = s;
+				inp = (usch *)s;
 				if ((ob = kfind(nl)) != NULL) {
 					if (*ob->buf == '-' || *ob->buf == '+')
 						putch(' ');
@@ -643,11 +660,19 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 						putch(' ');
 					bufree(ob);
 				}
-			} else {
-				putstr(p);
+				s = (char *)inp;
+				rdp->curpos = s;
+				lastw = s;
+				continue;
+
+			default:
+				continue;
 			}
 			break;
 		}
+		if (s != lastw)
+			putblk(lastw, s);
+		escln++;
 	}
 }
 
@@ -1091,9 +1116,9 @@ elsestmt(void)
 	chknl(1);
 }
 
-#define	TYP_ELIF	1
-#define	TYP_ELIFDEF	2
-#define	TYP_ELIFNDEF	3
+#define TYP_ELIF	1
+#define TYP_ELIFDEF	2
+#define TYP_ELIFNDEF	3
 static void elifcommon(int typ);
 static int chktyp(int typ);
 
@@ -1174,7 +1199,7 @@ chktyp(int typ)
 	rv = lookup(bp, FIND) == NULL;
 	if (typ == TYP_ELIFDEF)
 		rv = !rv;
-        chknl(0);
+	chknl(0);
 	return rv;
 }
 
@@ -1296,8 +1321,8 @@ cinput(void)
 	return qcchar();
 }
 
-#define	DIR_FLSLVL	001
-#define	DIR_FLSINC	002
+#define DIR_FLSLVL	001
+#define DIR_FLSINC	002
 static struct {
 	const char *name;
 	void (*fun)(void);
@@ -1323,7 +1348,7 @@ static struct {
 	{ "include_next", include_next, 0 },
 #endif
 };
-#define	NPPD	(int)(sizeof(ppd) / sizeof(ppd[0]))
+#define NPPD	(int)(sizeof(ppd) / sizeof(ppd[0]))
 
 static void
 skpln(void)
@@ -1400,7 +1425,7 @@ again:		switch (ch) {
 				fastcmnt2(ch);
 			goto again;
 		}
-        }
+	}
 }
 
 

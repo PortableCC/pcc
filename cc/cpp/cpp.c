@@ -2339,6 +2339,16 @@ putstr(const usch *s)
 	fprintf(stdout, "%s", s);
 }
 
+void
+putblk(const char *b, const char *e)
+{
+	if (Mflag)
+		return;
+	if (skpows)
+		cntline();
+	fwrite(b, 1, e - b, stdout);
+}
+
 /*
  * convert a number to an ascii string. Store it on the heap.
  */
