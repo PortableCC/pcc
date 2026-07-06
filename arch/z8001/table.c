@@ -1109,12 +1109,19 @@ struct optab table[] = {
  */
 
 /*
- * Compare vs zero.  We must use cp/cpl (a real subtraction), NOT test/testl:
- * TEST performs "dst OR 0" (Z8000 manual), so it sets S and Z but leaves the
- * P/V flag as parity rather than signed-overflow.  The signed conditions
- * lt/ge/gt/le are (S xor V), so after TEST they misfire at the 0 boundary
- * (e.g. "0 < 0" wrongly taken).  cp/cpl set S, V, C and Z correctly for all
- * signed and unsigned conditions.
+ * Compare vs zero.  For the ORDERED conditions we must use cp/cpl (a real
+ * subtraction), NOT test/testl: TEST performs "dst OR 0" (Z8000 manual), so
+ * it sets S and Z but leaves the P/V flag as parity rather than signed-
+ * overflow.  The signed conditions lt/ge/gt/le are (S xor V), so after TEST
+ * they misfire at the 0 boundary (e.g. "0 < 0" wrongly taken).  cp/cpl set
+ * S, V, C and Z correctly for all signed and unsigned conditions.
+ *
+ * EQ/NE read ONLY the Z flag, which TEST does set correctly - so equality
+ * against zero uses test/testl/testb like native cc.  test takes dst =
+ * R/IR/DA/X (as S_CLR class), so it also works directly on memory: testl
+ * mem replaces an ldl+cpl pair and testb mem a ldb/extsb/cp triple.  The
+ * EQ/NE rules must precede the OPLOG cp rules: for an equality compare
+ * both match at the same level and the first table entry wins.
  */
 /*
  * cp/cpb have two hardware forms (Coherent as S_CP): "cp Rd,src" with
@@ -1122,6 +1129,81 @@ struct optab table[] = {
  * dst = IR/DA/X.  There is NO mem-vs-reg compare and NO BA operand.
  * cpl has ONLY the register-dst form: "cpl RRd,src".
  */
+
+/* equality vs zero, word */
+{ EQ,	FORCC,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\n", },
+
+{ NE,	FORCC,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\n", },
+
+{ EQ,	FORCC,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\n", },
+
+{ NE,	FORCC,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\n", },
+
+/* equality vs zero, long/pointer: unlike cpl, testl also takes memory */
+{ EQ,	FORCC,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\n", },
+
+{ NE,	FORCC,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\n", },
+
+{ EQ,	FORCC,
+	SNBA,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\n", },
+
+{ NE,	FORCC,
+	SNBA,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\n", },
+
+/* equality vs zero, char (byte registers print as rlN) */
+{ EQ,	FORCC,
+	SDREG|SNAME,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testb	AL\n", },
+
+{ NE,	FORCC,
+	SDREG|SNAME,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testb	AL\n", },
+
+{ EQ,	FORCC,
+	SNBA,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testb	AL\n", },
+
+{ NE,	FORCC,
+	SNBA,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testb	AL\n", },
 
 /* compare word vs zero */
 { OPLOG,	FORCC,
