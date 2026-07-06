@@ -209,7 +209,7 @@ struct symtab *lookup(const usch *namep, int enterf);
 struct blocker;
 struct iobuf *submac(struct symtab *nl, int, struct iobuf *, int);
 struct iobuf *kfind(struct symtab *nl);
-void ppdir(void);
+void ppdir(char *);
 
 void define(void);
 void include(void);

@@ -598,7 +598,7 @@ fastscan(void)
 
 		if (*s == '#') {
 			inp++;
-			ppdir();
+			ppdir(++s);
 			escln++;
 			s = skpwscmnt((char *)inp);
 			continue;
@@ -693,6 +693,8 @@ fastscan(void)
 				p = s-1;
 				while (F_ISID(*s))
 					s++;
+				if (flslvl)
+					continue;
 				if ((nl = lookup((usch *)p, FIND)) == NULL)
 					continue;
 				putblk(lastw, p);
@@ -1309,6 +1311,8 @@ prwoe(void)
 static void
 cpperror(void)
 {
+	if (flslvl)
+		return;
 	fflush(stdout);
 
 	fprintf(stderr, "#error");
@@ -1321,6 +1325,8 @@ cppwarning(void)
 {
 	extern int warnings;
 
+	if (flslvl)
+		return;
 	fprintf(stderr, "#warning");
 	prwoe();
 	warnings++;
@@ -1333,6 +1339,8 @@ undefstmt(void)
 	register usch *bp;
 	register int ch;
 
+	if (flslvl)
+		return;
 	if (!ISID0(ch = fastspc()))
 		error("bad #undef");
 	bp = readid(ch);
@@ -1346,6 +1354,8 @@ identstmt(void)
 {
 	int x = 0;
 
+	if (flslvl)
+		return;
 	if (yylex() == STRING) {
 		bufree(yynode.nd_ob);
 		x = yylex();
@@ -1359,6 +1369,8 @@ pragmastmt(void)
 {
 	register int ch;
 
+	if (flslvl)
+		return;
 	putstr((const usch *)"\n#pragma");
 	while ((ch = qcchar()) != '\n' && ch > 0)
 		putch(ch);
@@ -1417,121 +1429,47 @@ skpln(void)
 }
 
 /*
- * do an even faster scan than fastscan while at flslvl.
- * just search for a new directive.
- */
-static void
-flscan(void)
-{
-	register int ch;
-
-	for (;;) {
-		ch = qcchar();
-again:		switch (ch) {
-		case 0:
-			return;
-		case '\n':
-			putch('\n');
-			ifiles->lineno++;
-			while ((ch = qcchar()) == ' ' || ch == '\t')
-				;
-			if ((ch == '#') ||
-			    (ch == '%' && (ch = qcchar()) == ':')) {
-				while ((ch = qcchar()) == ' ' || ch == '\t')
-					;
-				if (ISID0(ch)) {
-					unch(ch);
-					return;
-				}
-			}
-			goto again;
-		case '\'':
-			while ((ch = qcchar()) != '\'') {
-				if (ch == '\\')
-					qcchar();
-				if (ch == '\n')
-					goto again;
-			}
-			break;
-		case '\"':
-			instr = 1;
-			while ((ch = qcchar()) != '\"') {
-				switch (ch) {
-				case '\\':
-					incmnt = 1;
-					qcchar();
-					incmnt = 0;
-					break;
-				case '\n':
-					goto again;
-				case 0:
-					instr = 0;
-					return;
-				}
-			}
-			instr = 0;
-			break;
-		case '/':
-			ch = qcchar();
-			if (ch == '/' || ch == '*')
-				fastcmnt2(ch);
-			goto again;
-		}
-	}
-}
-
-
-/*
  * Handle a preprocessor directive.
  * # is already found.
  */
 void
-ppdir(void)
+ppdir(char *s)
 {
-	register int ch, i, oldC;
-	usch *bp;
+	register int ch, i;
+	char *bp;
 
-	oldC = Cflag;
-redo:	Cflag = 0;
-	if ((ch = fastspc()) == '\n') { /* empty directive */
-		unch(ch);
-		Cflag = oldC;
+	s = skpwscmnt(s);
+	if (*s == '\n') {
+		inp = (usch *)s;
 		return;
 	}
-	Cflag = oldC;
-	if ((ISID0(ch)) == 0)
-		goto out;
-	bp = readid(ch);
 
-	/* got some keyword */
-	for (i = 0; i < NPPD; i++) {
-		if (bp[0] == ppd[i].name[0] &&
-		    strcmp((char *)bp, ppd[i].name) == 0) {
-			if (flslvl == 0) {
-				(*ppd[i].fun)();
-				if (flslvl == 0)
-					return;
-			} else {
-				if (ppd[i].flags & DIR_FLSLVL) {
-					(*ppd[i].fun)();
-					if (flslvl == 0)
-						return;
-				} else if (ppd[i].flags & DIR_FLSINC)
-					flslvl++;
-			}
-			flscan();
-			goto redo;
-		}
-	}
+	for (bp = s; F_ISID(*s); s++)
+		;
+	ch = *s, *s = 0;
+	for (i = 0; i < NPPD; i++)
+		if (strcmp(bp, ppd[i].name) == 0)
+			break;
+	if (i == NPPD || !F_ISWSNL(ch))
+		goto bad;
+
+	*s = ch;
+	inp = (usch *)s;
 	if (flslvl == 0) {
-		if (Aflag)
-			skpln();
-		return;
+		(*ppd[i].fun)();
+		if (flslvl == 0)
+			return;
+	} else {
+		if (ppd[i].flags & DIR_FLSLVL) {
+			(*ppd[i].fun)();
+			if (flslvl == 0)
+				return;
+		} else if (ppd[i].flags & DIR_FLSINC)
+			flslvl++;
 	}
-	flscan();
-	goto redo;
+	return;
 
-out:
+bad:
 	if (flslvl == 0 && Aflag == 0)
 		error("invalid preprocessor directive");
 

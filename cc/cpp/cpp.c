@@ -1908,7 +1908,7 @@ readargs(register struct iobuf *in, struct symtab *sp, const usch **args)
 				escln++;
 				c = skpws();
 				if (c == '#') {
-					ppdir();
+					ppdir((char *)inp);
 				} else {
 					/* only if not first char on line */
 					if (argary[i] != ab->cptr)
@@ -2342,7 +2342,7 @@ putstr(const usch *s)
 void
 putblk(const char *b, const char *e)
 {
-	if (Mflag)
+	if (Mflag || flslvl)
 		return;
 	if (skpows)
 		cntline();
