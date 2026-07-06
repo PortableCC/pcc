@@ -403,6 +403,16 @@ int COLORMAP(int c, int *r);
 #define	SIZET		UNSIGNED
 #define	PTRDIFFT	INT
 
+/*
+ * Never fold x+0/x-0 to a bare frame-pointer REG: a segmented address
+ * needs the lda+mask pair materialization (ZF), and r13 alone is a
+ * word with no segment.  Hit by &arr[N] where the array end lands at
+ * frame offset exactly 0 (tee.c "fpp >= &fp[NUFILE]" emitted the
+ * illegal "cpl rr8,r13").
+ */
+#define	OPTIM_KEEPZERO(p)	(p->n_left->n_op == REG && \
+				 p->n_left->n_rval == FPREG)
+
 /* Soft-float: big-endian IEEE binary32 and binary64 */
 #define	USE_IEEEFP_32
 #define	FLT_PREFIX	IEEEFP_32

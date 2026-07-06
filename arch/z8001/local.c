@@ -153,8 +153,13 @@ clocal(NODE *p)
 			return l;
 		}
 
-		/* long <-> long in same class: no-op */
-		if ((m == LONG || m == ULONG) &&
+		/* long/pointer <-> long in same class: no-op.  A pointer
+		 * source shows up as SCONV from an explicit (long)ptr cast
+		 * (conversions TO pointers are PCONV); both are 32-bit
+		 * pairs, so it is the same bit-level no-op as long<->long.
+		 * (Seen as: "Cannot generate code op SCONV" on units.c
+		 * "u_name += (long)sstart".) */
+		if ((m == LONG || m == ULONG || ISPTR(m)) &&
 		    (p->n_type == LONG || p->n_type == ULONG)) {
 			l->n_type = p->n_type;
 			nfree(p);
