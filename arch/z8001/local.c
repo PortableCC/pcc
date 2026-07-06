@@ -167,6 +167,51 @@ clocal(NODE *p)
 		}
 		break;
 
+	case EQ:
+	case NE: {
+		/*
+		 * Narrow a char equality compare against a constant: the
+		 * front end promotes both sides to int, hiding the byte
+		 * operand behind an SCONV so pass 2 can never use
+		 * testb/cpb.  For EQ/NE the promotion is value-preserving
+		 * in both directions whenever the constant fits the char's
+		 * value range, so strip the SCONV and retype the constant
+		 * to the char type.  Ordered compares are NOT narrowed:
+		 * an unsigned char would also need the operator flipped
+		 * to the unsigned condition.
+		 */
+		NODE *sc, *cn;
+
+		sc = p->n_left;
+		cn = p->n_right;
+		if (sc->n_op != SCONV && cn->n_op == SCONV) {
+			sc = p->n_right;
+			cn = p->n_left;
+		}
+		if (sc->n_op != SCONV || cn->n_op != ICON || cn->n_sp != NULL)
+			break;
+		if (sc->n_type != INT && sc->n_type != UNSIGNED)
+			break;
+		if (sc->n_left->n_op == FLD)
+			break;	/* keep bitfield extraction intact */
+		m = sc->n_left->n_type;
+		if (m == CHAR) {
+			if (glval(cn) < -128 || glval(cn) > 127)
+				break;
+		} else if (m == UCHAR) {
+			if (glval(cn) < 0 || glval(cn) > 255)
+				break;
+		} else
+			break;
+		if (p->n_left == sc)
+			p->n_left = sc->n_left;
+		else
+			p->n_right = sc->n_left;
+		nfree(sc);
+		cn->n_type = m;
+		break;
+	}
+
 	case FORCE:
 		/*
 		 * FORCE ensures the return value is in the correct register.
