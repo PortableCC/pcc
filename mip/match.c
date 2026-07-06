@@ -679,8 +679,13 @@ findops(NODE *p, int cookie)
 		F2WALK(r);
 
 		/* Help register assignment after SSA by preferring */
-		/* 2-op insns instead of 3-ops */
+		/* 2-op insns instead of 3-ops.  Not for SPECIAL shapes:
+		 * their low bits are a shape number, not register-class
+		 * bits, and demoting a direct special match forces the
+		 * operand into a register class picked from those bits
+		 * (e.g. SPECIAL|8 reads as INCREG). */
 		if (xssa && (q->rewrite & RLEFT) == 0 &&
+		    (n2osh(q->lshape) & SPECIAL) == 0 &&
 		    (n2osh(q->lshape) & (INREGS)) && shl == SRDIR)
 			shl = SRREG;
 
