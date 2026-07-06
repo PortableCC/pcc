@@ -1225,6 +1225,18 @@ simpleinit(struct symtab *sp, NODE *p)
 		return;
 	}
 
+	/* K&R laxness: a scalar initializer for an array initializes
+	 * its first element, as if braced ("char tapedev[10] = '\0';").
+	 * Falling through would build ASSIGN(array, scalar) and give
+	 * "lvalue required". */
+	if (ISARY(sp->stype) && !ISARY(p->n_type)) {
+		werror("array initialized with scalar; braces assumed");
+		ctx = beginit(sp);
+		scalinit(ctx, p, NULL);
+		endinit(ctx, 0);
+		return;
+	}
+
 	nt = nametree(sp);
 	switch (sp->sclass) {
 	case STATIC:

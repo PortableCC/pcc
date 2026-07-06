@@ -1539,6 +1539,13 @@ ptmatch(P1ND *p)
 				if (BTYPE(td2->type) == VOID)
 					break;
 			}
+			if (ISPTR(td1->type) && ISPTR(td2->type)) {
+				/* mismatched pointers: K&R code does
+				 * e.g. "m ? (char *)0 : fp"; warn and
+				 * use the left type */
+				werror("illegal pointer combination");
+				break;
+			}
 			uerror("illegal types in :");
 		}
 		break;
