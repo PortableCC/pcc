@@ -363,6 +363,48 @@ fastcmnt2(register int ch)
 }
 
 /*
+ * Skip over a comment.
+ */
+static char *
+skpcmnt(char *s)
+{
+	s+=2;	/* skip initial / + * */
+	for (;;) {
+		while (*s != '*' && *s != '\n')
+			s++;
+		if (*s == '\n') {
+			putch('\n');
+			ifiles->lineno++;
+			if (templine(ifiles->rdp) == NULL)
+				error("EOF in comment");
+			s = ifiles->rdp->curpos;
+//printf("c1: '%s'\n", s);
+			continue;
+		}
+		/* found a '*' */
+		s++;
+		if (*s == '/')
+			return ++s;
+	}
+}
+
+/*
+ * Skip over whitespaces and comments to next char.
+ */
+static char *
+skpwscmnt(char *s)
+{
+	for (;;) {
+		while (ISWS(*s))
+			s++;
+		if (*s == '/' && s[1] == '*')
+			s = skpcmnt(s);
+		else
+			return s;
+	}
+}
+
+/*
  * check for universal-character-name on input, and
  * write to the output buffer, encoded as UTF-8.
  */
@@ -539,9 +581,14 @@ fastscan(void)
 		if (templine(rdp) == NULL)
 			return;
 		s = lastw = rdp->curpos;
+//printf("l1: '%s'\n", s);
+		if (Cflag == 0 && *s == '/' && s[1] == '*') {
+			/* Remove leading comments */
+			lastw = s = skpwscmnt(s);
+		}
 		// XXX compat
-		inp = (usch *)rdp->curpos;
-		pend = inp + rdp->len;
+		inp = (usch *)s;
+		pend = (usch *)rdp->curpos + rdp->len;
 		// XXX end compat
 
 		if (*s == '#') {
@@ -585,6 +632,7 @@ fastscan(void)
 						s++;
 					s++;
 				}
+				s++;
 				continue;
 
 			case F_SLASH:
@@ -609,7 +657,9 @@ fastscan(void)
 					} else
 						s++;
 				}
-				break;
+				s += 2;
+				lastw = s;
+				continue;
 
 			case F_NUM:
 				for (;;) {
@@ -845,17 +895,6 @@ cleanup(FILE *ifd)
 			if (ch != '\n' && ch != '\t')
 				warning("bad char %d", ch);
 		}
-		if (beginning) {
-			if (ch == ' ' || ch == '\t')
-				continue;
-			if (ch == '%') {
-				if ((c2 = fgetc(ifd)) == ':')
-					ch = '#';
-				else
-					ungetc(c2, ifd);
-			}
-		}
-		beginning = 0;
 		if (Tflag && ch == '?') {
 	chk2:		if ((ch = fgetc(ifd)) == '?') {
 				if (chktg(ch = fgetc(ifd))) {
@@ -885,6 +924,17 @@ cleanup(FILE *ifd)
 			}
 			ungetc(c2, ifd);
 		}
+		if (beginning) {
+			if (ch == ' ' || ch == '\t')
+				continue;
+			if (ch == '%') {
+				if ((c2 = fgetc(ifd)) == ':')
+					ch = '#';
+				else
+					ungetc(c2, ifd);
+			}
+		}
+		beginning = 0;
 		putc(ch, ofd);
 		if (ch == '\n') {
 			beginning = 1;
