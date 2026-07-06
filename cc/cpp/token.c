@@ -368,23 +368,29 @@ fastcmnt2(register int ch)
 static char *
 skpcmnt(char *s)
 {
+	char *lastw = s;
+
 	s+=2;	/* skip initial / + * */
 	for (;;) {
 		while (*s != '*' && *s != '\n')
 			s++;
 		if (*s == '\n') {
+			if (Cflag)
+				putblk(lastw, s);
 			putch('\n');
 			ifiles->lineno++;
 			if (templine(ifiles->rdp) == NULL)
 				error("EOF in comment");
-			s = ifiles->rdp->curpos;
-//printf("c1: '%s'\n", s);
+			lastw = s = ifiles->rdp->curpos;
 			continue;
 		}
 		/* found a '*' */
 		s++;
-		if (*s == '/')
+		if (*s == '/') {
+			if (Cflag)
+				putblk(lastw, s+1);
 			return ++s;
+		}
 	}
 }
 
@@ -581,7 +587,6 @@ fastscan(void)
 		if (templine(rdp) == NULL)
 			return;
 		s = lastw = rdp->curpos;
-//printf("l1: '%s'\n", s);
 		if (Cflag == 0 && *s == '/' && s[1] == '*') {
 			/* Remove leading comments */
 			lastw = s = skpwscmnt(s);
@@ -638,27 +643,19 @@ fastscan(void)
 			case F_SLASH:
 				if (*s == '/') { /* C++-style comment */
 					s--; /* skip first / */
+					if (Cflag)
+						s = ifiles->rdp->line +
+						    ifiles->rdp->len - 1;
 					break;
 				}
 				if (*s != '*')
 					continue;
-				s++;
-				while (*s != '*' || s[1] != '/') {
-					if (*s == '\n') {
-						ifiles->lineno++;
-						putch('\n');
-						if (templine(rdp) == NULL)
-							error("rdcmnt()");
-						s = lastw = rdp->curpos;
-						// XXX compat
-						inp = (usch *)rdp->curpos;
-						pend = inp + rdp->len;
-						// XXX end compat
-					} else
-						s++;
-				}
-				s += 2;
-				lastw = s;
+				putblk(lastw, --s);
+				lastw = s = skpcmnt(s);
+				// XXX compat
+				inp = (usch *)s;
+				pend = (usch *)rdp->line + rdp->len;
+				// XXX end compat
 				continue;
 
 			case F_NUM:
