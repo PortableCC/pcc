@@ -306,6 +306,29 @@ instring(struct symtab *sp)
 }
 
 /*
+ * Default integer argument promotion: char/short arguments occupy a
+ * full word slot and a K&R callee ("int fd;") reads the whole word,
+ * but a class-D char value only defines the LOW byte of its containing
+ * word, so a bare word push would carry a garbage high byte.  Widen to
+ * int/unsigned so the push is a properly extended word, exactly like
+ * the native compiler.  (The front end only promotes FLOAT to DOUBLE
+ * for unprototyped calls, in params.c oldarg(); the integer promotions
+ * land here.)
+ */
+static NODE *
+argwiden(NODE *q)
+{
+	TWORD t = q->n_type;
+
+	/* short/ushort are already full 16-bit words on this target */
+	if (t == CHAR)
+		q = block(SCONV, q, NIL, INT, 0, 0);
+	else if (t == UCHAR)
+		q = block(SCONV, q, NIL, UNSIGNED, 0, 0);
+	return q;
+}
+
+/*
  * Prepare a function call: wrap each argument in a FUNARG node
  * so pass2 knows to push them onto the stack.
  */
@@ -315,17 +338,18 @@ funcode(NODE *p)
 	NODE *r, *l;
 
 	for (r = p->n_right; r->n_op == CM; r = r->n_left) {
-		if (r->n_right->n_op != STARG)
-			r->n_right = block(FUNARG, r->n_right, NIL,
-			    r->n_right->n_type, r->n_right->n_df,
-			    r->n_right->n_ap);
+		if (r->n_right->n_op != STARG) {
+			l = argwiden(r->n_right);
+			r->n_right = block(FUNARG, l, NIL,
+			    l->n_type, l->n_df, l->n_ap);
+		}
 	}
 	if (r->n_op != STARG) {
 		l = talloc();
 		*l = *r;
 		r->n_op = FUNARG;
-		r->n_left = l;
-		r->n_type = l->n_type;
+		r->n_left = argwiden(l);
+		r->n_type = r->n_left->n_type;
 	}
 	return p;
 }
