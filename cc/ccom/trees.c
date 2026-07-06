@@ -1166,6 +1166,10 @@ chkpun(P1ND *p)
 				if (ISARY(t2))
 					++d2;
 			} else if (ISFTN(t1)) {
+				if (!ISFTN(t2))
+					break; /* t2 has no df: (char *)0
+						* assigned to a function
+						* pointer crashed here */
 				if (pr_ckproto(d1->dlst, d2->dlst, 0)) {
 					werror("illegal function "
 					    "pointer combination");
