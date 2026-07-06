@@ -1340,10 +1340,34 @@ struct optab table[] = {
 		0,	RNULL,
 		"	push	(rr14),AL\n", },
 
-/* push word constant or memory */
+/* push src is R/IM/IR/DA/X - no BA (same encodable set as pushl below,
+ * as machine.c S_PUSH).  Constants, globals and frame words push
+ * directly like native (`push (rr14), $1` / `, errno_` / `, L5+4(r13)`);
+ * only BA OREGs (pair base + displacement) need the register detour.
+ * SNBA is a special shape so it cannot be OR'd into one rule with
+ * SCON/SNAME (tshape switches on the whole shape value). */
 { FUNARG,	FOREFF,
-	SCON|SNAME|SOREG,	TWORD|TSHORT|TUSHORT,
-	SANY,			TWORD,
+	SCON,		TWORD|TSHORT|TUSHORT,
+	SANY,		TWORD,
+		0,	RNULL,
+		"	push	(rr14),AL\n", },
+
+{ FUNARG,	FOREFF,
+	SNAME,		TWORD|TSHORT|TUSHORT,
+	SANY,		TWORD,
+		0,	RNULL,
+		"	push	(rr14),AL\n", },
+
+{ FUNARG,	FOREFF,
+	SNBA,		TWORD|TSHORT|TUSHORT,
+	SANY,		TWORD,
+		0,	RNULL,
+		"	push	(rr14),AL\n", },
+
+/* push word from BA memory */
+{ FUNARG,	FOREFF,
+	SOREG,		TWORD|TSHORT|TUSHORT,
+	SANY,		TWORD,
 		NAREG,	RNULL,
 		"	ld	A1,AL\n	push	(rr14),A1\n", },
 
@@ -1354,10 +1378,26 @@ struct optab table[] = {
 		0,	RNULL,
 		"	pushl	(rr14),AL\n", },
 
-/* push long/ptr/float from memory or constant */
+/* pushl globals and frame longs directly (DA/X/IR; native uses all
+ * three).  Long constants keep the ldl detour: native never emits
+ * pushl-immediate, and symbolic address constants would need the
+ * assembler's long-form segmented-immediate path. */
 { FUNARG,	FOREFF,
-	SCON|SNAME|SOREG,	TLONG|TULONG|TPOINT|TFLT,
-	SANY,			TLONG|TULONG|TPOINT|TFLT,
+	SNAME,		TLONG|TULONG|TPOINT|TFLT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
+		0,	RNULL,
+		"	pushl	(rr14),AL\n", },
+
+{ FUNARG,	FOREFF,
+	SNBA,		TLONG|TULONG|TPOINT|TFLT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
+		0,	RNULL,
+		"	pushl	(rr14),AL\n", },
+
+/* push long/ptr/float from a constant or BA memory */
+{ FUNARG,	FOREFF,
+	SCON|SOREG,	TLONG|TULONG|TPOINT|TFLT,
+	SANY,		TLONG|TULONG|TPOINT|TFLT,
 		NBREG,	RNULL,
 		"	ldl	A1,AL\n	pushl	(rr14),A1\n", },
 
@@ -1371,8 +1411,17 @@ struct optab table[] = {
 		0,	RNULL,
 		"ZP", },
 
+/* NB: SFRAME is a special shape - OR'ing it with SNAME makes a value
+ * tshape/special() match nothing (the old combined rule was dead and
+ * doubles always took the SCREG path); they must be separate rules. */
 { FUNARG,	FOREFF,
-	SNAME|SFRAME,	TDBL,
+	SNAME,		TDBL,
+	SANY,		TDBL,
+		0,	RNULL,
+		"ZP", },
+
+{ FUNARG,	FOREFF,
+	SFRAME,		TDBL,
 	SANY,		TDBL,
 		0,	RNULL,
 		"ZP", },
