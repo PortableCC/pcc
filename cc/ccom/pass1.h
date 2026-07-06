@@ -716,6 +716,16 @@ void dwarf_end(void);
 #define PTRDIFFT	INTPTR
 #endif
 
+/*
+ * optim() folds x+0 and x-0 to plain x.  A target where a bare frame
+ * register is not a valid pointer value (segmented addressing needs an
+ * explicit address computation to supply the segment) can override this
+ * to keep the op when the left side is such a register.
+ */
+#ifndef OPTIM_KEEPZERO
+#define OPTIM_KEEPZERO(p)	0
+#endif
+
 /* Generate a bitmask from a given type size */
 #define SZMASK(y) ((((1LL << ((y)-1))-1) << 1) | 1)
 
