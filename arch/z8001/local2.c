@@ -1123,6 +1123,26 @@ special(NODE *p, int shape)
 {
 	switch (shape) {
 	case SNBA:
+		if (p->n_op == UMUL) {
+			/*
+			 * A dereference whose address is a bare pair
+			 * register/temp will fold to a ZERO-displacement
+			 * OREG (IR mode, "(rrN)") at emit time: offstar
+			 * puts the address in a pair and gencode's canon
+			 * turns UMUL(REG) into the OREG.  IR is legal in
+			 * every SNBA consumer, so accept it as SROREG.
+			 * PLUS/MINUS(base,con) addresses must NOT be
+			 * accepted: they fold to a displaced pair base =
+			 * BA mode, which these instructions cannot encode.
+			 */
+			NODE *q = p->n_left;
+			if (q->n_op == TEMP && szty(q->n_type) == 2)
+				return SROREG;
+			if (q->n_op == REG && szty(q->n_type) == 2 &&
+			    q->n_rval != FPREG)
+				return SROREG;
+			return SRNOPE;
+		}
 		if (p->n_op != OREG)
 			return SRNOPE;
 		if (p->n_rval == FPREG)
