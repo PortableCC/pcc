@@ -389,6 +389,8 @@ int COLORMAP(int c, int *r);
 				   pointer as a bare word register, produced
 				   only by the reader lowering &frameobj to
 				   PLUS/MINUS(REG r13, ICON off) */
+#define	SLDK	(MAXSPECIAL+4)	/* nameless ICON in 0..15: loadable with the
+				   2-byte ldk instead of the 4-byte ld $imm */
 
 /*
  * sizeof and pointer-difference results are plain 16-bit integers, NOT

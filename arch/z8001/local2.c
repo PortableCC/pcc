@@ -1158,6 +1158,11 @@ special(NODE *p, int shape)
 		if (p->n_op == REG && p->n_rval == FPREG)
 			return SRDIR;
 		return SRNOPE;
+	case SLDK:
+		if (p->n_op == ICON && p->n_name[0] == '\0' &&
+		    getlval(p) >= 0 && getlval(p) <= 15)
+			return SRDIR;
+		return SRNOPE;
 	}
 	return SRNOPE;
 }

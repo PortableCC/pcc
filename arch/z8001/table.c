@@ -953,6 +953,15 @@ struct optab table[] = {
 		0,	0,
 		"ZQ", },
 
+/* word reg <- small constant: 2-byte ldk.  ldk sets no flags, so no
+ * FORCC/RESCC here - a compare-context assign falls back to the generic
+ * rule below.  Must precede it (first match wins at equal level). */
+{ ASSIGN,	FOREFF|INAREG,
+	SAREG,		TWORD,
+	SLDK,		TANY,
+		0,	RDEST,
+		"	ldk	AL,AR\n", },
+
 /* word reg <- reg */
 { ASSIGN,	FOREFF|INAREG|FORCC,
 	SAREG,		TWORD,
@@ -1310,6 +1319,15 @@ struct optab table[] = {
  * OPLTYPE - load leaf type into register.
  * Used to materialize NAME/ICON/OREG into a register.
  */
+
+/* load small word constant: ldk takes exactly 0..15 (2 bytes vs 4 for
+ * ld $imm; as S_LDK).  Must precede the generic rule - findleaf takes
+ * the first direct match. */
+{ OPLTYPE,	INAREG,
+	SANY,	TANY,
+	SLDK,	TWORD|TSHORT|TUSHORT,
+		NAREG,	RESC1,
+		"	ldk	A1,AL\n", },
 
 /* load word constant/name/oreg into word register */
 { OPLTYPE,	INAREG,
