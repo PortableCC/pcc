@@ -981,11 +981,18 @@ struct optab table[] = {
 		0,	0,
 		"	ld	AL,AR\n", },
 
-/* pair reg <- pair reg or mem (long/ptr/float) */
+/* pair reg <- pair reg or mem (long/ptr/float).
+ * NORIGHT(RR0): clocal rewrites return into ASSIGN(REG-rr0, value); for
+ * a reg-reg assign insnwalk moveadds the right side with the precolored
+ * rr0 node, and coalescing bypasses the clregs selectable mask (same
+ * bug class as the session-5 CALL-result coalesce).  If the returned
+ * pair is also used as an indirect base that yields the forbidden
+ * (rr0).  The conflict edge blocks only that coalesce, so such returns
+ * emit an explicit ldl rr0,rrN like native. */
 { ASSIGN,	FOREFF|INBREG,
 	SBREG,		TLONG|TULONG|TPOINT|TFLT,
 	SBREG|SNAME|SOREG|SCON,	TLONG|TULONG|TPOINT|TFLT,
-		0,	RDEST,
+		NEEDS(NORIGHT(RR0)),	RDEST,
 		"	ldl	AL,AR\n", },
 
 /* pair mem <- pair reg (long/ptr/float) */
