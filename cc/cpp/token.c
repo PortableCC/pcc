@@ -188,7 +188,7 @@ char cppmap[256] = {
 	0,	0,	0,	0,	0,	0,	0,	0,
 
 	0,	0,	F_STR,	0,	0,	0,	0,	F_STR,
-	0,	0,	0,	0,	0,	0,	F_NUM,	F_SLASH,
+	0,	0,	0,	0,	0,	0,	F_DOT,	F_SLASH,
 	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,
 	F_NUM,	F_NUM,	0,	0,	0,	0,	0,	0,
 
@@ -600,6 +600,7 @@ fastscan(void)
 			inp++;
 			ppdir();
 			escln++;
+			s = skpwscmnt((char *)inp);
 			continue;
 		}
 
@@ -658,6 +659,10 @@ fastscan(void)
 				// XXX end compat
 				continue;
 
+			case F_DOT:
+				if (F_TYP(*s) != F_NUM)
+					continue;
+				/* FALLTHROUGH */
 			case F_NUM:
 				for (;;) {
 					ch = *s++;
@@ -674,10 +679,10 @@ fastscan(void)
 
 			case F_LU:
 				if (*s == '\"' || *s == '\'')
-					break;
+					continue;
 				if (ch == 'u' && *s == '8' && s[1] == '\"') {
 					s++;
-					break;
+					continue;
 				}
 				/* FALLTHROUGH */
 

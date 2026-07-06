@@ -98,7 +98,7 @@ extern	int	escln;	/* escaped newlines, to be added */
 #define C_ESTR	0200		/* [\0\n\\\'\"] */
 
 extern char cppmap[];
-enum { F_STR = 1, F_SLASH, F_NUM, F_LU, F_ID0, F_BID };
+enum { F_STR = 1, F_SLASH, F_NUM, F_DOT, F_LU, F_ID0, F_BID };
 #define F_TYP(x)  cppmap[(unsigned char)x]
 #define F_ISID0(x) (F_TYP(x) == F_LU || F_TYP(x) == F_ID0)
 #define F_ISID(x) (F_TYP(x) == F_NUM || F_TYP(x) == F_LU || F_TYP(x) == F_ID0)
