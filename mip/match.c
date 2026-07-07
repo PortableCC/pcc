@@ -720,8 +720,12 @@ findops(NODE *p, int cookie)
 	    qq->rewrite & RRIGHT, gor);
 
 	if (sh == -1) {
-		if (cookie == FOREFF || cookie == FORCC)
-			sh = 0;
+		if (cookie == FOREFF ||
+		    (cookie & qq->visit & INREGS) == 0)
+			sh = 0; /* no result register: FOREFF, or a rule
+				 * visited only for its condition codes
+				 * (ffs()-1 on an empty mask would collide
+				 * with FFAIL) */
 		else
 			sh = ffs(cookie & qq->visit & INREGS)-1;
 	}

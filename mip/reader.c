@@ -902,6 +902,20 @@ prcook(int cookie)
 }
 #endif
 
+#ifndef CCOKFORCOMP
+/*
+ * May a compare against constant zero be elided by computing its child
+ * with FORCC, so that the child insn's own condition codes feed the
+ * branch?  The child rule claiming FORCC guarantees correct flags only
+ * for the conditions its instruction actually sets: on machines where
+ * e.g. the logical ops leave the overflow flag untouched, an ordered
+ * (signed) branch after an elided compare would read a stale flag.
+ * Targets override this with the compare op and the child op to veto
+ * such pairs; the default keeps the historic behavior.
+ */
+#define	CCOKFORCOMP(o, ch)	1
+#endif
+
 int
 geninsn(NODE *p, int cookie)
 {
@@ -932,12 +946,15 @@ again:	switch (o = p->n_op) {
 		p1 = p->n_left;
 		p2 = p->n_right;
 		if (p2->n_op == ICON && getlval(p2) == 0 && *p2->n_name == 0 &&
-		    (dope[p1->n_op] & (FLOFLG|DIVFLG|SIMPFLG|SHFFLG))) {
+		    (dope[p1->n_op] & (FLOFLG|DIVFLG|SIMPFLG|SHFFLG)) &&
+		    CCOKFORCOMP(o, p1->n_op)) {
 #ifdef mach_pdp11 /* XXX all targets? */
 			if ((rv = geninsn(p1, FORCC|QUIET)) != FFAIL)
 				break;
 #else
-			if (findops(p1, FORCC) > 0)
+			/* 0 is a successful match on a rule with no result
+			 * register (visit FORCC only, e.g. a bit test) */
+			if (findops(p1, FORCC) >= 0)
 				break;
 #endif
 		}
