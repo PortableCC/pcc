@@ -408,6 +408,19 @@ int pickcolor(int class, int mask);
 #define	SPCON	(MAXSPECIAL+6)	/* nameless ICON representable as a word
 				   immediate (-32768..65535): pointer offset
 				   arithmetic on the pair's low word */
+/*
+ * Compare-vs-zero elision gate (reader.c geninsn): the word logical
+ * instructions AND/OR/XOR leave P/V unaffected (and the byte forms set
+ * it to parity), so after an elided compare only the Z and S flags are
+ * trustworthy - an ordered branch (jr lt/ge = S xor V) would read a
+ * stale V.  Allow the elision for EQ/NE always (they read Z alone) and
+ * for PLUS/MINUS children unconditionally (add/sub/inc/dec set V
+ * arithmetically, which is exactly the signed compare against zero).
+ * The bit-test rules (BIT sets ONLY Z) also rely on this gate: FORCC
+ * can reach an AND node only from an EQ/NE compare.
+ */
+#define	CCOKFORCOMP(o, ch) \
+	((o) == EQ || (o) == NE || (ch) == PLUS || (ch) == MINUS)
 
 /*
  * sizeof and pointer-difference results are plain 16-bit integers, NOT
