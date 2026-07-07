@@ -585,6 +585,22 @@ struct optab table[] = {
 		0,	RLEFT,
 		"	add	UL,AR\n", },
 
+/*
+ * Address constant + word index (&arr[i] on a global array): lda's
+ * Indexed (X) mode encodes sym(rIDX) in one instruction where the
+ * generic path needs ldl $sym + add on the offset word.  X mode
+ * CANNOT encode index r0 (an index field of 0 decodes as DA), and a
+ * nameless address constant has no DA/X spelling - the ZX escape
+ * emits the ldl+add fallback for those two cases.  A1 never overlaps
+ * the index register (plain NBREG, no sharing), so the fallback's ldl
+ * cannot clobber the index before the add reads it.
+ */
+{ PLUS,		INBREG,
+	SCON,	TPOINT,
+	SAREG,	TWORD|TSHORT|TUSHORT,
+		NBREG,	RESC1,
+		"ZX", },
+
 /* add pair + pair (long/ptr); pointer offsets are widened to a pair */
 { PLUS,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG|TPOINT,

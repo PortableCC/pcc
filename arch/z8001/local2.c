@@ -478,6 +478,9 @@ quadmem(NODE *mem, int q, int store)
  *       value-context "tcc cc,A1" (the truth value itself is wanted)
  *   ZY  bit number of the single CLEAR bit in the right ICON (an
  *       SNPOW2 shape), for res: "x &= ~0x40" prints as "$6"
+ *   ZX  address constant + word index: "lda A1,sym(AR)" when the
+ *       index register is not r0 and the address is named, else the
+ *       "ldl A1,$sym ; add <low word of A1>,AR" fallback
  */
 
 /* set by ZO, consumed by the cbgen call that follows the compare */
@@ -588,6 +591,34 @@ zzzcode(NODE *p, int c)
 				n++;
 			printf("$%d", n);
 		}
+		break;
+
+	case 'X':	/* address constant + word index: lda A1,sym(AR),
+			 * unless the index sits in r0 (an X-mode index
+			 * field of 0 decodes as DA) or the address is a
+			 * nameless constant - those get the ldl+add
+			 * fallback.  A1 never overlaps AR (plain NBREG,
+			 * no sharing), so the fallback's ldl cannot
+			 * clobber the index before the add reads it. */
+	    {
+		NODE *r = getlr(p, 'R');
+
+		l = getlr(p, 'L');
+		n = getlr(p, '1')->n_rval;
+		if (r->n_op != REG || l->n_op != ICON)
+			comperr("ZX: bad operands");
+		if (r->n_rval != 0 && l->n_name[0] != '\0') {
+			printf("\tlda\t%s,%s", rnames[n], l->n_name);
+			if (getlval(l) != 0)
+				printf("+" CONFMT, getlval(l));
+			printf("(%s)\n", rnames[r->n_rval]);
+		} else {
+			printf("\tldl\t%s,$", rnames[n]);
+			conput(stdout, l);
+			printf("\n\tadd\t%s,%s\n",
+			    rnames[(n - RR0) * 2 + 1], rnames[r->n_rval]);
+		}
+	    }
 		break;
 
 	case 'I':	/* word -> byte: copy the word into the byte result
