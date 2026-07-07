@@ -897,7 +897,7 @@ cleanup(FILE *ifd)
 			if (ch == '\r' || ch == '\f')
 				continue;
 			if (ch != '\n' && ch != '\t')
-				warning("bad char %d", ch);
+				warning("input file has char %d, ignored", ch);
 		}
 		if (Tflag && ch == '?') {
 	chk2:		if ((ch = fgetc(ifd)) == '?') {
