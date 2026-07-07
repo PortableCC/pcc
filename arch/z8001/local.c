@@ -47,6 +47,69 @@
 #include <string.h>
 
 /*
+ * offword: rewrite a pointer-arithmetic index subtree to word type.
+ *
+ * The front end converts the index of pointer arithmetic to the 32-bit
+ * offset type before scaling, so pass 2 widens it into a pair (exts)
+ * and adds with addl.  Under the Coherent segmented assumption (no
+ * object crosses a segment boundary - the license recorded on the
+ * TPOINT SP16/SPCON rules in table.c) only the low 16 bits of the
+ * index ever reach the pointer's offset word, so the widen is dead:
+ * strip it and compute the index in word registers; the TPOINT
+ * "add/sub UL,AR" rules then operate on the offset word alone, like
+ * native cc ("sla r9,$2; add r11,r9").  Scaling (LS/MUL by a constant)
+ * moves into the word domain with it - the low 16 product/shift bits
+ * are identical.  Returns the rewritten subtree, or NULL to leave the
+ * tree (and thus the full-width addl/subl) alone.  POINTERS ONLY: the
+ * caller checks the PLUS/MINUS node is pointer-typed, a plain long
+ * addition keeps its real 32-bit carry.
+ */
+static NODE *
+offword(NODE *p)
+{
+	NODE *l;
+
+	if (p->n_type != LONG && p->n_type != ULONG)
+		return NULL;
+	switch (p->n_op) {
+	case SCONV:
+		l = p->n_left;
+		if (l->n_op == FLD)
+			return NULL;	/* keep bitfield extraction intact */
+		switch (l->n_type) {
+		case INT:
+		case UNSIGNED:
+		case SHORT:
+		case USHORT:
+			/* the widen becomes a no-op: use the word value */
+			nfree(p);
+			return l;
+		case CHAR:
+		case UCHAR:
+			/* widen to a word instead of a pair */
+			p->n_type = l->n_type == CHAR ? INT : UNSIGNED;
+			return p;
+		}
+		return NULL;
+	case LS:
+	case MUL:
+		/* constant elsize scaling: scale the word instead of the
+		 * pair (word mult/sla, exactly the native idiom) */
+		if (p->n_right->n_op != ICON || p->n_right->n_sp != NULL)
+			return NULL;
+		if (glval(p->n_right) < 0 || glval(p->n_right) > 32767)
+			return NULL;
+		if ((l = offword(p->n_left)) == NULL)
+			return NULL;
+		p->n_left = l;
+		p->n_type = INT;
+		p->n_right->n_type = INT;
+		return p;
+	}
+	return NULL;
+}
+
+/*
  * clocal: perform local pass-1 transformations.
  *
  * The main job here is to rewrite NAME nodes for AUTO and PARAM variables
@@ -165,6 +228,22 @@ clocal(NODE *p)
 			nfree(p);
 			return l;
 		}
+		break;
+
+	case PLUS:
+	case MINUS:
+		/*
+		 * Variable pointer index: strip the int->long widen from
+		 * the index subtree so the arithmetic happens on the
+		 * offset word (see offword above).  Pointer-typed nodes
+		 * only; the index is always the right operand (buildtree
+		 * puts the pointer on the left), and pointer difference
+		 * is not pointer-typed so it never gets here.
+		 */
+		if (!ISPTR(p->n_type) || ISPTR(p->n_right->n_type))
+			break;
+		if ((l = offword(p->n_right)) != NULL)
+			p->n_right = l;
 		break;
 
 	case EQ:

@@ -565,6 +565,26 @@ struct optab table[] = {
 		0,	RLEFT,
 		"	inc	UL,AR\n", },
 
+/*
+ * pointer + variable word index: clocal rewrites the index subtree of
+ * a pointer PLUS/MINUS to word type (stripping the int->long widen -
+ * the same segment-invariant license as the constant rules above), so
+ * the add happens on the offset word alone like native "add UL,rN"
+ * instead of exts+addl on a widened pair.  add src is R/IM/IR/DA/X -
+ * no BA, hence the separate SNBA rule.
+ */
+{ PLUS,		INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SAREG|SNAME,	TWORD|TSHORT|TUSHORT,
+		0,	RLEFT,
+		"	add	UL,AR\n", },
+
+{ PLUS,		INBREG|FOREFF,
+	SBREG,	TPOINT,
+	SNBA,	TWORD|TSHORT|TUSHORT,
+		0,	RLEFT,
+		"	add	UL,AR\n", },
+
 /* add pair + pair (long/ptr); pointer offsets are widened to a pair */
 { PLUS,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG|TPOINT,
@@ -670,6 +690,19 @@ struct optab table[] = {
 	SP16,		TANY,
 		0,	RLEFT,
 		"	dec	UL,AR\n", },
+
+/* pointer - variable word index (see the PLUS twin above) */
+{ MINUS,	INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SAREG|SNAME,	TWORD|TSHORT|TUSHORT,
+		0,	RLEFT,
+		"	sub	UL,AR\n", },
+
+{ MINUS,	INBREG|FOREFF,
+	SBREG,	TPOINT,
+	SNBA,	TWORD|TSHORT|TUSHORT,
+		0,	RLEFT,
+		"	sub	UL,AR\n", },
 
 /* subtract pair (long/ptr); pointer offsets are widened to a pair */
 { MINUS,	INBREG|FOREFF,
