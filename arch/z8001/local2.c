@@ -1071,6 +1071,52 @@ COLORMAP(int c, int *r)
 }
 
 /*
+ * pickcolor: the PICKCOLOR hook consulted by AssignColors' fallback
+ * (regs.c colfind) when no move-related recommendation exists.
+ *
+ * Caller-saved registers come first in their usual lowest-first order,
+ * so allocations that fit in scratch registers are unchanged.  The
+ * callee-saved registers are preferred TOP-DOWN (r12 before r6, rr10
+ * before rr8 before rr6, rl7 before rl6): the prologue saves one
+ * CONTIGUOUS block from the lowest used callee register through r13
+ * (ldm), so its cost in stack words and cycles is set by that lowest
+ * register alone.  Native cc shows the same bias (common prologue is
+ * "ldm r8,$6", not "ldm r6,$8").
+ *
+ * The tables list COLOR indices (positions in the mkext-generated rmap
+ * order), not register numbers: class A colors 0-12 are r0-r12, class
+ * B colors 0-5 are rr0,rr2,rr4,rr6,rr8,rr10 (rr0 is cleared from
+ * clregs and never appears in the mask), class C colors 0-2 are
+ * rq0,rq4,rq8, class D colors 0-7 are rl0-rl7.
+ */
+int
+pickcolor(int class, int mask)
+{
+	static const signed char aorder[] =
+	    { 0, 1, 2, 3, 4, 5, 12, 11, 10, 9, 8, 7, 6, -1 };
+	static const signed char border[] =	/* rr2 rr4 rr10 rr8 rr6 rr0 */
+	    { 1, 2, 5, 4, 3, 0, -1 };
+	static const signed char corder[] =	/* rq0 rq8 rq4(r6,r7) */
+	    { 0, 2, 1, -1 };
+	static const signed char dorder[] =	/* rl0-rl5, rl7 before rl6 */
+	    { 0, 1, 2, 3, 4, 5, 7, 6, -1 };
+	const signed char *o;
+	int i;
+
+	switch (class) {
+	case CLASSA: o = aorder; break;
+	case CLASSB: o = border; break;
+	case CLASSC: o = corder; break;
+	default:     o = dorder; break;
+	}
+	for (i = 0; o[i] >= 0; i++)
+		if (mask & (1 << o[i]))
+			return o[i];
+	comperr("pickcolor: empty mask class %d", class);
+	return 0;
+}
+
+/*
  * Return the register class suitable for a value of type t.
  * Consistent with PCLASS in macdefs.h: char uses class D (byte
  * registers), 64-bit values (double) class C (quads), 32-bit values

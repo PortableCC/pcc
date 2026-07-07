@@ -336,6 +336,18 @@ typedef long long OFFSZ;
 int COLORMAP(int c, int *r);
 #define	GCLASS(x)	((x) < 16 ? CLASSA : (x) < 22 ? CLASSB : \
 			 (x) < 25 ? CLASSC : CLASSD)
+
+/* AssignColors fallback choice (regs.c colfind): caller-saved registers
+ * lowest-first as before, callee-saved TOP-DOWN so the prologue's
+ * contiguous ldm save range stays minimal (pickcolor in local2.c). */
+int pickcolor(int class, int mask);
+#define	PICKCOLOR(c, m)	pickcolor(c, m)
+
+/* A permreg shadow that loses its own register must SPILL (the ldm
+ * range already covers a saved register at zero extra instructions),
+ * never sit in another callee-save register behind entry/exit moves
+ * (regs.c AssignColors). */
+#define	SPILLSHADOW
 /* 6-bit register fields: MAXREGS is 33, three regs packed in n_reg */
 #define DECRA(x,y)	(((x) >> ((y)*6)) & 63)	/* decode register from n_reg */
 #define	ENCRD(x)	(x)			/* encode dest register */
