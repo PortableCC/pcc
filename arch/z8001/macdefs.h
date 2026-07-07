@@ -408,6 +408,10 @@ int pickcolor(int class, int mask);
 #define	SPCON	(MAXSPECIAL+6)	/* nameless ICON representable as a word
 				   immediate (-32768..65535): pointer offset
 				   arithmetic on the pair's low word */
+#define	SPOW2	(MAXSPECIAL+7)	/* nameless ICON that is a single-bit mask
+				   in its type's width (word or char): the
+				   bit-test rules print it as a bit number */
+
 /*
  * Compare-vs-zero elision gate (reader.c geninsn): the word logical
  * instructions AND/OR/XOR leave P/V unaffected (and the byte forms set

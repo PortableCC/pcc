@@ -906,6 +906,28 @@ struct optab table[] = {
  * memory operand must be a name or a frame slot (SFRAME), never
  * pair-based. */
 
+/*
+ * Single-bit truth test: for "(x & pow2) ==/!= 0" the compare-vs-zero
+ * elision hands the AND a FORCC cookie (gated to EQ/NE consumers by
+ * CCOKFORCOMP in macdefs.h - BIT sets ONLY Z, with the same sense as
+ * the and: Z = 1 iff the tested bit is 0).  bit is 2 bytes vs 4 for
+ * and-immediate, leaves the operand register intact, and the memory
+ * forms (dst R/IR/DA/X - no BA) absorb the operand load entirely.
+ * Pure-FORCC rules: never selected in value contexts, and they must
+ * precede the general and rules (first match at equal shape level).
+ */
+{ AND,	FORCC,
+	SAREG|SNAME,	TWORD,
+	SPOW2,		TANY,
+		0,	RESCC,
+		"	bit	AL,ZJ\n", },
+
+{ AND,	FORCC,
+	SNBA,	TWORD,
+	SPOW2,	TANY,
+		0,	RESCC,
+		"	bit	AL,ZJ\n", },
+
 { AND,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
 	SAREG|SNAME|SCON,	TWORD,
@@ -937,6 +959,21 @@ struct optab table[] = {
  * (op&W==0), the same encoding path as cpb Rb,IM.  RESCC is safe for
  * the eq/ne consumer only: andb sets Z from the result but P/V is
  * parity, exactly like testb. */
+
+/* single-bit char truth test: bitb, exactly as the word bit rules
+ * above (the byte IR form absorbs the ldb of a pair-based deref) */
+{ AND,	FORCC,
+	SDREG|SNAME,	TCHAR|TUCHAR,
+	SPOW2,		TANY,
+		0,	RESCC,
+		"	bitb	AL,ZJ\n", },
+
+{ AND,	FORCC,
+	SNBA,	TCHAR|TUCHAR,
+	SPOW2,	TANY,
+		0,	RESCC,
+		"	bitb	AL,ZJ\n", },
+
 { AND,		INDREG|FOREFF|FORCC,
 	SDREG,			TCHAR|TUCHAR,
 	SDREG|SNAME|SCON,	TCHAR|TUCHAR,

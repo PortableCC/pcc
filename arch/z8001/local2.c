@@ -514,6 +514,24 @@ zzzcode(NODE *p, int c)
 			printf("\tand\t%s,$0xff\n", rnames[n]);
 		break;
 
+	case 'J':	/* bit number of the single-bit mask in the right
+			 * ICON (an SPOW2 shape), for the bit/bitb test
+			 * rules: "x & 0x40" prints as "$6". */
+		{
+			CONSZ v = getlval(p->n_right);
+
+			if (p->n_right->n_op != ICON)
+				comperr("ZJ: right not ICON");
+			v &= (p->n_type == CHAR || p->n_type == UCHAR) ?
+			    0xff : 0xffff;
+			if (v == 0 || (v & (v - 1)) != 0)
+				comperr("ZJ: not a single-bit mask");
+			for (n = 0; (v & 1) == 0; v >>= 1)
+				n++;
+			printf("$%d", n);
+		}
+		break;
+
 	case 'I':	/* word -> byte: copy the word into the byte result
 			 * A1's containing word; A1 (its low byte) then holds
 			 * the truncated char.  The word's high byte is dead
@@ -1235,6 +1253,26 @@ special(NODE *p, int shape)
 		    getlval(p) >= -32768 && getlval(p) <= 65535)
 			return SRDIR;
 		return SRNOPE;
+	case SPOW2: {
+		/*
+		 * A nameless ICON that is a single-bit mask within its
+		 * type's width, in either sign representation (bit 15 of
+		 * a word may arrive as 32768 or -32768).  The ZJ escape
+		 * prints it as the bit number for bit/bitb.
+		 */
+		CONSZ v = getlval(p), vv;
+		int w;
+
+		if (p->n_op != ICON || p->n_name[0] != '\0')
+			return SRNOPE;
+		w = (p->n_type == CHAR || p->n_type == UCHAR) ? 8 : 16;
+		vv = v & ((((CONSZ)1) << w) - 1);
+		if (vv == 0 || (vv & (vv - 1)) != 0)
+			return SRNOPE;
+		if (v != vv && v != vv - (((CONSZ)1) << w))
+			return SRNOPE;
+		return SRDIR;
+	}
 	}
 	return SRNOPE;
 }
