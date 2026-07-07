@@ -476,6 +476,8 @@ quadmem(NODE *mem, int q, int store)
  *       cbgen emits next must read S alone, i.e. jr mi/pl
  *   ZV  condition-code name of this relop, non-negated, for the
  *       value-context "tcc cc,A1" (the truth value itself is wanted)
+ *   ZY  bit number of the single CLEAR bit in the right ICON (an
+ *       SNPOW2 shape), for res: "x &= ~0x40" prints as "$6"
  */
 
 /* set by ZO, consumed by the cbgen call that follows the compare */
@@ -554,7 +556,7 @@ zzzcode(NODE *p, int c)
 
 	case 'J':	/* bit number of the single-bit mask in the right
 			 * ICON (an SPOW2 shape), for the bit/bitb test
-			 * rules: "x & 0x40" prints as "$6". */
+			 * rules and set: "x & 0x40" prints as "$6". */
 		{
 			CONSZ v = getlval(p->n_right);
 
@@ -564,6 +566,24 @@ zzzcode(NODE *p, int c)
 			    0xff : 0xffff;
 			if (v == 0 || (v & (v - 1)) != 0)
 				comperr("ZJ: not a single-bit mask");
+			for (n = 0; (v & 1) == 0; v >>= 1)
+				n++;
+			printf("$%d", n);
+		}
+		break;
+
+	case 'Y':	/* bit number of the single CLEAR bit in the right
+			 * ICON (an SNPOW2 shape), for res:
+			 * "x &= ~0x40" prints as "$6". */
+		{
+			CONSZ v = getlval(p->n_right);
+
+			if (p->n_right->n_op != ICON)
+				comperr("ZY: right not ICON");
+			v = ~v & ((p->n_type == CHAR || p->n_type == UCHAR) ?
+			    0xff : 0xffff);
+			if (v == 0 || (v & (v - 1)) != 0)
+				comperr("ZY: not a single-clear-bit mask");
 			for (n = 0; (v & 1) == 0; v >>= 1)
 				n++;
 			printf("$%d", n);
@@ -1309,6 +1329,28 @@ special(NODE *p, int shape)
 		if (vv == 0 || (vv & (vv - 1)) != 0)
 			return SRNOPE;
 		if (v != vv && v != vv - (((CONSZ)1) << w))
+			return SRNOPE;
+		return SRDIR;
+	}
+	case SNPOW2: {
+		/*
+		 * The complement of SPOW2: a nameless ICON with every bit
+		 * of its type's width set except one ("x &= ~mask"; the
+		 * res operand).  Same two sign representations: ~8 on a
+		 * word arrives as -9 or 65527.  ZY prints the clear
+		 * bit's number.
+		 */
+		CONSZ v = getlval(p), vv, m;
+		int w;
+
+		if (p->n_op != ICON || p->n_name[0] != '\0')
+			return SRNOPE;
+		w = (p->n_type == CHAR || p->n_type == UCHAR) ? 8 : 16;
+		m = (((CONSZ)1) << w) - 1;
+		vv = ~v & m;	/* the single bit that is CLEAR in v */
+		if (vv == 0 || (vv & (vv - 1)) != 0)
+			return SRNOPE;
+		if (v != (v & m) && v != (v & m) - (m + 1))
 			return SRNOPE;
 		return SRDIR;
 	}

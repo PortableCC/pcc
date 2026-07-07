@@ -411,6 +411,11 @@ int pickcolor(int class, int mask);
 #define	SPOW2	(MAXSPECIAL+7)	/* nameless ICON that is a single-bit mask
 				   in its type's width (word or char): the
 				   bit-test rules print it as a bit number */
+#define	SNPOW2	(MAXSPECIAL+8)	/* nameless ICON with every bit of its
+				   type's width set EXCEPT one (~mask of a
+				   single bit, either sign representation):
+				   the res rule prints the clear bit's
+				   number via ZY */
 
 /*
  * Compare-vs-zero elision gate (reader.c geninsn): the word logical

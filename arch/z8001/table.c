@@ -961,6 +961,28 @@ struct optab table[] = {
 		0,	RESCC,
 		"	bit	AL,ZJ\n", },
 
+/*
+ * Single-bit clear: x &= ~(1 << k).  The mask reaches pass 2 as an
+ * ICON with exactly one bit CLEAR in the operand's width (SNPOW2,
+ * either sign representation); ZY prints that bit's number.  res is
+ * 2 bytes vs 4 for and-immediate, and the memory forms (dst R/IR/DA/X
+ * like bit) fire through findmops for "g &= ~mask", absorbing the
+ * load/store pair.  res affects NO flags, so no FORCC/RESCC claims -
+ * flag consumers fall through to the and rules below.  Must precede
+ * them (first match at equal shape level).
+ */
+{ AND,	INAREG|FOREFF,
+	SAREG|SNAME,	TWORD,
+	SNPOW2,	TANY,
+		0,	RLEFT,
+		"	res	AL,ZY\n", },
+
+{ AND,	FOREFF,
+	SNBA,	TWORD,
+	SNPOW2,	TANY,
+		0,	RLEFT,
+		"	res	AL,ZY\n", },
+
 { AND,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
 	SAREG|SNAME|SCON,	TWORD,
@@ -1022,6 +1044,25 @@ struct optab table[] = {
 /*
  * OR - bitwise or.
  */
+
+/*
+ * Single-bit set: x |= (1 << k) with a constant single-bit mask
+ * (SPOW2; ZJ prints it as a bit number, as in the bit rules).  set is
+ * 2 bytes vs 4 for or-immediate and the memory forms fire through
+ * findmops.  Like res: NO flags affected, no FORCC/RESCC, must
+ * precede the generic or rules.
+ */
+{ OR,	INAREG|FOREFF,
+	SAREG|SNAME,	TWORD,
+	SPOW2,	TANY,
+		0,	RLEFT,
+		"	set	AL,ZJ\n", },
+
+{ OR,	FOREFF,
+	SNBA,	TWORD,
+	SPOW2,	TANY,
+		0,	RLEFT,
+		"	set	AL,ZJ\n", },
 
 { OR,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
