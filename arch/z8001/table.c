@@ -517,6 +517,52 @@ struct optab table[] = {
 		0,	RLEFT|RESCC,
 		"	add	AL,AR\n", },
 
+/*
+ * Pointer + constant: operate on the OFFSET WORD of the pair only (UL =
+ * low word; the segment word is untouched).  Legal under the Coherent
+ * segmented model: no object crosses a segment boundary, so valid pointer
+ * arithmetic can never carry out of the 16-bit offset - the same
+ * assumption native cc makes (it emits inc r9,$1 on pointer pairs).
+ * PLAIN LONGS ARE EXCLUDED: for a real 32-bit integer the carry is
+ * arithmetic, so TLONG/TULONG keep the full addl/subl rules below.
+ * These must precede the generic pair rules (first match wins).
+ * inc/dec take 1..16 (2 bytes); add/sub take any word immediate
+ * (4 bytes, vs 6 for addl) but only a REGISTER destination, hence no
+ * SPCON memory forms.  Memory forms use SNAME (DA+2) and SFRAME
+ * (X mode, off+2) - NOT SNBA: the low word of a zero-displacement
+ * pair-base OREG would be BA mode, which inc cannot encode.
+ */
+{ PLUS,		INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SP16,		TANY,
+		0,	RLEFT,
+		"	inc	UL,AR\n", },
+
+{ PLUS,		INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SMONE,		TANY,
+		0,	RLEFT,
+		"	dec	UL,$1\n", },
+
+{ PLUS,		INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SPCON,		TANY,
+		0,	RLEFT,
+		"	add	UL,AR\n", },
+
+/* pointer in memory += 1..16 (via FINDMOPS, like the word inc rules) */
+{ PLUS,		FOREFF,
+	SNAME,		TPOINT,
+	SP16,		TANY,
+		0,	RLEFT,
+		"	inc	UL,AR\n", },
+
+{ PLUS,		FOREFF,
+	SFRAME,		TPOINT,
+	SP16,		TANY,
+		0,	RLEFT,
+		"	inc	UL,AR\n", },
+
 /* add pair + pair (long/ptr); pointer offsets are widened to a pair */
 { PLUS,		INBREG|FOREFF,
 	SBREG,		TLONG|TULONG|TPOINT,
@@ -589,6 +635,39 @@ struct optab table[] = {
 	SNBA,		TWORD,
 		0,	RLEFT|RESCC,
 		"	sub	AL,AR\n", },
+
+/* pointer - constant on the offset word only (see the PLUS comment:
+ * Coherent objects never cross a segment boundary; plain longs excluded) */
+{ MINUS,	INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SP16,		TANY,
+		0,	RLEFT,
+		"	dec	UL,AR\n", },
+
+{ MINUS,	INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SMONE,		TANY,
+		0,	RLEFT,
+		"	inc	UL,$1\n", },
+
+{ MINUS,	INBREG|FOREFF,
+	SBREG,		TPOINT,
+	SPCON,		TANY,
+		0,	RLEFT,
+		"	sub	UL,AR\n", },
+
+/* pointer in memory -= 1..16 (via FINDMOPS) */
+{ MINUS,	FOREFF,
+	SNAME,		TPOINT,
+	SP16,		TANY,
+		0,	RLEFT,
+		"	dec	UL,AR\n", },
+
+{ MINUS,	FOREFF,
+	SFRAME,		TPOINT,
+	SP16,		TANY,
+		0,	RLEFT,
+		"	dec	UL,AR\n", },
 
 /* subtract pair (long/ptr); pointer offsets are widened to a pair */
 { MINUS,	INBREG|FOREFF,

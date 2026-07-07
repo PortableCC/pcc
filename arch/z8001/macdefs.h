@@ -391,6 +391,11 @@ int COLORMAP(int c, int *r);
 				   PLUS/MINUS(REG r13, ICON off) */
 #define	SLDK	(MAXSPECIAL+4)	/* nameless ICON in 0..15: loadable with the
 				   2-byte ldk instead of the 4-byte ld $imm */
+#define	SP16	(MAXSPECIAL+5)	/* nameless ICON in 1..16: the inc/dec
+				   immediate range */
+#define	SPCON	(MAXSPECIAL+6)	/* nameless ICON representable as a word
+				   immediate (-32768..65535): pointer offset
+				   arithmetic on the pair's low word */
 
 /*
  * sizeof and pointer-difference results are plain 16-bit integers, NOT

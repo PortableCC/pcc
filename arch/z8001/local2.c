@@ -1163,6 +1163,16 @@ special(NODE *p, int shape)
 		    getlval(p) >= 0 && getlval(p) <= 15)
 			return SRDIR;
 		return SRNOPE;
+	case SP16:
+		if (p->n_op == ICON && p->n_name[0] == '\0' &&
+		    getlval(p) >= 1 && getlval(p) <= 16)
+			return SRDIR;
+		return SRNOPE;
+	case SPCON:
+		if (p->n_op == ICON && p->n_name[0] == '\0' &&
+		    getlval(p) >= -32768 && getlval(p) <= 65535)
+			return SRDIR;
+		return SRNOPE;
 	}
 	return SRNOPE;
 }
