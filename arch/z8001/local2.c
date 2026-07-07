@@ -1415,10 +1415,67 @@ myxasm(struct interpass *ip, NODE *p)
 	return 0;
 }
 
-/* No target-specific pass2 optimisation. */
+/*
+ * Fuse an assignment with the compare of the value it just stored:
+ *
+ *	ASSIGN(TEMP t, expr) ; CBRANCH(relop(TEMP t, 0))
+ *
+ * adjacent in the interpass list becomes
+ *
+ *	CBRANCH(relop(ASSIGN(TEMP t, expr), 0))
+ *
+ * An ASSIGN yields its stored value, so this is exactly the tree pass 1
+ * builds for "if ((t = expr))" - a shape the whole pipeline already
+ * handles.  When expr is a read-modify-write of t, the compare-vs-zero
+ * elision in geninsn then branches on the operation's own flags
+ * ("dec r5,$1 ; jr ne" instead of dec + test + jr, gated per-op by
+ * CCOKFORCOMP); otherwise pass 2 generates exactly the unfused code.
+ * Integer and pointer temps only: float compares are rewritten to
+ * fcomp helper calls and must keep their canonical shape.
+ *
+ * Runs from myoptim, i.e. AFTER deljumps/SSA/DCE and just before
+ * register allocation: SSA splits exactly this kind of tree back into
+ * the two-statement form (pass1's own "if ((t = expr))" trees
+ * included), so fusing any earlier is undone at -O1.
+ */
+static void
+fusecmp(struct interpass *ipole)
+{
+	struct interpass *ip, *inext;
+	NODE *p, *q;
+
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole; ip = inext) {
+		inext = DLIST_NEXT(ip, qelem);
+		if (ip->type != IP_NODE || inext == ipole ||
+		    inext->type != IP_NODE)
+			continue;
+		p = ip->ip_node;
+		if (p->n_op != ASSIGN || p->n_left->n_op != TEMP)
+			continue;
+		if (!KEEPLOGOPVALUE_T(p->n_left->n_type))
+			continue;
+		q = inext->ip_node;
+		if (q->n_op != CBRANCH)
+			continue;
+		q = q->n_left;
+		if (q->n_op < EQ || q->n_op > UGT)
+			continue;
+		if (q->n_left->n_op != TEMP ||
+		    regno(q->n_left) != regno(p->n_left))
+			continue;
+		if (q->n_right->n_op != ICON || getlval(q->n_right) != 0 ||
+		    q->n_right->n_name[0] != '\0')
+			continue;
+		nfree(q->n_left);
+		q->n_left = p;
+		DLIST_REMOVE(ip, qelem);
+	}
+}
+
 void
 myoptim(struct interpass *ip)
 {
+	fusecmp(ip);
 }
 
 /*
