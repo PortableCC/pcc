@@ -3048,9 +3048,20 @@ onlyperm: /* XXX - should not have to redo all */
 	memset(edgehash, 0, sizeof(edgehash));
 
 	/* clear adjacent node list */
-	for (i = 0; i < MAXREGS; i++)
+	for (i = 0; i < MAXREGS; i++) {
 		for (j = 0; j < NUMCLASS+1; j++)
 			NCLASS(&ablock[i], j) = 0;
+		/*
+		 * Clear the precolored move lists like the nblock memset
+		 * below does for the temporaries: a stale entry from the
+		 * previous round makes moveadd()'s already-there check
+		 * drop the move, so it never re-enters worklistMoves and
+		 * the temp loses its coalesce hint (a "return 0" temp
+		 * colored away from the return register emitted
+		 * "clr r0; ld r1,r0" instead of "clr r1").
+		 */
+		ablock[i].r_moveList = NULL;
+	}
 
 	if (tbits) {
 		memset(nblock+tempmin, 0, tbits * sizeof(REGW));
