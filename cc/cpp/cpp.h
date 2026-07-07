@@ -140,9 +140,10 @@ extern struct vspace ibspc;
  */
 struct rdline {
 	FILE *fp;
-	char *line;
-	char *curpos;
-	size_t len;
+	char *line;	/* Beginning of current line */
+	char *curpos;	/* Current position in line */
+	size_t alen;	/* Allocated buffer size for line (getline) */
+	ssize_t len;	/* Length of current line */
 };
 
 /*
@@ -218,7 +219,7 @@ void line(void);
 
 /* tempfile functions */
 struct rdline *templine(struct rdline *rdl);
-struct rdline *tempfile(void);
+struct rdline *tempfile(FILE *);
 void tempclose(struct rdline *);
 
 void pushfile(FILE *fp, const usch *fn, int idx, void *incs);

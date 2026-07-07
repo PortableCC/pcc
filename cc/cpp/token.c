@@ -965,7 +965,7 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	register int otrulvl;
 	struct rdline *rdp = &rdline;
 
-	rdp->fp = cleanup(ifp);
+	rdp = tempfile(cleanup(ifp));
 
 	ic = &ibuf;
 	ic->next = ifiles;
@@ -999,6 +999,8 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	pbeg = ic->opbeg;
 	pend = pbeg + ic->opend;
 	inp = pbeg + ic->oinp;
+
+	tempclose(rdp);
 }
 
 /*

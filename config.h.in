@@ -48,6 +48,9 @@
 /* Define to 1 if you have the 'ffs' function. */
 #undef HAVE_FFS
 
+/* Define to 1 if you have the 'fgetln' function. */
+#undef HAVE_FGETLN
+
 /* Define to 1 if you have the 'getopt' function. */
 #undef HAVE_GETOPT
 
