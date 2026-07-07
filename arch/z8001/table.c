@@ -194,12 +194,14 @@ struct optab table[] = {
 		NEEDS(NREG(A, 1), NSL(A)),	RESC1,
 		"ZK	extsb	A1\n", },
 
-/* unsigned char (byte reg) -> (u)int: zero-extend via word and */
+/* unsigned char (byte reg) -> (u)int: zero-extend in place.  ZU picks
+ * the native idiom "subb rhN,rhN" (2 bytes) when A1's word has an
+ * addressable high byte (r0-r7), else the word "and A1,$0xff". */
 { SCONV,	INAREG,
 	SDREG,		TUCHAR,
 	SANY,		TWORD,
 		NEEDS(NREG(A, 1), NSL(A)),	RESC1,
-		"ZK	and	A1,$0xff\n", },
+		"ZKZU", },
 
 /* char -> (u)long: word-copy the containing word into the pair's low
  * word, extend byte->word->pair.  No NSL: "ld U1,ZG" writes U1 before
@@ -928,6 +930,25 @@ struct optab table[] = {
 		0,	RLEFT,
 		"ZL", },
 
+/* char AND: clocal narrows char-mask truth tests ((c & m) ==/!= k with
+ * m,k in 0..255) back to byte width, so these only ever compute an
+ * EQ/NE condition.  andb dst is a register, src R/IM/IR/DA/X (as
+ * S_RSRC); a byte immediate is replicated into both halves by as
+ * (op&W==0), the same encoding path as cpb Rb,IM.  RESCC is safe for
+ * the eq/ne consumer only: andb sets Z from the result but P/V is
+ * parity, exactly like testb. */
+{ AND,		INDREG|FOREFF|FORCC,
+	SDREG,			TCHAR|TUCHAR,
+	SDREG|SNAME|SCON,	TCHAR|TUCHAR,
+		0,	RLEFT|RESCC,
+		"	andb	AL,AR\n", },
+
+{ AND,		INDREG|FOREFF|FORCC,
+	SDREG,	TCHAR|TUCHAR,
+	SNBA,	TCHAR|TUCHAR,
+		0,	RLEFT|RESCC,
+		"	andb	AL,AR\n", },
+
 /*
  * OR - bitwise or.
  */
@@ -1109,6 +1130,28 @@ struct optab table[] = {
  * hardware has no "ldl mem,#imm" form (Coherent as mchld: only word/byte
  * have the LDI store path), so the constant is materialized into a pair
  * register (OPLTYPE ldl $imm) and stored via the mem <- pair rule above. */
+
+/* byte reg <- zero: clrb sets no flags (manual: "No flags affected"),
+ * so no FORCC/RESCC - a compare-context assign falls back to the
+ * generic rules below (first match wins at equal level). */
+{ ASSIGN,	FOREFF|INDREG,
+	SDREG,		TCHAR|TUCHAR,
+	SZERO,		TANY,
+		0,	RDEST,
+		"	clrb	AL\n", },
+
+/* byte mem <- zero (clrb dst is R/IR/DA/X - no BA, like clr) */
+{ ASSIGN,	FOREFF,
+	SNAME,		TCHAR|TUCHAR,
+	SZERO,		TANY,
+		0,	0,
+		"	clrb	AL\n", },
+
+{ ASSIGN,	FOREFF,
+	SNBA,		TCHAR|TUCHAR,
+	SZERO,		TANY,
+		0,	0,
+		"	clrb	AL\n", },
 
 /* byte/char reg <- reg, mem or const (byte registers print as rlN) */
 { ASSIGN,	FOREFF|INDREG|FORCC,

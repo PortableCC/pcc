@@ -461,6 +461,8 @@ quadmem(NODE *mem, int q, int store)
  *   ZH  word register containing the class-D (byte) result A1
  *   ZK  byte -> word conversion move: "ld A1,<word of left>", omitted
  *       when A1 already is that word (NSL sharing)
+ *   ZU  uchar zero-extend of A1's low byte in place: "subb rhN,rhN"
+ *       for r0-r7, "and A1,$0xff" for the high-byte-less r8-r15
  *   ZI  word -> byte conversion move: "ld <word of A1>,AL", omitted
  *       when AL already is A1's word (NSL sharing)
  *   ZS  struct assignment: ldirb block copy
@@ -496,6 +498,20 @@ zzzcode(NODE *p, int c)
 		if (n != dword(l->n_rval))
 			printf("\tld\t%s,%s\n",
 			    rnames[n], rnames[dword(l->n_rval)]);
+		break;
+
+	case 'U':	/* zero-extend the low byte of the class-A result A1
+			 * in place (ZK put the uchar's word there): high-byte
+			 * self-subtract when the word has an addressable high
+			 * byte (r0-r7; the 2-byte native idiom), else the
+			 * equivalent 4-byte word and. */
+		n = getlr(p, '1')->n_rval;
+		if (n < 0 || n > 15)
+			comperr("ZU: result not a word register");
+		if (n <= 7)
+			printf("\tsubb\trh%d,rh%d\n", n, n);
+		else
+			printf("\tand\t%s,$0xff\n", rnames[n]);
 		break;
 
 	case 'I':	/* word -> byte: copy the word into the byte result
