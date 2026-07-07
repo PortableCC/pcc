@@ -945,7 +945,12 @@ again:	switch (o = p->n_op) {
 	case UGT:
 		p1 = p->n_left;
 		p2 = p->n_right;
-		if (p2->n_op == ICON && getlval(p2) == 0 && *p2->n_name == 0 &&
+		/* The compare-vs-zero elision only makes sense when the
+		 * relop is evaluated for its condition codes: in value
+		 * context (a target keeping value relops in the tree)
+		 * the child's flags alone produce no register result. */
+		if (cookie == FORCC &&
+		    p2->n_op == ICON && getlval(p2) == 0 && *p2->n_name == 0 &&
 		    (dope[p1->n_op] & (FLOFLG|DIVFLG|SIMPFLG|SHFFLG)) &&
 		    CCOKFORCOMP(o, p1->n_op)) {
 #ifdef mach_pdp11 /* XXX all targets? */
@@ -958,7 +963,7 @@ again:	switch (o = p->n_op) {
 				break;
 #endif
 		}
-		rv = relops(p);
+		rv = relops(p, cookie);
 		break;
 
 	case PLUS:

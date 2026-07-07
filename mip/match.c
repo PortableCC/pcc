@@ -754,7 +754,7 @@ findops(NODE *p, int cookie)
  *	REG	REG	4	# put both in reg
  */
 int
-relops(NODE *p)
+relops(NODE *p, int cookie)
 {
 	extern int *qtable[];
 	struct optab *q;
@@ -774,6 +774,14 @@ relops(NODE *p)
 
 		F2DEBUG(("relops: ixp %d\n", ixp[i]));
 		if (!acceptable(q))		/* target-dependent filter */
+			continue;
+
+		/* Historically every relop rule was FORCC-only and the
+		 * context was implied.  A target keeping relops in value
+		 * context adds rules that materialize the truth value in
+		 * a register; those must not be picked under a branch,
+		 * nor a flags-only rule where a result is wanted. */
+		if (cookie != FOREFF && (q->visit & cookie) == 0)
 			continue;
 
 		if (ttype(l->n_type, q->ltype) == 0 ||
@@ -820,11 +828,19 @@ relops(NODE *p)
 		sh = ffs(n2osh(q->lshape) & INREGS)-1;
 	else if (q->rewrite & RRIGHT)
 		sh = ffs(n2osh(q->rshape) & INREGS)-1;
+	else if (cookie != FORCC && (cookie & q->visit & INREGS) != 0)
+		/* value-context relop delivering its 0/1 result in a
+		 * scratch register (RESC1-style rule): the class comes
+		 * from the rule's visit mask, exactly as in findops */
+		sh = ffs(cookie & q->visit & INREGS)-1;
 
 	F2DEBUG(("relops: node %p\n", p));
 	p->n_su = MKIDX(idx, 0);
 	SCLASS(p->n_su, sh);
-	return 0;
+	/* like findops: the return value is the result class - shswitch
+	 * feeds it to a rewriting parent (a value-context relop under
+	 * RLEFT would otherwise leave the parent classless, n_reg -1) */
+	return sh;
 }
 
 /*
