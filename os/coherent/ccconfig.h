@@ -33,21 +33,33 @@
 #define CPPMDADD	{ "-DZ8001", "-Dcoherent", "-Dunix", NULL }
 
 /* Startup object: segmented Z8001 C run-time start-off (csu/crts0.s),
- * entry point "start" which calls main_.  No ELF-style crti/crtn. */
-#define CRT0		"/lib/crts0.o"
+ * entry point "start" which calls main_.  No ELF-style crti/crtn.
+ * A bare name: the driver resolves it through the crt search dirs
+ * (-B directories, and on Windows the driver's own directory). */
+#define CRT0		"crts0.o"
 #define CRTBEGIN	0
 #define CRTEND		0
 #define CRTI		0
 #define CRTN		0
 
-/* Default library linked into every C program */
-#define DEFLIBS		{ "-lc", 0 }
+/* Default library linked into every C program.  A bare file name:
+ * Coherent ld hardcodes /lib and /usr/lib for -l (useless when
+ * cross-linking), so the driver resolves the file itself. */
+#define DEFLIBS		{ "libc.a", 0 }
 
 /*
- * Library search paths: /lib first, then /usr/lib.
- * Confirmed from linker source (_examples/cmd/ld/main.c).
+ * No -L default search paths: to Coherent ld -L means "large memory
+ * model", not a library path.  Libraries and crt files are resolved
+ * by the driver through -B directories (and the driver's directory).
  */
-#define DEFLIBDIRS	{ "/lib/", "/usr/lib/", 0 }
+#define DEFLIBDIRS	{ 0 }
+
+/*
+ * The Coherent assembler treats undefined symbols as errors unless
+ * -g is given, which turns them into external references (the native
+ * cc driver relies on this too).
+ */
+#define PCC_EARLY_AS_ARGS	strlist_append(&args, "-g");
 
 /*
  * System include paths: /include first, then /usr/include.

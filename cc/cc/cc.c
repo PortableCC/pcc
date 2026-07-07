@@ -1029,6 +1029,23 @@ main(int argc, char *argv[])
 		signal(SIGTERM, idexit);
 
 	/* after arg parsing */
+#ifdef _WIN32
+	/* also search the directory the driver itself lives in, so the
+	 * other tools and the target libraries can be kept in one folder;
+	 * -B directories were added during arg parsing and take precedence */
+	{
+		char exepath[MAX_PATH];
+		char *p;
+
+		if (GetModuleFileName(NULL, exepath, sizeof(exepath)) > 0 &&
+		    (p = strrchr(exepath, '\\')) != NULL) {
+			*p = 0;
+			strlist_append(&progdirs, exepath);
+			strlist_append(&crtdirs, exepath);
+			strlist_append(&libdirs, exepath);
+		}
+	}
+#endif
 	strlist_append(&progdirs, LIBEXECDIR);
 	if (pcclibdir)
 		strlist_append(&crtdirs, pcclibdir);
@@ -1258,6 +1275,17 @@ find_file(const char *file, struct strlist *path, int mode)
 		memcpy(f + lp + need_sep, file, lf + 1);
 		if (access(f, mode) == 0)
 			return f;
+#ifdef _WIN32
+		/* Windows executables only match with the .exe suffix */
+		{
+			char *fx = cat(f, ".exe");
+			if (access(fx, mode) == 0) {
+				free(f);
+				return fx;
+			}
+			free(fx);
+		}
+#endif
 		free(f);
 	}
 	return xstrdup(file);
@@ -2053,7 +2081,7 @@ struct flgcheck ldflgcheck[] = {
 #else
 	{ &Bstatic, 1, "-Bstatic" },
 #endif
-#if !defined(os_darwin) && !defined(os_sunos)
+#if !defined(os_darwin) && !defined(os_sunos) && !defined(os_coherent)
 	{ &gflag, 1, "-g" },
 #endif
 	{ &pthreads, 1, "-lpthread" },
@@ -2090,7 +2118,9 @@ setup_ld_flags(void)
 			strlist_append(&early_linker_flags, dynlinkarg);
 			strlist_append(&early_linker_flags, dynlinklib);
 		}
-#ifndef os_darwin
+	/* Coherent ld enters at the first object (crts0.o); its "start"
+	 * label is not global, so -e cannot name it */
+#if !defined(os_darwin) && !defined(os_coherent)
 		strlist_append(&early_linker_flags, "-e");
 		strlist_append(&early_linker_flags, STARTLABEL);
 #endif
@@ -2107,12 +2137,15 @@ setup_ld_flags(void)
 		strlist_append(&early_linker_flags, cat("--sysroot=", sysroot));
 	if (!nostdlib) {
 		/* library search paths */
+	/* Coherent ld has no search-path option: -L means "large model" */
+#ifndef os_coherent
 		if (pcclibdir)
 			strlist_append(&late_linker_flags,
 			    cat("-L", pcclibdir));
 		for (i = 0; deflibdirs[i]; i++)
 			strlist_append(&late_linker_flags,
 			    cat("-L", deflibdirs[i]));
+#endif
 		/* standard libraries */
 		if (pgflag) {
 			for (i = 0; defproflibs[i]; i++)
@@ -2123,8 +2156,16 @@ setup_ld_flags(void)
 				strlist_append(&late_linker_flags,
 				    defcxxlibs[i]);
 		} else {
-			for (i = 0; deflibs[i]; i++)
-				strlist_append(&late_linker_flags, deflibs[i]);
+			for (i = 0; deflibs[i]; i++) {
+				if (deflibs[i][0] == '-')
+					strlist_append(&late_linker_flags,
+					    deflibs[i]);
+				else
+					/* bare library file: resolve it here,
+					 * for linkers without -l/-L */
+					strap(&late_linker_flags, &libdirs,
+					    deflibs[i], 'a');
+			}
 		}
 	}
 	if (!nostartfiles) {
