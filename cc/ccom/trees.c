@@ -2383,6 +2383,20 @@ rmcops(P1ND *p)
 	case LT:
 	case GE:
 	case GT:
+		/*
+		 * A relational used for its value.  Targets that can
+		 * materialize a truth value directly keep the bare relop
+		 * in the tree (pass2 matches it with a value-context
+		 * OPLOG rule); everyone else gets the branch diamond
+		 * below.  The operands are ordinary expressions - just
+		 * clean them up recursively.
+		 */
+		if (KEEPLOGOPVALUE(p)) {
+			rmcops(p->n_left);
+			rmcops(p->n_right);
+			break;
+		}
+		/* FALLTHROUGH */
 	case ANDAND:
 	case OROR:
 	case NOT:

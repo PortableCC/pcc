@@ -726,6 +726,18 @@ void dwarf_end(void);
 #define OPTIM_KEEPZERO(p)	0
 #endif
 
+/*
+ * rmcops() rewrites relationals used for their value (f = (a < b)) into
+ * a branch diamond storing 1/0 to a temp.  A target whose instruction
+ * set can materialize a truth value directly (Z8000 tcc, ...) overrides
+ * this to keep the bare relop in the tree; pass2 then needs table rules
+ * matching OPLOG in value (register) context.  ANDAND/OROR/NOT are
+ * still rewritten regardless: they require lazy evaluation.
+ */
+#ifndef KEEPLOGOPVALUE
+#define KEEPLOGOPVALUE(p)	0
+#endif
+
 /* Generate a bitmask from a given type size */
 #define SZMASK(y) ((((1LL << ((y)-1))-1) << 1) | 1)
 
