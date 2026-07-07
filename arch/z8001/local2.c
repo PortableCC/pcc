@@ -1490,10 +1490,172 @@ fusecmp(struct interpass *ipole)
 	}
 }
 
+/*
+ * Count definitions and uses of TEMP number num in a tree.  A TEMP
+ * that is the direct target of an ASSIGN is a definition; every
+ * other occurrence is a use.
+ */
+static void
+tmpcount(NODE *p, int num, int *defs, int *uses)
+{
+	if (p->n_op == ASSIGN && p->n_left->n_op == TEMP) {
+		if (regno(p->n_left) == num)
+			(*defs)++;
+		tmpcount(p->n_right, num, defs, uses);
+		return;
+	}
+	switch (optype(p->n_op)) {
+	case BITYPE:
+		tmpcount(p->n_right, num, defs, uses);
+		/* FALLTHROUGH */
+	case UTYPE:
+		tmpcount(p->n_left, num, defs, uses);
+		return;
+	default:
+		if (p->n_op == TEMP && regno(p) == num)
+			(*uses)++;
+	}
+}
+
+/*
+ * Recover the -O0 read-modify-write shape at -O1.
+ *
+ * SSA renames the two halves of pass 1's fused countdown tree, so
+ * after removephi a "while (--n)" loop reads
+ *
+ *	ASSIGN(TEMP s, TEMP x)			entry copy
+ *   L:	CBRANCH(rel(ASSIGN(TEMP d, op(TEMP s, e)), 0))
+ *	... body uses TEMP d ...
+ *	ASSIGN(TEMP s, TEMP d)			back-edge copy
+ *	GOTO L
+ *
+ * and findmops' treecmp(d, s) can never match, so the compare-vs-zero
+ * elision that works at -O0 ("dec r5,$1 ; jr ne") is lost; the
+ * register allocator does coalesce d and s into one register, but by
+ * then geninsn has already emitted the separate test.
+ *
+ * When the whole-function interpass list proves this exact structure
+ * - d defined only by the RMW, s used only by the RMW, and s defined
+ * by exactly two plain top-level temp-to-temp copies, one before the
+ * RMW (from neither d nor s) and one after it reading d - renaming s
+ * to d is a semantics-preserving coalesce: the entry copy then loads
+ * d, the back-edge copy becomes a self-copy and is deleted, and the
+ * RMW reads and writes one temp, so the elision fires again.  The
+ * two-copy requirement is what makes the rename sound: it pins the
+ * removephi phi-lowering shape where every path back to the RMW
+ * passes one of the (consistently renamed) copies, and rejects
+ * aliasing shapes like "while (n = m - 1)" where m stays live.
+ * Gated on xssa: only SSA produces the split-temp shape, and the
+ * soundness argument leans on removephi's every-edge-gets-a-copy
+ * invariant.  Runs after fusecmp, which builds the fused tree for
+ * the pairs SSA split completely apart.
+ *
+ * The same basic-block boundary rule as fusecmp applies to the
+ * deleted copy: the register allocator reuses optimize()'s blocks.
+ */
+static void
+rmwrename(struct interpass *ipole)
+{
+	struct interpass *ip, *ip2, *entrycp, *backcp;
+	struct basicblock *bb;
+	NODE *p, *q, *rmw, *r;
+	int d, s, seen, bad, ddefs, duses, sdefs, suses, du, dd;
+
+	if (!xssa)
+		return;
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole;
+	    ip = DLIST_NEXT(ip, qelem)) {
+		if (ip->type != IP_NODE)
+			continue;
+		p = ip->ip_node;
+		if (p->n_op != CBRANCH)
+			continue;
+		q = p->n_left;
+		if (q->n_op < EQ || q->n_op > UGT)
+			continue;
+		rmw = q->n_left;
+		if (rmw->n_op != ASSIGN || rmw->n_left->n_op != TEMP)
+			continue;
+		r = rmw->n_right;
+		if (r->n_op != PLUS && r->n_op != MINUS && r->n_op != AND &&
+		    r->n_op != OR && r->n_op != ER)
+			continue;
+		if (r->n_left->n_op != TEMP)
+			continue;
+		d = regno(rmw->n_left);
+		s = regno(r->n_left);
+		if (d == s || rmw->n_left->n_type != r->n_left->n_type)
+			continue;
+		/* the modifier expression may mention neither temp */
+		dd = du = 0;
+		tmpcount(r->n_right, d, &dd, &du);
+		tmpcount(r->n_right, s, &dd, &du);
+		if (dd || du)
+			continue;
+
+		ddefs = duses = sdefs = suses = 0;
+		entrycp = backcp = NULL;
+		seen = bad = 0;
+		for (ip2 = DLIST_NEXT(ipole, qelem); ip2 != ipole;
+		    ip2 = DLIST_NEXT(ip2, qelem)) {
+			if (ip2->type != IP_NODE)
+				continue;
+			q = ip2->ip_node;
+			if (ip2 == ip) {
+				/* the candidate: 1 d-def + 1 s-use by
+				 * shape; anything more counts below and
+				 * fails the ddefs/suses/sdefs checks */
+				seen = 1;
+			} else if (q->n_op == ASSIGN &&
+			    q->n_left->n_op == TEMP &&
+			    regno(q->n_left) == s &&
+			    q->n_right->n_op == TEMP) {
+				if (seen == 0 && entrycp == NULL &&
+				    regno(q->n_right) != d &&
+				    regno(q->n_right) != s) {
+					/* entry copy: 1 s-def, no other
+					 * d/s references */
+					entrycp = ip2;
+					sdefs++;
+					continue;
+				}
+				if (seen == 1 && backcp == NULL &&
+				    regno(q->n_right) == d) {
+					/* back-edge copy: 1 s-def, 1 d-use */
+					backcp = ip2;
+					sdefs++;
+					duses++;
+					continue;
+				}
+				bad = 1;	/* copy in the wrong place */
+				break;
+			}
+			tmpcount(q, d, &ddefs, &duses);
+			tmpcount(q, s, &sdefs, &suses);
+		}
+		if (bad || ddefs != 1 || suses != 1 || sdefs != 2 ||
+		    entrycp == NULL || backcp == NULL)
+			continue;
+
+		/* rename s to d; the back-edge copy becomes dead */
+		entrycp->ip_node->n_left->n_rval = d;
+		r->n_left->n_rval = d;
+		DLIST_FOREACH(bb, &p2env.bblocks, bbelem) {
+			if (bb->first == backcp)
+				bb->first = DLIST_NEXT(backcp, qelem);
+			if (bb->last == backcp)
+				bb->last = DLIST_PREV(backcp, qelem);
+		}
+		tfree(backcp->ip_node);
+		DLIST_REMOVE(backcp, qelem);
+	}
+}
+
 void
 myoptim(struct interpass *ip)
 {
 	fusecmp(ip);
+	rmwrename(ip);
 }
 
 /*
