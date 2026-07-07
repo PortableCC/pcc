@@ -963,6 +963,25 @@ again:	switch (o = p->n_op) {
 				break;
 #endif
 		}
+#ifdef FINDMOPS
+		/* Branch on a value just stored:
+		 *	CBRANCH(relop(ASSIGN(x, op(x, e)), 0))
+		 * (built by pass1 for "if ((x = expr))" or by a target's
+		 * myreader fusing an assignment with the following
+		 * compare).  When a read-modify-write insn computes the
+		 * stored value, its flags ARE the compare result - the
+		 * same contract as the plain-op elision above, with
+		 * CCOKFORCOMP keyed on the modifying op. */
+		if (cookie == FORCC &&
+		    p2->n_op == ICON && getlval(p2) == 0 && *p2->n_name == 0 &&
+		    p1->n_op == ASSIGN &&
+		    optype(p1->n_right->n_op) == BITYPE &&
+		    (dope[p1->n_right->n_op] & (FLOFLG|DIVFLG|SIMPFLG|SHFFLG)) &&
+		    CCOKFORCOMP(o, p1->n_right->n_op)) {
+			if (findmops(p1, FORCC) != FFAIL)
+				break;
+		}
+#endif
 		rv = relops(p, cookie);
 		break;
 
@@ -1377,7 +1396,12 @@ gencode(NODE *p, int cookie)
 	expand(p, cookie, q->cstring);
 
 #ifdef FINDMOPS
-	if (ismops && DECRA(p->n_reg, 0) != regno(l) && cookie != FOREFF) {
+	/* Copy the RMW result to the allocated register only when a
+	 * register result was actually requested: an ASSIGN elided under
+	 * a compare (matched with FORCC, evaluated here with cookie 0)
+	 * has no result register at all - n_reg is -1 and DECRA of it
+	 * would name a garbage register. */
+	if (ismops && DECRA(p->n_reg, 0) != regno(l) && (cookie & INREGS)) {
 		CDEBUG(("gencode(%p) rmove\n", p));
 		rmove(regno(l), DECRA(p->n_reg, 0), p->n_type);
 	} else
