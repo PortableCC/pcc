@@ -1406,6 +1406,63 @@ struct optab table[] = {
 		0,	RESCC,
 		"	testb	AL\n", },
 
+/*
+ * Sign test vs zero: LT and GE against 0 are decided by the S flag
+ * alone, which test/testl set correctly - the ZO escape makes cbgen
+ * branch on mi/pl instead of the generic lt/ge (those are S xor V,
+ * and TEST leaves P/V as parity/stale; native cc uses the same
+ * "test; jr mi/pl" idiom).  GT/LE also need Z and V, so they fall
+ * through to the cp/cpl rules below.  Like the EQ/NE test rules
+ * these must precede the OPLOG cp rules.
+ */
+{ LT,	FORCC,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\nZO", },
+
+{ GE,	FORCC,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\nZO", },
+
+{ LT,	FORCC,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\nZO", },
+
+{ GE,	FORCC,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	test	AL\nZO", },
+
+{ LT,	FORCC,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\nZO", },
+
+{ GE,	FORCC,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\nZO", },
+
+{ LT,	FORCC,
+	SNBA,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\nZO", },
+
+{ GE,	FORCC,
+	SNBA,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		0,	RESCC,
+		"	testl	AL\nZO", },
+
 /* compare word vs zero */
 { OPLOG,	FORCC,
 	SAREG|SNAME,	TWORD,

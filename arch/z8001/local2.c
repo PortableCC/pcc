@@ -471,7 +471,14 @@ quadmem(NODE *mem, int q, int store)
  *   ZE  double load: memory/quad reg -> result quad A1
  *   ZP  double argument push: two pushl (low pair first)
  *   ZW  high (sign+exponent) word of the left operand's quad/pair
+ *   ZO  the compare just emitted is a sign-Only flag setter (test/testl:
+ *       S and Z valid, P/V left as parity/stale): the LT/GE branch that
+ *       cbgen emits next must read S alone, i.e. jr mi/pl
  */
+
+/* set by ZO, consumed by the cbgen call that follows the compare */
+static int signonlycc;
+
 void
 zzzcode(NODE *p, int c)
 {
@@ -512,6 +519,13 @@ zzzcode(NODE *p, int c)
 			printf("\tsubb\trh%d,rh%d\n", n, n);
 		else
 			printf("\tand\t%s,$0xff\n", rnames[n]);
+		break;
+
+	case 'O':	/* the test/testl this template printed sets S and Z
+			 * but leaves P/V alone, so the signed conditions
+			 * lt/ge (S xor V) would read a stale V: make the
+			 * following cbgen branch on the sign flag alone. */
+		signonlycc = 1;
 		break;
 
 	case 'J':	/* bit number of the single-bit mask in the right
@@ -1013,9 +1027,23 @@ static char *ccnames[] = {
 void
 cbgen(int o, int lab)
 {
+	char *cc;
+
 	if (o < EQ || o > UGT)
 		comperr("cbgen: bad op %d", o);
-	printf("\tjr\t%s," LABFMT "\n", ccnames[o - EQ], lab);
+	cc = ccnames[o - EQ];
+	if (signonlycc) {
+		/* the compare was a test/testl (ZO): S is valid but V is
+		 * not, so LT/GE must branch on the sign flag alone */
+		signonlycc = 0;
+		if (o == LT)
+			cc = "mi";
+		else if (o == GE)
+			cc = "pl";
+		else
+			comperr("cbgen: sign-only cc for op %d", o);
+	}
+	printf("\tjr\t%s," LABFMT "\n", cc, lab);
 }
 
 /*
