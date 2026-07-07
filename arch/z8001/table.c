@@ -853,6 +853,17 @@ struct optab table[] = {
  * Shifts.
  */
 
+/* shift left by 1 = self-add, the native idiom: 2 bytes vs 4 for sll.
+ * add sets all flags arithmetically for the doubled value (unlike sll,
+ * which leaves V alone), so the FORCC/RESCC claim is sound; the
+ * CCOKFORCOMP gate limits elided compares on an LS child to EQ/NE
+ * anyway.  Must precede the generic sll rule (first match wins). */
+{ LS,		INAREG|FOREFF|FORCC,
+	SAREG,		TWORD,
+	SONE,		TANY,
+		0,	RLEFT|RESCC,
+		"	add	AL,AL\n", },
+
 /* logical shift left word, constant count */
 { LS,		INAREG|FOREFF,
 	SAREG,		TWORD,
@@ -873,6 +884,13 @@ struct optab table[] = {
 	SCON,		TWORD,
 		0,	RLEFT,
 		"	srl	AL,AR\n", },
+
+/* pair shift left by 1 = self-add: 2 bytes vs 4 for slll */
+{ LS,		INBREG|FOREFF,
+	SBREG,		TLONG|TULONG,
+	SONE,		TANY,
+		0,	RLEFT,
+		"	addl	AL,AL\n", },
 
 /* shift left long pair, constant count */
 { LS,		INBREG|FOREFF,
