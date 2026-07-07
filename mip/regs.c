@@ -2407,7 +2407,13 @@ colfind(int okColors, REGW *r)
 		RDEBUG(("colfind: Recommend color from %d\n", ASGNUM(w)));
 		return COLOR(w);
 	}
+#ifdef PICKCOLOR
+	/* let the target choose among the remaining colors (e.g. to keep
+	 * the callee-save range in the prologue minimal) */
+	return color2reg(PICKCOLOR(CLASS(r), okColors), CLASS(r));
+#else
 	return color2reg(ffs(okColors)-1, CLASS(r));
+#endif
 }
 
 static void
@@ -2444,6 +2450,28 @@ AssignColors(struct interpass *ip)
 				okColors &= ~c;
 			}
 		}
+#ifdef SPILLSHADOW
+		/*
+		 * A permreg shadow that cannot keep its own register is
+		 * cheaper spilled (the target prologue saves the register)
+		 * than parked in another callee-save register with entry/
+		 * exit moves.  Force the spill path; the ONLYPERM rewrite
+		 * then marks the register in nsavregs and recolors.
+		 */
+		if (okColors != 0 &&
+		    w >= &nblock[tempmin] && w < &nblock[basetemp]) {
+			int own = permregs[(int)(w - nblock) - tempmin];
+			for (c = 0; c < regK[CLASS(w)]; c++)
+				if (color2reg(c, CLASS(w)) == own)
+					break;
+			if (c == regK[CLASS(w)] ||
+			    ((1 << c) & okColors) == 0) {
+				RDEBUG(("shadow %d loses %s: spill\n",
+				    ASGNUM(w), rnames[own]));
+				okColors = 0;
+			}
+		}
+#endif
 		if (okColors == 0) {
 			PUSHWLIST(w, spilledNodes);
 #ifdef PCC_DEBUG
