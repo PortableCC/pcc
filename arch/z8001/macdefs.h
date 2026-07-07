@@ -449,6 +449,21 @@ int pickcolor(int class, int mask);
 #define	OPTIM_KEEPZERO(p)	(p->n_left->n_op == REG && \
 				 p->n_left->n_rval == FPREG)
 
+/*
+ * Keep value-context relationals (f = (a < b), return x == y) as bare
+ * OPLOG nodes instead of pass1's branch diamond: pass2 materializes
+ * the truth value with "cp ; clr A1 ; tcc cc,A1".  TCC sets only bit 0
+ * of its register destination when cc holds (all other bits and all
+ * flags untouched), and CLR sets no flags either - so the order is
+ * compare first, clr second, tcc last, which also makes it safe for
+ * the result register to share with a compare operand.  Integer and
+ * pointer operands only: float and longlong compares have no
+ * value-context OPLOG rules and keep the diamond.
+ */
+#define	KEEPLOGOPVALUE_T(t)	(ISPTR(t) || ((t) >= CHAR && (t) <= ULONG))
+#define	KEEPLOGOPVALUE(p)	(KEEPLOGOPVALUE_T(p->n_left->n_type) && \
+				 KEEPLOGOPVALUE_T(p->n_right->n_type))
+
 /* Soft-float: big-endian IEEE binary32 and binary64 */
 #define	USE_IEEEFP_32
 #define	FLT_PREFIX	IEEEFP_32

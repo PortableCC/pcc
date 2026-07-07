@@ -474,10 +474,26 @@ quadmem(NODE *mem, int q, int store)
  *   ZO  the compare just emitted is a sign-Only flag setter (test/testl:
  *       S and Z valid, P/V left as parity/stale): the LT/GE branch that
  *       cbgen emits next must read S alone, i.e. jr mi/pl
+ *   ZV  condition-code name of this relop, non-negated, for the
+ *       value-context "tcc cc,A1" (the truth value itself is wanted)
  */
 
 /* set by ZO, consumed by the cbgen call that follows the compare */
 static int signonlycc;
+
+/* condition-code names, indexed by relop - EQ (used by cbgen and ZV) */
+static char *ccnames[] = {
+	"eq",	/* EQ  */
+	"ne",	/* NE  */
+	"le",	/* LE  */
+	"lt",	/* LT  */
+	"ge",	/* GE  */
+	"gt",	/* GT  */
+	"ule",	/* ULE */
+	"ult",	/* ULT */
+	"uge",	/* UGE */
+	"ugt",	/* UGT */
+};
 
 void
 zzzcode(NODE *p, int c)
@@ -526,6 +542,14 @@ zzzcode(NODE *p, int c)
 			 * lt/ge (S xor V) would read a stale V: make the
 			 * following cbgen branch on the sign flag alone. */
 		signonlycc = 1;
+		break;
+
+	case 'V':	/* value-context relational: the cc name of this
+			 * OPLOG itself, non-negated (the compare is already
+			 * printed; tcc sets bit 0 of A1 when cc holds). */
+		if (p->n_op < EQ || p->n_op > UGT)
+			comperr("ZV: op %d not a relop", p->n_op);
+		printf("%s", ccnames[p->n_op - EQ]);
 		break;
 
 	case 'J':	/* bit number of the single-bit mask in the right
@@ -1011,19 +1035,6 @@ adrput(FILE *io, NODE *p)
 /*
  * cbgen: emit a conditional branch.
  */
-static char *ccnames[] = {
-	"eq",	/* EQ  */
-	"ne",	/* NE  */
-	"le",	/* LE  */
-	"lt",	/* LT  */
-	"ge",	/* GE  */
-	"gt",	/* GT  */
-	"ule",	/* ULE */
-	"ult",	/* ULT */
-	"uge",	/* UGE */
-	"ugt",	/* UGT */
-};
-
 void
 cbgen(int o, int lab)
 {

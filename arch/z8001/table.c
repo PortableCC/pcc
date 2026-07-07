@@ -1549,6 +1549,185 @@ struct optab table[] = {
 		"	cpb	AL,AR\n", },
 
 /*
+ * Value-context relationals (kept in the tree by KEEPLOGOPVALUE):
+ * materialize the 0/1 result with "compare ; clr A1 ; tcc cc,A1".
+ * TCC cc,Rd sets only bit 0 of Rd when cc holds - all other bits and
+ * all flags untouched - and CLR sets no flags, so the order compare/
+ * clr/tcc is mandatory and also makes it safe for A1 to share a
+ * register with a compare operand (XSL sharing; the compare reads
+ * first).  ZV prints the relop's own cc name, non-negated (value
+ * sense).
+ *
+ * Like the FORCC set: EQ/NE against zero go through test/testl/testb
+ * (2 bytes shorter than the cp $0 immediate form, and the memory forms
+ * absorb the operand load); everything else through cp/cpl/cpb, which
+ * set all flags correctly for the ordered and unsigned conditions
+ * (LT/GE-vs-0 need no mi/pl escape here: cp's V is valid).  The
+ * result is always a word (relop type is INT), so the tcc is always
+ * the word form regardless of operand width.
+ */
+
+/* equality vs zero -> 0/1, word */
+{ EQ,	INAREG,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	test	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ NE,	INAREG,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	test	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ EQ,	INAREG,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	test	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ NE,	INAREG,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	test	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* equality vs zero -> 0/1, long/pointer */
+{ EQ,	INAREG,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testl	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ NE,	INAREG,
+	SBREG|SNAME,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testl	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ EQ,	INAREG,
+	SNBA,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testl	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ NE,	INAREG,
+	SNBA,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testl	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* equality vs zero -> 0/1, char */
+{ EQ,	INAREG,
+	SDREG|SNAME,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testb	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ NE,	INAREG,
+	SDREG|SNAME,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testb	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ EQ,	INAREG,
+	SNBA,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testb	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ NE,	INAREG,
+	SNBA,	TCHAR|TUCHAR,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	testb	AL\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop vs zero -> 0/1, word (ordered/unsigned land here) */
+{ OPLOG,	INAREG,
+	SAREG|SNAME,	TWORD,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	cp	AL,$0\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ OPLOG,	INAREG,
+	SNBA,	TWORD,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	cp	AL,$0\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop -> 0/1, word reg vs reg/name/const */
+{ OPLOG,	INAREG,
+	SAREG,			TWORD,
+	SAREG|SNAME|SCON,	TWORD,
+		XSL(A),		RESC1,
+		"	cp	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ OPLOG,	INAREG,
+	SAREG,	TWORD,
+	SNBA,	TWORD,
+		XSL(A),		RESC1,
+		"	cp	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop -> 0/1, word mem vs const (immediate-compare form) */
+{ OPLOG,	INAREG,
+	SNAME,	TWORD,
+	SCON,	TWORD,
+		XSL(A),		RESC1,
+		"	cp	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ OPLOG,	INAREG,
+	SNBA,	TWORD,
+	SCON,	TWORD,
+		XSL(A),		RESC1,
+		"	cp	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop vs zero -> 0/1, pair: register only (no cpl mem,#imm) */
+{ OPLOG,	INAREG,
+	SBREG,	TLONG|TULONG|TPOINT,
+	SZERO,	TANY,
+		XSL(A),		RESC1,
+		"	cpl	AL,$0\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop -> 0/1, pair vs pair */
+{ OPLOG,	INAREG,
+	SBREG,			TLONG|TULONG|TPOINT,
+	SBREG|SNAME|SCON,	TLONG|TULONG|TPOINT,
+		XSL(A),		RESC1,
+		"	cpl	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ OPLOG,	INAREG,
+	SBREG,	TLONG|TULONG|TPOINT,
+	SNBA,	TLONG|TULONG|TPOINT,
+		XSL(A),		RESC1,
+		"	cpl	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop -> 0/1, char vs char */
+{ OPLOG,	INAREG,
+	SDREG,			TCHAR|TUCHAR,
+	SDREG|SNAME|SCON,	TCHAR|TUCHAR,
+		XSL(A),		RESC1,
+		"	cpb	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ OPLOG,	INAREG,
+	SDREG,	TCHAR|TUCHAR,
+	SNBA,	TCHAR|TUCHAR,
+		XSL(A),		RESC1,
+		"	cpb	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/* any relop -> 0/1, char mem vs const (immediate-compare form) */
+{ OPLOG,	INAREG,
+	SNAME,	TCHAR|TUCHAR,
+	SCON,	TCHAR|TUCHAR,
+		XSL(A),		RESC1,
+		"	cpb	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+{ OPLOG,	INAREG,
+	SNBA,	TCHAR|TUCHAR,
+	SCON,	TCHAR|TUCHAR,
+		XSL(A),		RESC1,
+		"	cpb	AL,AR\n	clr	A1\n	tcc	ZV,A1\n", },
+
+/*
  * GOTO - unconditional jump.
  */
 { GOTO,		FOREFF,

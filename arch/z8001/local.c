@@ -397,6 +397,46 @@ clocal(NODE *p)
 		break;
 	}
 
+	case NOT:
+		/*
+		 * !(a REL b) on integer/pointer operands folds to the
+		 * negated relation - cgram negates every if/while
+		 * condition with a NOT wrapper, and wrapping the relop
+		 * in EQ(rel, 0) instead would push it into VALUE context
+		 * (KEEPLOGOPVALUE) and pessimize every branch.  Float
+		 * compares keep their NOT: andorbr's label swap tracks
+		 * their negation (ATTR_FP_SWAPPED).
+		 *
+		 * For a plain scalar, !e is exactly (e == 0): rewriting
+		 * lets "f = !x" materialize through clr+tcc instead of
+		 * the branch diamond; in branch context andorbr treats
+		 * NOT(e) and EQ(e, 0) identically.  ANDAND/OROR/NOT
+		 * operands need andorbr's lazy evaluation: left alone.
+		 * The clocal re-run applies the compare canonicalization
+		 * above (char narrowing) to the new node.
+		 */
+		l = p->n_left;
+		if (l->n_op >= EQ && l->n_op <= UGT) {
+			static int negrel[] = { NE, EQ, GT, GE, LT, LE,
+			    UGT, UGE, ULT, ULE };
+
+			if (KEEPLOGOPVALUE_T(l->n_left->n_type) &&
+			    KEEPLOGOPVALUE_T(l->n_right->n_type)) {
+				l->n_op = negrel[l->n_op - EQ];
+				*p = *l;
+				nfree(l);
+			}
+			break;
+		}
+		if (l->n_op == ANDAND || l->n_op == OROR || l->n_op == NOT)
+			break;
+		if (KEEPLOGOPVALUE_T(l->n_type)) {
+			p->n_op = EQ;
+			p->n_right = bcon(0);
+			return clocal(p);
+		}
+		break;
+
 	case FORCE:
 		/*
 		 * FORCE ensures the return value is in the correct register.
