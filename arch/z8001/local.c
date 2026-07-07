@@ -168,27 +168,82 @@ clocal(NODE *p)
 		break;
 
 	case EQ:
-	case NE: {
+	case NE:
+	case LT:
+	case LE:
+	case GT:
+	case GE:
+	case ULT:
+	case ULE:
+	case UGT:
+	case UGE: {
 		/*
-		 * Narrow a char equality compare against a constant: the
-		 * front end promotes both sides to int, hiding the byte
-		 * operand behind an SCONV so pass 2 can never use
-		 * testb/cpb.  For EQ/NE the promotion is value-preserving
-		 * in both directions whenever the constant fits the char's
-		 * value range, so strip the SCONV and retype the constant
-		 * to the char type.  Ordered compares are NOT narrowed:
-		 * an unsigned char would also need the operator flipped
-		 * to the unsigned condition.
+		 * Narrow a char compare against a constant: the front end
+		 * promotes both sides to int, hiding the byte operand
+		 * behind an SCONV so pass 2 can never use testb/cpb/andb.
+		 * For EQ/NE the promotion is value-preserving in both
+		 * directions whenever the constant fits the char's value
+		 * range.  For the ORDERED compares the promoted word
+		 * compare maps to the byte compare with the char's own
+		 * extension: sign-extension preserves signed order (char
+		 * keeps the signed operator), zero-extension puts both
+		 * sides in 0..255 where the signed word compare equals
+		 * the UNSIGNED byte compare (uchar flips the operator to
+		 * the unsigned condition).  A sign-extended char under an
+		 * already-unsigned word compare has no byte equivalent
+		 * and is left alone.
 		 */
 		NODE *sc, *cn;
 
 		sc = p->n_left;
 		cn = p->n_right;
-		if (sc->n_op != SCONV && cn->n_op == SCONV) {
+		if (cn->n_op != ICON && sc->n_op == ICON) {
 			sc = p->n_right;
 			cn = p->n_left;
 		}
-		if (sc->n_op != SCONV || cn->n_op != ICON || cn->n_sp != NULL)
+		if (cn->n_op != ICON || cn->n_sp != NULL)
+			break;
+
+		/*
+		 * Truth test of a masked char: EQ/NE(AND(SCONV(char->int),
+		 * ICON m), ICON k) with m and k both in 0..255.  The mask
+		 * clears every promoted high bit no matter how the char
+		 * extended, so the equality is decided by the low byte
+		 * alone: strip the SCONV and retype the AND to the char
+		 * type.  Pass 2 then emits andb, whose Z flag feeds the
+		 * eq/ne branch directly (native: "andb rlN,$m; jr ne").
+		 */
+		if ((p->n_op == EQ || p->n_op == NE) && sc->n_op == AND &&
+		    glval(cn) >= 0 && glval(cn) <= 255) {
+			NODE *a = sc->n_left, *msk = sc->n_right;
+
+			if (a->n_op != SCONV || msk->n_op != ICON ||
+			    msk->n_sp != NULL ||
+			    glval(msk) < 0 || glval(msk) > 255)
+				break;
+			if (a->n_type != INT && a->n_type != UNSIGNED)
+				break;
+			if (a->n_left->n_op == FLD)
+				break;	/* keep bitfield extraction intact */
+			m = a->n_left->n_type;
+			if (m != CHAR && m != UCHAR)
+				break;
+			sc->n_left = a->n_left;
+			nfree(a);
+			sc->n_type = m;
+			msk->n_type = m;
+			cn->n_type = m;
+			if (p->n_left == cn) {
+				/* constant to the right so the zero-compare
+				 * elision and imm-compare shapes match;
+				 * EQ/NE are symmetric */
+				p->n_left = sc;
+				p->n_right = cn;
+			}
+			break;
+		}
+
+		if (sc->n_op != SCONV)
 			break;
 		if (sc->n_type != INT && sc->n_type != UNSIGNED)
 			break;
@@ -203,12 +258,55 @@ clocal(NODE *p)
 				break;
 		} else
 			break;
+		if (p->n_op != EQ && p->n_op != NE) {
+			if (m == CHAR) {
+				/* sign-extended: only the SIGNED word
+				 * compare maps to the signed byte compare */
+				if (p->n_op != LT && p->n_op != LE &&
+				    p->n_op != GT && p->n_op != GE)
+					break;
+			} else {
+				/* zero-extended: both sides are 0..255, so
+				 * signed and unsigned word compares agree
+				 * and both map to the UNSIGNED byte compare */
+				if (p->n_op == LT)
+					p->n_op = ULT;
+				else if (p->n_op == LE)
+					p->n_op = ULE;
+				else if (p->n_op == GT)
+					p->n_op = UGT;
+				else if (p->n_op == GE)
+					p->n_op = UGE;
+			}
+		}
 		if (p->n_left == sc)
 			p->n_left = sc->n_left;
 		else
 			p->n_right = sc->n_left;
 		nfree(sc);
 		cn->n_type = m;
+		if (p->n_left == cn) {
+			/*
+			 * Constant to the right: the parser builds a>b and
+			 * a<=b as b<a / b>=a, leaving the constant on the
+			 * left where pass 2 has no imm-compare rule and
+			 * would materialize it into a byte register.
+			 * Swapping a (side-effect-free) constant reverses
+			 * the ordered operator; EQ/NE are symmetric.
+			 */
+			p->n_left = p->n_right;
+			p->n_right = cn;
+			switch (p->n_op) {
+			case LT:  p->n_op = GT;  break;
+			case GT:  p->n_op = LT;  break;
+			case LE:  p->n_op = GE;  break;
+			case GE:  p->n_op = LE;  break;
+			case ULT: p->n_op = UGT; break;
+			case UGT: p->n_op = ULT; break;
+			case ULE: p->n_op = UGE; break;
+			case UGE: p->n_op = ULE; break;
+			}
+		}
 		break;
 	}
 
