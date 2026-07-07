@@ -1437,11 +1437,20 @@ myxasm(struct interpass *ip, NODE *p)
  * register allocation: SSA splits exactly this kind of tree back into
  * the two-statement form (pass1's own "if ((t = expr))" trees
  * included), so fusing any earlier is undone at -O1.
+ *
+ * The basic blocks built during optimize() are REUSED by the register
+ * allocator's liveness analysis (Build/LivenessAnalysis walk each
+ * block from bb->last back to bb->first in the circular interpass
+ * list) - removing an interpass that a bb->first points at would make
+ * that walk miss its terminator and loop forever (ar.c update(): the
+ * fused ASSIGN was the first statement of the for-body block).  Patch
+ * any block boundary that names the removed element.
  */
 static void
 fusecmp(struct interpass *ipole)
 {
 	struct interpass *ip, *inext;
+	struct basicblock *bb;
 	NODE *p, *q;
 
 	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole; ip = inext) {
@@ -1468,6 +1477,15 @@ fusecmp(struct interpass *ipole)
 			continue;
 		nfree(q->n_left);
 		q->n_left = p;
+		if (xtemps || xssa) {	/* blocks exist iff optimize built
+					 * them - same condition it uses */
+			DLIST_FOREACH(bb, &p2env.bblocks, bbelem) {
+				if (bb->first == ip)
+					bb->first = inext;
+				if (bb->last == ip)
+					bb->last = DLIST_PREV(ip, qelem);
+			}
+		}
 		DLIST_REMOVE(ip, qelem);
 	}
 }
