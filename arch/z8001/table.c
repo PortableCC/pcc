@@ -592,13 +592,16 @@ struct optab table[] = {
  * CANNOT encode index r0 (an index field of 0 decodes as DA), and a
  * nameless address constant has no DA/X spelling - the ZX escape
  * emits the ldl+add fallback for those two cases.  A1 never overlaps
- * the index register (plain NBREG, no sharing), so the fallback's ldl
- * cannot clobber the index before the add reads it.
+ * the index register (plain NREG(B,1), no sharing), so the fallback's
+ * ldl cannot clobber the index before the add reads it.  NORIGHT(R0)
+ * steers the index temp away from r0 (one interference edge per
+ * matched node), so the allocator's lowest-first preference no longer
+ * forces the fallback on X-encodable sites.
  */
 { PLUS,		INBREG,
 	SCON,	TPOINT,
 	SAREG,	TWORD|TSHORT|TUSHORT,
-		NBREG,	RESC1,
+		NEEDS(NREG(B, 1), NORIGHT(R0)),	RESC1,
 		"ZX", },
 
 /* add pair + pair (long/ptr); pointer offsets are widened to a pair */
