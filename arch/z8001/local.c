@@ -110,6 +110,23 @@ offword(NODE *p)
 }
 
 /*
+ * conaddr: a compare operand that is, or will fold to, a constant.
+ *
+ * Besides a bare ICON, an ADDROF of a static-duration NAME (an array
+ * name in an expression, "&global") counts: optim folds it to a named
+ * ICON, but only after the compare node has been through clocal, so
+ * the const-to-right swap below must recognize the pre-fold form.
+ * The andable() gate mirrors the fold's own condition.
+ */
+static int
+conaddr(NODE *q)
+{
+	return q->n_op == ICON ||
+	    (q->n_op == ADDROF && q->n_left->n_op == NAME &&
+	    andable(q->n_left));
+}
+
+/*
  * clocal: perform local pass-1 transformations.
  *
  * The main job here is to rewrite NAME nodes for AUTO and PARAM variables
@@ -274,12 +291,35 @@ clocal(NODE *p)
 		 */
 		NODE *sc, *cn;
 
+		/*
+		 * Constant to the right, for every compare width: the
+		 * parser builds a>b and a<=b as b<a / b>=a (cgram.y
+		 * eve()), leaving the constant on the left where pass 2
+		 * has no imm-compare rule and detours it through a
+		 * register ("ldk r1,$0; cp r1,r0").  Swapping a (side-
+		 * effect-free) constant reverses the ordered operator;
+		 * EQ/NE are symmetric.  conaddr() also catches address
+		 * constants still in their pre-fold ADDROF(NAME) form
+		 * ("sp > fname" against an array).
+		 */
+		if (conaddr(p->n_left) && !conaddr(p->n_right)) {
+			cn = p->n_left;
+			p->n_left = p->n_right;
+			p->n_right = cn;
+			switch (p->n_op) {
+			case LT:  p->n_op = GT;  break;
+			case GT:  p->n_op = LT;  break;
+			case LE:  p->n_op = GE;  break;
+			case GE:  p->n_op = LE;  break;
+			case ULT: p->n_op = UGT; break;
+			case UGT: p->n_op = ULT; break;
+			case ULE: p->n_op = UGE; break;
+			case UGE: p->n_op = ULE; break;
+			}
+		}
+
 		sc = p->n_left;
 		cn = p->n_right;
-		if (cn->n_op != ICON && sc->n_op == ICON) {
-			sc = p->n_right;
-			cn = p->n_left;
-		}
 		if (cn->n_op != ICON || cn->n_sp != NULL)
 			break;
 
@@ -312,13 +352,6 @@ clocal(NODE *p)
 			sc->n_type = m;
 			msk->n_type = m;
 			cn->n_type = m;
-			if (p->n_left == cn) {
-				/* constant to the right so the zero-compare
-				 * elision and imm-compare shapes match;
-				 * EQ/NE are symmetric */
-				p->n_left = sc;
-				p->n_right = cn;
-			}
 			break;
 		}
 
@@ -358,34 +391,9 @@ clocal(NODE *p)
 					p->n_op = UGE;
 			}
 		}
-		if (p->n_left == sc)
-			p->n_left = sc->n_left;
-		else
-			p->n_right = sc->n_left;
+		p->n_left = sc->n_left;
 		nfree(sc);
 		cn->n_type = m;
-		if (p->n_left == cn) {
-			/*
-			 * Constant to the right: the parser builds a>b and
-			 * a<=b as b<a / b>=a, leaving the constant on the
-			 * left where pass 2 has no imm-compare rule and
-			 * would materialize it into a byte register.
-			 * Swapping a (side-effect-free) constant reverses
-			 * the ordered operator; EQ/NE are symmetric.
-			 */
-			p->n_left = p->n_right;
-			p->n_right = cn;
-			switch (p->n_op) {
-			case LT:  p->n_op = GT;  break;
-			case GT:  p->n_op = LT;  break;
-			case LE:  p->n_op = GE;  break;
-			case GE:  p->n_op = LE;  break;
-			case ULT: p->n_op = UGT; break;
-			case UGT: p->n_op = ULT; break;
-			case ULE: p->n_op = UGE; break;
-			case UGE: p->n_op = ULE; break;
-			}
-		}
 		break;
 	}
 
