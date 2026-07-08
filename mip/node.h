@@ -222,7 +222,8 @@ typedef struct node {
 #define	STCLR	56
 #define	FUNARG	57
 #define	ADDROF	58
+#define	SWDISP	59	/* sparse-switch cpir dispatch (z8001) */
 
-#define	MAXOP	58
+#define	MAXOP	59
 
 #endif

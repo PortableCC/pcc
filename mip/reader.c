@@ -1040,6 +1040,7 @@ again:	switch (o = p->n_op) {
 	case UCALL:
 	case USTCALL:
 	case ADDROF:
+	case SWDISP:
 		rv = finduni(p, cookie);
 		break;
 

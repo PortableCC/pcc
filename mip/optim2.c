@@ -1088,8 +1088,24 @@ cfg_build(struct p2env *p2e)
 				SLIST_INSERT_LAST(&bb->child, cnode, chld);
 			} else {
 				int *l;
-				/* XXX assume all labels are valid as dest */
-				for (l = p2e->epp->ip_labels; *l; l++) {
+				/*
+				 * Computed goto.  A switch-dispatch GOTO(SWDISP)
+				 * carries its OWN null-terminated target list in
+				 * the GOTO's n_name - edge only to those, so the
+				 * case bodies of one switch are not falsely made
+				 * predecessors-of/reachable-from every other
+				 * computed goto in the function (that over-
+				 * connection makes every case body a multi-pred
+				 * merge, and SSA removephi then floods the single
+				 * dispatch point with phi copies -> spills).  A
+				 * true "goto *p" (no SWDISP) still assumes any
+				 * address-taken label in ip_labels.
+				 */
+				if (p->n_left->n_op == SWDISP)
+					l = (int *)p->n_name;
+				else
+					l = p2e->epp->ip_labels;
+				for (; *l; l++) {
 					cnode->bblock = p2e->labinfo.arr[*l - p2e->labinfo.low];
 					SLIST_INSERT_LAST(&cnode->bblock->parents, pnode, cfgelem);
 					SLIST_INSERT_LAST(&bb->child, cnode, chld);
