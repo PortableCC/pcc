@@ -1301,6 +1301,20 @@ struct optab table[] = {
 		0,	0,
 		"	clrb	AL\n", },
 
+/*
+ * BCLR - block memory clear (ANSI zero-fill of a partially-initialized auto
+ * aggregate's tail, folded from the per-byte clrb run by myreader()).  AL is
+ * the buffer's first byte (a frame OREG); the node's n_lval is the byte
+ * count.  ZA clears byte 0, then propagates the zero forward with one ldirb.
+ * The pair result slot doubles as the dst scratch (DECRA packs only 3 regs:
+ * result + A1 count + A2 src pair); the result is discarded (FOREFF).
+ */
+{ BCLR,		FOREFF,
+	SOREG|SNAME,	TANY,
+	SANY,		TANY,
+		NEEDS(NREG(A, 1), NREG(B, 1)),	0,
+		"ZA", },
+
 /* byte/char reg <- reg, mem or const (byte registers print as rlN) */
 { ASSIGN,	FOREFF|INDREG|FORCC,
 	SDREG,		TCHAR|TUCHAR,

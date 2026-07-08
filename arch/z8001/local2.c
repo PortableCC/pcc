@@ -553,6 +553,34 @@ zzzcode(NODE *p, int c)
 			printf("\tand\t%s,$0xff\n", rnames[n]);
 		break;
 
+	case 'A':	/* block memory clear via overlapping ldirb.  AL is the
+			 * buffer's first byte (frame OREG); the node's n_lval is
+			 * the byte count.  Clear byte 0, then copy it forward:
+			 * ldirb propagates the zero through the whole block.
+			 * The node result pair is the dst (used and discarded -
+			 * DECRA packs only 3 regs, so the result slot doubles as
+			 * a scratch); A2 = src pair, A1 = byte count. */
+	    {
+		int dst = getlr(p, 'D')->n_rval;	/* result pair, used as dst */
+		int src = getlr(p, '2')->n_rval;	/* B scratch pair (src) */
+		int cnt = getlr(p, '1')->n_rval;	/* A count register */
+
+		printf("\tlda\t%s,", rnames[dst]);	/* dst = &buf[0] */
+		expand(p, FOREFF, "AL");
+		printf("\n\tand\t");
+		prword(getlr(p, 'D'), 0);		/* normalise segment word */
+		printf(",$32512\n");
+		printf("\tclrb\t(%s)\n", rnames[dst]);	/* buf[0] = 0 */
+		printf("\tldl\t%s,%s\n", rnames[src], rnames[dst]); /* src = &buf[0] */
+		printf("\tinc\t");
+		prword(getlr(p, 'D'), 1);		/* dst = &buf[1] */
+		printf(",$1\n");
+		printf("\tld\t%s,$%d\n", rnames[cnt], p->n_rval - 1);
+		printf("\tldirb\t(%s),(%s),%s\n",
+		    rnames[dst], rnames[src], rnames[cnt]);
+	    }
+		break;
+
 	case 'Z':	/* sparse-switch cpir dispatch.  Search the .word
 			 * case-value table (label d->ltab) for the switch
 			 * value AL; on no match branch to the default; else
@@ -2047,6 +2075,124 @@ swcpir(struct interpass *ipole)
 	}
 }
 
+/*
+ * A single-byte zero store to a frame slot:
+ *	ASSIGN(UMUL(MINUS(REG r13, ICON off)), ICON 0)   [char]
+ * (pass1 endinit->clearbf->insbf emits one per byte of the ANSI zero-fill
+ * tail of a partially-initialized auto aggregate).  Return 1 and the base
+ * register + byte offset, else 0.
+ */
+static int
+bytezero(NODE *p, int *base, CONSZ *off)
+{
+	NODE *l, *m;
+
+	if (p->n_op != ASSIGN ||
+	    (p->n_type != CHAR && p->n_type != UCHAR))
+		return 0;
+	if (p->n_right->n_op != ICON || getlval(p->n_right) != 0 ||
+	    p->n_right->n_name[0] != '\0')
+		return 0;
+	l = p->n_left;
+	if (l->n_op != UMUL)
+		return 0;
+	m = l->n_left;
+	if (m->n_op != MINUS || m->n_left->n_op != REG ||
+	    regno(m->n_left) != R13 ||
+	    m->n_right->n_op != ICON || m->n_right->n_name[0] != '\0')
+		return 0;
+	*base = regno(m->n_left);
+	*off = getlval(m->n_right);
+	return 1;
+}
+
+/*
+ * Compact the run of consecutive single-byte zero stores that pass1 emits for
+ * an auto aggregate's zero-fill tail (one clrb each; login 123, tar 101).
+ * The run is buf[0..len-1] at the SAME base register with offsets hi, hi-1,
+ * ... (decreasing = increasing address; the first node is buf[0], the lowest
+ * address / highest offset).
+ *
+ *  - len >= BCLR_THRESH: fold the whole run into one overlapping-ldirb block
+ *    clear (BCLR): ~7 insns regardless of len (clear buf[0], propagate it
+ *    forward).  Reuse the first node's address lvalue as the BCLR operand.
+ *  - 2 <= len < BCLR_THRESH: merge each word-aligned byte pair into one word
+ *    clear (r13 is even, so an even offset is a word-aligned frame address);
+ *    the even-offset store is retyped to a word and its odd neighbour dropped.
+ *
+ * Runs from myreader(), before canon/regalloc.  BCLR reserves its scratch
+ * pairs + count via NEEDS; the word clears need no scratch.
+ *
+ * Threshold: word-collapse costs ~ceil(len/2) instructions, BCLR a flat ~7,
+ * so BCLR only wins once len exceeds ~14.
+ */
+#define	BCLR_THRESH	15
+
+static void
+clrfill(struct interpass *ipole)
+{
+	struct interpass *ip, *nx, *past, *d, *dn;
+	NODE *p, *l;
+	int base, nbase, len;
+	CONSZ off, noff;
+
+	ip = DLIST_NEXT(ipole, qelem);
+	while (ip != ipole) {
+		if (ip->type != IP_NODE || !bytezero(ip->ip_node, &base, &off)) {
+			ip = DLIST_NEXT(ip, qelem);
+			continue;
+		}
+		/* measure the run: consecutive same-base bytes, off = off-1... */
+		len = 1;
+		for (nx = DLIST_NEXT(ip, qelem);
+		    nx != ipole && nx->type == IP_NODE &&
+		    bytezero(nx->ip_node, &nbase, &noff) &&
+		    nbase == base && noff == off - 1;
+		    nx = DLIST_NEXT(nx, qelem)) {
+			len++;
+			off = noff;
+		}
+		past = nx;		/* first interpass past the run */
+
+		if (len >= BCLR_THRESH) {
+			/* fold into one overlapping-ldirb clear.  ip is buf[0];
+			 * reuse its address lvalue (UMUL) as the BCLR operand. */
+			p = ip->ip_node;
+			l = p->n_left;
+			nfree(p->n_right);		/* the ICON 0 */
+			nfree(p);			/* the ASSIGN shell */
+			/* INCREF type -> the node result slot is a B pair, used
+			 * as the dst scratch by ZA.  The byte count rides in
+			 * n_rval (n_lval would alias n_left, the child). */
+			p = mkunode(BCLR, l, len, INCREF(CHAR));
+			ip->ip_node = p;
+			for (d = DLIST_NEXT(ip, qelem); d != past; d = dn) {
+				dn = DLIST_NEXT(d, qelem);
+				tfree(d->ip_node);
+				DLIST_REMOVE(d, qelem);
+			}
+		} else {
+			/* word-collapse aligned byte pairs within the run */
+			for (d = ip; d != past; ) {
+				bytezero(d->ip_node, &nbase, &noff);
+				dn = DLIST_NEXT(d, qelem);
+				if ((noff & 1) == 0 && dn != past) {
+					p = d->ip_node;	/* even off: word clear */
+					p->n_type = INT;
+					p->n_left->n_type = INT;
+					p->n_left->n_left->n_type = INCREF(INT);
+					p->n_right->n_type = INT;
+					tfree(dn->ip_node);
+					DLIST_REMOVE(dn, qelem);
+					d = DLIST_NEXT(d, qelem);
+				} else
+					d = dn;		/* odd/last: lone clrb */
+			}
+		}
+		ip = past;
+	}
+}
+
 void
 myreader(struct interpass *ip)
 {
@@ -2054,6 +2200,7 @@ myreader(struct interpass *ip)
 	int off = p2autooff;
 
 	swcpir(ip);
+	clrfill(ip);
 	DLIST_FOREACH(ip2, ip, qelem) {
 		if (ip2->type != IP_NODE)
 			continue;
