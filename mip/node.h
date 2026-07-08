@@ -223,7 +223,8 @@ typedef struct node {
 #define	FUNARG	57
 #define	ADDROF	58
 #define	SWDISP	59	/* sparse-switch cpir dispatch (z8001) */
+#define	BCLR	60	/* block memory clear (z8001 overlapping ldirb) */
 
-#define	MAXOP	59
+#define	MAXOP	60
 
 #endif

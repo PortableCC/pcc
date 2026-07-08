@@ -277,6 +277,7 @@ isuseless(NODE *n)
 	case USTCALL:
 	case STASG:
 	case STARG:
+	case BCLR:		/* block memory clear - has a side effect */
 		return 0;
 	default:
 		return 1;
@@ -1041,6 +1042,7 @@ again:	switch (o = p->n_op) {
 	case USTCALL:
 	case ADDROF:
 	case SWDISP:
+	case BCLR:
 		rv = finduni(p, cookie);
 		break;
 
