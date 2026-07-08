@@ -356,8 +356,7 @@ main(int argc, char **argv)
 	}
 
 	if (argc == 2) {
-		/* "b": the output must not get CRLF line endings on Windows */
-		if (freopen(argv[1], "wb", stdout) == NULL)
+		if (freopen(argv[1], "w", stdout) == NULL)
 			error("Can't freopen %s", argv[1]);
 	}
 	if (argc && strcmp(argv[0], "-")) {

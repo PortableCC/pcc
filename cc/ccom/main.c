@@ -277,8 +277,7 @@ main(int argc, char *argv[])
 		}
 	}
 	if (argc > 1 && strcmp(argv[1], "-") != 0) {
-		/* "b": the output must not get CRLF line endings on Windows */
-		if (freopen(argv[1], "wb", stdout) == NULL) {
+		if (freopen(argv[1], "w", stdout) == NULL) {
 			fprintf(stderr, "open output file '%s':",
 			    argv[1]);
 			perror(NULL);
