@@ -67,6 +67,17 @@ int canaddr(NODE *);
 void mygenregs(struct interpass *ip);
 
 /*
+ * Descriptor carried by a SWDISP node (in n_name) from swcpir() to the ZZ
+ * zzzcode: case count, default-target label, and the value/target table
+ * label.  See mygenswitch() in code.c for the dispatch shape.
+ */
+struct swdesc {
+	int n;			/* number of cases */
+	int deflab;		/* default (no-match) label */
+	int ltab;		/* .word/.long table label */
+};
+
+/*
  * Register names indexed by PCC register number.
  * r0-r15 are 16-bit word registers; rr0,rr2,...,rr10 are 32-bit pairs;
  * rq0,rq4,rq8 are 64-bit quads (doubles); rl0-rl7 are the 8-bit byte
@@ -540,6 +551,38 @@ zzzcode(NODE *p, int c)
 			printf("\tsubb\trh%d,rh%d\n", n, n);
 		else
 			printf("\tand\t%s,$0xff\n", rnames[n]);
+		break;
+
+	case 'Z':	/* sparse-switch cpir dispatch.  Search the .word
+			 * case-value table (label d->ltab) for the switch
+			 * value AL; on no match branch to the default; else
+			 * index the parallel .long target table and load the
+			 * target address into the result pair A2 - the outer
+			 * GOTO(SWDISP) then jumps through it with "jp (A2)".
+			 * A2 is both the search pointer and (reloaded) the
+			 * target; A1 is the count; the pair's low word carries
+			 * the byte offset of the matched entry.  Displacement
+			 * 2N-4: after cpir the low word is 2*(idx+1) past the
+			 * table base, doubled to 4*(idx+1); the .long section
+			 * starts 2N bytes in, so target idx sits at
+			 * base + 2N + 4*idx = (base + 2) + (2N-4) + 4*(idx+1). */
+	    {
+		struct swdesc *d = (struct swdesc *)p->n_name;
+		int cnt = getlr(p, '1')->n_rval;	/* A1 = A count word */
+		int pair = getlr(p, '2')->n_rval;	/* A2 = B result pair */
+		int lo = (pair - RR0) * 2 + 1;		/* pair's low word */
+
+		printf("\tld\t%s,$%d\n", rnames[cnt], d->n);
+		printf("\tldl\t%s,$" LABFMT "\n", rnames[pair], d->ltab);
+		printf("\tcpir\t");
+		expand(p, FOREFF, "AL");
+		printf(",(%s),%s,eq\n", rnames[pair], rnames[cnt]);
+		printf("\tjr\tne," LABFMT "\n", d->deflab);
+		printf("\tsub\t%s,$" LABFMT "\n", rnames[lo], d->ltab);
+		printf("\tadd\t%s,%s\n", rnames[lo], rnames[lo]);
+		printf("\tldl\t%s," LABFMT "+%d(%s)\n",
+		    rnames[pair], d->ltab, 2 * d->n - 4, rnames[lo]);
+	    }
 		break;
 
 	case 'O':	/* the test/testl this template printed sets S and Z
@@ -1876,12 +1919,141 @@ findstcall(NODE *p, void *arg)
 	p->n_ap = attr_add(p->n_ap, ap);
 }
 
+/*
+ * Rewrite the /SW... comment interpasses that mygenswitch() left around a
+ * sparse switch into the cpir dispatch (see mygenswitch() in code.c).
+ *
+ * Runs from myreader() - before optimize() builds the CFG and before
+ * register allocation - which is essential:
+ *
+ *  - the switch value TEMP still exists here and gains a real use (the
+ *    SWDISP child), so it is not dead-eliminated;
+ *  - the case + default labels are registered in epp->ip_labels.  The
+ *    dispatch ends in GOTO(SWDISP(value)) - a computed goto - so cfg_build
+ *    adds an edge from the dispatch to every label in ip_labels; that both
+ *    makes the case bodies reachable (else DCE removes them) and is what
+ *    inuse()/deljumps use to keep those labels alive;
+ *  - the SWDISP node gets its NEEDS scratch pair + count from the allocator.
+ *
+ * The value/target tables are emitted as one opaque IP_ASM blob (the table
+ * label is defined inside the text) so no collectable IP_DEFLAB is created
+ * for a label that is only ever referenced textually.
+ */
+static void
+swcpir(struct interpass *ipole)
+{
+	struct interpass *ip, *inext, *prev, *m, *end, *dip, *bip, *r, *rn;
+	struct swdesc *d;
+	NODE *val, *sw, *go;
+	int num, n, deflab, ltab, i, k, on, last;
+	unsigned type;
+	int *vals, *labs, *ol, *nl, *tg;
+	char *blob, *q;
+
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole; ip = inext) {
+		inext = DLIST_NEXT(ip, qelem);
+		if (ip->type != IP_ASM || strncmp(ip->ip_asm, "\t/SWH ", 6))
+			continue;
+
+		sscanf(ip->ip_asm, "%*s %d %u %d %d %d",
+		    &num, &type, &n, &deflab, &ltab);
+		vals = tmpalloc(n * sizeof(int));
+		labs = tmpalloc(n * sizeof(int));
+		prev = DLIST_PREV(ip, qelem);
+
+		/* collect the /SWC case lines up to /SWE */
+		i = 0;
+		for (m = DLIST_NEXT(ip, qelem); m != ipole;
+		    m = DLIST_NEXT(m, qelem)) {
+			if (m->type == IP_ASM &&
+			    strncmp(m->ip_asm, "\t/SWC ", 6) == 0) {
+				if (i < n)
+					sscanf(m->ip_asm, "%*s %d %d",
+					    &vals[i], &labs[i]);
+				i++;
+				continue;
+			}
+			break;
+		}
+		end = m;			/* the /SWE interpass */
+		inext = DLIST_NEXT(end, qelem);
+
+		/* drop the markers (SWH .. SWE inclusive) */
+		for (r = ip; ; r = rn) {
+			rn = DLIST_NEXT(r, qelem);
+			last = (r == end);
+			DLIST_REMOVE(r, qelem);
+			if (last)
+				break;
+		}
+
+		/* GOTO(SWDISP(TEMP value)); SWDISP result is the target pair */
+		d = tmpalloc(sizeof(struct swdesc));
+		d->n = n;
+		d->deflab = deflab;
+		d->ltab = ltab;
+		val = mklnode(TEMP, 0, num, (TWORD)type);
+		sw = mkunode(SWDISP, val, 0, INCREF(VOID));
+		sw->n_name = (char *)d;
+		go = mkunode(GOTO, sw, 0, INT);
+		/* This dispatch's own target list (case labels + default),
+		 * null-terminated, on the GOTO node: cfg_build edges only to
+		 * these, keeping the computed-goto CFG precise per switch. */
+		tg = tmpalloc((n + 2) * sizeof(int));
+		for (i = 0; i < n; i++)
+			tg[i] = labs[i];
+		tg[n] = deflab;
+		tg[n + 1] = 0;
+		go->n_name = (char *)tg;
+
+		dip = tmpalloc(sizeof(struct interpass));
+		dip->type = IP_NODE;
+		dip->lineno = 0;
+		dip->ip_node = go;
+		DLIST_INSERT_AFTER(prev, dip, qelem);
+
+		/* value/target tables as one opaque blob (label defined in it) */
+		blob = tmpalloc(n * 32 + 32);
+		q = blob;
+		q += sprintf(q, LABFMT ":\n", ltab);
+		for (k = 0; k < n; k++)
+			q += sprintf(q, "\t.word\t%d\n", vals[k]);
+		for (k = 0; k < n; k++)
+			q += sprintf(q, "\t.long\t" LABFMT "\n", labs[k]);
+
+		bip = tmpalloc(sizeof(struct interpass));
+		bip->type = IP_ASM;
+		bip->lineno = 0;
+		bip->ip_asm = blob;
+		DLIST_INSERT_AFTER(dip, bip, qelem);
+
+		/* Also add them to the function's ip_labels.  cfg_build now
+		 * takes this dispatch's edges from the GOTO's own list (above),
+		 * so this is purely to mark the labels used-outside so deljumps'
+		 * inuse() never deletes a case body reached only by the jp. */
+		ol = p2env.epp->ip_labels;
+		on = 0;
+		if (ol)
+			while (ol[on])
+				on++;
+		nl = tmpalloc((on + n + 2) * sizeof(int));
+		for (k = 0; k < on; k++)
+			nl[k] = ol[k];
+		for (i = 0; i < n; i++)
+			nl[on + i] = labs[i];
+		nl[on + n] = deflab;
+		nl[on + n + 1] = 0;
+		p2env.epp->ip_labels = nl;
+	}
+}
+
 void
 myreader(struct interpass *ip)
 {
 	struct interpass *ip2;
 	int off = p2autooff;
 
+	swcpir(ip);
 	DLIST_FOREACH(ip2, ip, qelem) {
 		if (ip2->type != IP_NODE)
 			continue;

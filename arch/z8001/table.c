@@ -1822,6 +1822,22 @@ struct optab table[] = {
 		"	jp	(AL)\n", },
 
 /*
+ * SWDISP - sparse-switch cpir dispatch (built by myreader() from the
+ * mygenswitch() marks).  The switch value AL (a word A-register) is searched
+ * against the case-value table; the matched target address is produced in
+ * the result pair A1, through which the enclosing GOTO(SWDISP) jumps.
+ * Resources are ordered by class (like STASG's ZS): A1 = A-class case count
+ * (word); A2 = B-class search pointer / reloaded target (the pair result, so
+ * RESC2).  No NSL: the default resource<->left interference keeps the value
+ * register out of both the count and the pair, as cpir requires.
+ */
+{ SWDISP,	INBREG,
+	SAREG,	TWORD,
+	SANY,	TANY,
+		NEEDS(NREG(A, 1), NREG(B, 1)),	RESC2,
+		"ZZ", },
+
+/*
  * OPLTYPE - load leaf type into register.
  * Used to materialize NAME/ICON/OREG into a register.
  */

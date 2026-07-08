@@ -360,11 +360,69 @@ fldty(struct symtab *p)
 {
 }
 
-/* Use PCC's default switch generation. */
+/*
+ * Sparse-switch dispatch via the Z8000 cpir block-search idiom.
+ *
+ * Native Coherent cc dispatches a scattered set of case values (typically
+ * ASCII character codes) not with a compare ladder but with a single cpir
+ * that linearly searches a compact .word table of the case values, then
+ * indexes a parallel .long table of target addresses and jumps through it:
+ *
+ *	ld	rC, $N
+ *	ldl	rrP, $LTAB
+ *	cpir	rX, (rrP), rC, eq	; rX = switch value
+ *	jr	ne, DEFAULT
+ *	sub	r(P+1), $LTAB		; r(P+1) = 2*(idx+1)
+ *	add	r(P+1), r(P+1)		; = 4*(idx+1)
+ *	ldl	rrP, LTAB+(2N-4)(r(P+1))
+ *	jp	un, (rrP)
+ * LTAB: .word v0..v(N-1) ; .long t0..t(N-1)
+ *
+ * The search is one instruction regardless of N, so eight instructions
+ * dispatch any number of cases - a large win over the 2-per-case ladder once
+ * N grows.  The idiom cannot be built from pass1 trees (there is no C-level
+ * "search", and cpir's fixed register roles need pass2 allocation), so we
+ * only MARK the switch here in comment interpasses carrying the case table;
+ * myreader() rewrites the marks into a GOTO(SWDISP(value)) node plus the data
+ * table, once pass2 can reserve the scratch pair + count register.
+ *
+ * Eligibility: a word-sized (int/unsigned) switch value - cpir compares
+ * 16-bit words, so a long switch cannot use it - and at least SWCPIR_THRESH
+ * cases, below which the ladder is as short or shorter (and already matches
+ * or beats native, which uses cpir even for tiny switches).
+ */
+#define	SWCPIR_THRESH	5
+
 int
 mygenswitch(int num, TWORD type, struct swents **p, int n)
 {
-	return 0;
+	char buf[64];
+	int i, deflab, ltab;
+
+	if (n < SWCPIR_THRESH)
+		return 0;
+	if (type != INT && type != UNSIGNED)
+		return 0;
+
+	/* default target: the real default label, or a fresh label placed
+	 * just after the dispatch (falls through past the switch) */
+	deflab = p[0]->slab > 0 ? p[0]->slab : getlab();
+	ltab = getlab();
+
+	snprintf(buf, sizeof(buf), "\t/SWH %d %u %d %d %d\n",
+	    num, (unsigned)type, n, deflab, ltab);
+	send_passt(IP_ASM, buf);
+	for (i = 1; i <= n; i++) {
+		snprintf(buf, sizeof(buf), "\t/SWC %d %d\n",
+		    (int)p[i]->sval, p[i]->slab);
+		send_passt(IP_ASM, buf);
+	}
+	send_passt(IP_ASM, "\t/SWE\n");
+
+	if (p[0]->slab <= 0)
+		send_passt(IP_DEFLAB, deflab);
+
+	return 1;
 }
 
 NODE *
