@@ -387,22 +387,23 @@ fldty(struct symtab *p)
  * table, once pass2 can reserve the scratch pair + count register.
  *
  * Eligibility: a word-sized (int/unsigned) switch value - cpir compares
- * 16-bit words, so a long switch cannot use it - and at least SWCPIR_THRESH
- * cases, below which the ladder is as short or shorter (and already matches
- * or beats native, which uses cpir even for tiny switches).
+ * 16-bit words, so a long switch cannot use it - and a SIZE gate.  The
+ * dispatch is ~28 bytes plus 4 bytes per case (a .word value + a .word
+ * target offset); a compare ladder is ~6 bytes per case (cp $imm; jr) with
+ * no tables.  So cpir is only smaller for the larger switches; use it just
+ * when 28 + 4N < 6N (+2 if there is a default branch), i.e. N >= ~14.  Below
+ * that the ladder is smaller (and smaller than native's cpir).
  */
-#define	SWCPIR_THRESH	5
-
 int
 mygenswitch(int num, TWORD type, struct swents **p, int n)
 {
 	char buf[64];
 	int i, deflab, ltab;
 
-	if (n < SWCPIR_THRESH)
-		return 0;
 	if (type != INT && type != UNSIGNED)
 		return 0;
+	if (28 + 4 * n >= 6 * n + (p[0]->slab > 0 ? 2 : 0))
+		return 0;			/* ladder is at least as small */
 
 	/* default target: the real default label, or a fresh label placed
 	 * just after the dispatch (falls through past the switch) */

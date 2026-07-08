@@ -74,7 +74,7 @@ void mygenregs(struct interpass *ip);
 struct swdesc {
 	int n;			/* number of cases */
 	int deflab;		/* default (no-match) label */
-	int ltab;		/* .word/.long table label */
+	int ltab;		/* .word value/offset table label */
 };
 
 /*
@@ -584,20 +584,22 @@ zzzcode(NODE *p, int c)
 	case 'Z':	/* sparse-switch cpir dispatch.  Search the .word
 			 * case-value table (label d->ltab) for the switch
 			 * value AL; on no match branch to the default; else
-			 * index the parallel .long target table and load the
-			 * target address into the result pair A2 - the outer
-			 * GOTO(SWDISP) then jumps through it with "jp (A2)".
-			 * A2 is both the search pointer and (reloaded) the
-			 * target; A1 is the count; the pair's low word carries
-			 * the byte offset of the matched entry.  Displacement
-			 * 2N-4: after cpir the low word is 2*(idx+1) past the
-			 * table base, doubled to 4*(idx+1); the .long section
-			 * starts 2N bytes in, so target idx sits at
-			 * base + 2N + 4*idx = (base + 2) + (2N-4) + 4*(idx+1). */
+			 * load the matched case's 16-bit TARGET OFFSET from the
+			 * parallel .word offset table into the search pair's LOW
+			 * word, leaving its high (segment) word - which cpir did
+			 * not touch - pointing at this (the code) segment; the
+			 * outer GOTO(SWDISP) then jumps through the pair.  All
+			 * case bodies share the dispatch's segment, so a 16-bit
+			 * offset suffices (half the size of a .long address).
+			 * A2 = search pair, A1 = count.  Displacement 2N-2:
+			 * after cpir the low word is 2*(idx+1) past the table
+			 * base; the .word target table starts 2N bytes in, so
+			 * target idx sits at base + 2N + 2*idx =
+			 * (base + 2N-2) + 2*(idx+1). */
 	    {
 		struct swdesc *d = (struct swdesc *)p->n_name;
 		int cnt = getlr(p, '1')->n_rval;	/* A1 = A count word */
-		int pair = getlr(p, '2')->n_rval;	/* A2 = B result pair */
+		int pair = getlr(p, '2')->n_rval;	/* A2 = B search pair */
 		int lo = (pair - RR0) * 2 + 1;		/* pair's low word */
 
 		printf("\tld\t%s,$%d\n", rnames[cnt], d->n);
@@ -607,9 +609,8 @@ zzzcode(NODE *p, int c)
 		printf(",(%s),%s,eq\n", rnames[pair], rnames[cnt]);
 		printf("\tjr\tne," LABFMT "\n", d->deflab);
 		printf("\tsub\t%s,$" LABFMT "\n", rnames[lo], d->ltab);
-		printf("\tadd\t%s,%s\n", rnames[lo], rnames[lo]);
-		printf("\tldl\t%s," LABFMT "+%d(%s)\n",
-		    rnames[pair], d->ltab, 2 * d->n - 4, rnames[lo]);
+		printf("\tld\t%s," LABFMT "+%d(%s)\n",
+		    rnames[lo], d->ltab, 2 * d->n - 2, rnames[lo]);
 	    }
 		break;
 
@@ -2040,14 +2041,16 @@ swcpir(struct interpass *ipole)
 		dip->ip_node = go;
 		DLIST_INSERT_AFTER(prev, dip, qelem);
 
-		/* value/target tables as one opaque blob (label defined in it) */
+		/* value/target tables as one opaque blob (label defined in it).
+		 * Targets are 16-bit .word OFFSETS (all case bodies share this
+		 * code segment), not .long addresses - half the size. */
 		blob = tmpalloc(n * 32 + 32);
 		q = blob;
 		q += sprintf(q, LABFMT ":\n", ltab);
 		for (k = 0; k < n; k++)
 			q += sprintf(q, "\t.word\t%d\n", vals[k]);
 		for (k = 0; k < n; k++)
-			q += sprintf(q, "\t.long\t" LABFMT "\n", labs[k]);
+			q += sprintf(q, "\t.word\t" LABFMT "\n", labs[k]);
 
 		bip = tmpalloc(sizeof(struct interpass));
 		bip->type = IP_ASM;
