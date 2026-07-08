@@ -70,6 +70,17 @@ If no value is given, the default is 1.
 .It Sy freestanding
 Emit code for a freestanding environment.
 Currently not implemented.
+.It Sy traditional
+Accept some pre-ANSI (K&R) constructs that are otherwise errors:
+external declarations with no type specifier (defaulting to
+.Sy int ) ,
+a missing
+.Sy return
+value in a non-void function, a scalar initializer for an array
+(initializing its first element), and mismatched pointer types in a
+.Sy ?:
+expression.
+Each is diagnosed with a warning instead of an error.
 .El
 .It Fl g
 Include debugging information in the output code for use by

@@ -320,7 +320,10 @@ notype_init_dcl_list:
 
 notype_init_dcl:   declarator attr_var {
 			P1ND *tn = mkty(INT, 0, 0);
-			werror("type defaults to int in declaration");
+			if (traditional)
+				werror("type defaults to int in declaration");
+			else
+				uerror("type specifier missing");
 			init_declarator(tn, $1, 0, $2, 0);
 			p1tfree(tn);
 		}
@@ -340,7 +343,10 @@ notype_init_dcl:   declarator attr_var {
 
 notype_xnfdcl:	   declarator attr_var {
 			P1ND *tn = mkty(INT, 0, 0);
-			werror("type defaults to int in declaration");
+			if (traditional)
+				werror("type defaults to int in declaration");
+			else
+				uerror("type specifier missing");
 			$$ = xnf = init_declarator(tn, $1, 1, $2, 0);
 			p1tfree(tn);
 		}
@@ -984,10 +990,14 @@ statement:	   e ';' { ecomp(eve($1)); symclear(blevel); }
 			branch(retlab);
 			if (cftnsp->stype != VOID &&
 			    (cftnsp->sflags & NORETYP) == 0 &&
-			    cftnsp->stype != VOID+FTN)
+			    cftnsp->stype != VOID+FTN) {
 				/* legal in C89 (constraint is C99);
 				 * common in K&R code */
-				werror("return value required");
+				if (traditional)
+					werror("return value required");
+				else
+					uerror("return value required");
+			}
 			rch:
 			if (!reached)
 				warner(Wunreachable_code);
