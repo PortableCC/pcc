@@ -206,6 +206,32 @@ clocal(NODE *p)
 		}
 		break;
 
+	case LS:
+	case RS:
+		/*
+		 * Integer-promote a byte shift count.  buildtree() promotes
+		 * the value being shifted, but only *demotes* an oversized
+		 * count (long -> int); a char/uchar count is left as-is.  The
+		 * dynamic shift instructions (sdl/sda/sdll/sdal) take the
+		 * count in a word register, so the register-count table rules
+		 * require a TWORD right operand - a byte count would match no
+		 * rule ("Cannot generate code ... op >>").  SHORT/USHORT are
+		 * already word-sized here, so only CHAR/UCHAR need widening.
+		 *
+		 * Built with block()/direct retype rather than makety() so the
+		 * shared file compiles under both ccom and cxxcom (whose
+		 * makety() prototypes differ).  A constant count is retyped in
+		 * place (no widen needed); a loaded byte gets a real SCONV.
+		 */
+		if (p->n_right->n_type == CHAR || p->n_right->n_type == UCHAR) {
+			if (p->n_right->n_op == ICON)
+				p->n_right->n_type = INT;
+			else
+				p->n_right = block(SCONV, p->n_right, NIL,
+				    INT, 0, 0);
+		}
+		break;
+
 	case SCONV:
 		/*
 		 * Scalar conversion: try to eliminate no-ops.
