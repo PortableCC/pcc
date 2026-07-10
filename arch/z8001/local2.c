@@ -201,28 +201,24 @@ prologue(struct interpass_prolog *ipp)
 
 	/*
 	 * Frame-base equate for stack-segment addressing (see framelab above).
-	 * L<n> = 0|total; slots are then addressed "L<n>+off(r13)" with r13 at
-	 * the frame bottom, so EA = seg0:(total + off + r13_bottom) recovers the
-	 * absolute frame offset and supplies the stack segment.  total >= 2
+	 * L<n> = SS|total; slots are then addressed "L<n>+off(r13)" with r13 at
+	 * the frame bottom, so EA = SS:(total + off + r13_bottom) recovers the
+	 * absolute frame offset AND supplies the stack segment.  total >= 2
 	 * always (R13 is always saved).
 	 *
-	 * The native compiler wrote "L<n>=SS|total" with SS an external symbol
-	 * (crts0.s pins it: "SS = 0x0000"), but that form is POISON with the
-	 * shipped Coherent "as": a symbolic segment expression is E_SEG, and
-	 * outsof()'s E_SEG long-form path (needed whenever total+off > 255,
-	 * i.e. any frame bigger than ~250 bytes) drops the bit-15 long-form
-	 * flag from the first address word (machine.c:1011 sets it on the
-	 * caller's expr, then emits the zeroed copy).  The CPU then decodes
-	 * the short form, eats one word too few, and executes the offset word
-	 * as an instruction - echo.c crashed exactly this way, and even the
-	 * native echo.s reassembled with the on-disk as loses its argv (MWC's
-	 * factory binaries were built with an assembler that didn't have the
-	 * bug).  A NUMERIC segment ("0|total") is E_ASEG instead, whose short
-	 * AND long emissions are both correct, and the segment truly is 0 on
-	 * this ABI.
+	 * SS is an external symbol pinned per-ABI by the startup: crts0.s sets
+	 * "SS = 0x0000" for user programs (a single flat segment), while the
+	 * kernel's md.s sets "SS = 0x3F3F" (system stack in segment 0x3F).  Using
+	 * the symbol makes frame/arg addressing correct in BOTH worlds; hardcoding
+	 * a numeric "0|total" only works when SS==0 and silently reads segment 0
+	 * for anything running segmented (the kernel), where every callee read its
+	 * stack arguments out of ROM.  The symbolic segment is E_SEG; this relies
+	 * on the assembler's E_SEG long-form emission being correct (it now is -
+	 * the earlier outsof() bit-15 drop that motivated the "0|" workaround has
+	 * been fixed in the Coherent "as").
 	 */
 	framelab = getlab2();
-	printf(LABFMT "=0|%d\n", framelab, total);
+	printf(LABFMT "=SS|%d\n", framelab, total);
 
 	/* Step 1: allocate entire frame */
 	if (total > 0) {
