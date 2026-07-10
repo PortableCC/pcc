@@ -124,9 +124,40 @@ qpair(int q, int lo)
 	return rnames[RR0 + (q - RQ0) * 2 + (lo ? 1 : 0)];
 }
 
+/*
+ * Labels already emitted in the current function, newest first.  cbfuse()
+ * consults this to tell a backward branch (target already seen) from a
+ * forward one: djnz is only a win backward - forward it would relax in the
+ * assembler to the larger "dec;jp" form.  Allocated from the per-function
+ * tmpalloc arena and reset at each prologue.
+ */
+struct seenlab {
+	struct seenlab *next;
+	int lab;
+};
+static struct seenlab *seenlabs;
+
+static int
+labseen(int lab)
+{
+	struct seenlab *s;
+
+	for (s = seenlabs; s != NULL; s = s->next)
+		if (s->lab == lab)
+			return 1;
+	return 0;
+}
+
 void
 deflab(int label)
 {
+	struct seenlab *s;
+
+	s = tmpalloc(sizeof(struct seenlab));
+	s->lab = label;
+	s->next = seenlabs;
+	seenlabs = s;
+
 	printf(LABFMT ":\n", label);
 }
 
@@ -191,6 +222,8 @@ void
 prologue(struct interpass_prolog *ipp)
 {
 	int firstsave, nsave, fsize, total;
+
+	seenlabs = NULL;	/* start a fresh emitted-label set (see cbfuse) */
 
 	firstsave = firstsavereg();
 
@@ -1152,6 +1185,76 @@ adrput(FILE *io, NODE *p)
 }
 
 /*
+ * cbfuse: fuse a decrement-and-test loop branch into a single djnz.
+ *
+ * After fusecmp()/rmwrename() a "while (--n)" countdown reads, at emit
+ * time, as
+ *	CBRANCH(NE(ASSIGN(REG n, PLUS(REG n, -1)), ICON 0), lab)
+ * which the normal path emits as "dec n,$1 ; jr ne,lab".  The Z8000 djnz
+ * does exactly that in one word - decrement a word register and jump while
+ * the result is nonzero - so emit "djnz n,lab" instead, saving the word.
+ *
+ * Returns 0 (keep the default dec;jr) unless every djnz precondition holds:
+ *   - branch sense NE: djnz jumps while the counter is nonzero;
+ *   - counter in a WORD register: djnz is a 16-bit decrement, so byte
+ *     counters (dbjnz, not handled here), pointer/long pairs and memory
+ *     counters are excluded;
+ *   - step exactly -1, on that same register;
+ *   - target BACKWARD (already emitted this function).  djnz cannot branch
+ *     forward, and letting the assembler relax a forward one to "dec;jp"
+ *     would be larger than the "dec;jr" it replaces.
+ *
+ * Called from emit()'s CBRANCH path (via TARGET_CBRANCH_FUSE) before the
+ * compare/branch are generated; returns 1 once it has emitted the branch.
+ */
+int
+cbfuse(NODE *p)
+{
+	NODE *rel, *asg, *mod, *dst;
+
+	rel = p->n_left;
+	if (rel->n_op != NE)
+		return 0;
+	/*
+	 * Only the elided-compare shape, where the compare itself produced
+	 * no instruction and the RMW child's flags ARE the branch result
+	 * (the same su==0 discriminator emit() uses to pick the child rule).
+	 * Otherwise a separate compare instruction is in play and djnz would
+	 * drop it.
+	 */
+	if (rel->n_su != 0)
+		return 0;
+	asg = rel->n_left;
+	if (asg->n_op != ASSIGN)
+		return 0;
+	dst = asg->n_left;		/* the counter (template AL) */
+	mod = asg->n_right;		/* the modifying expression */
+	if (dst->n_op != REG)
+		return 0;
+	if (dst->n_type != INT && dst->n_type != UNSIGNED &&
+	    dst->n_type != SHORT && dst->n_type != USHORT)
+		return 0;
+	/*
+	 * step must be a decrement by exactly 1 on the same register:
+	 * MINUS(r,1) or PLUS(r,-1) - both select the "dec r,$1" rule.
+	 */
+	if (mod->n_left->n_op != REG || regno(mod->n_left) != regno(dst))
+		return 0;
+	if (mod->n_right->n_op != ICON || mod->n_right->n_name[0] != '\0')
+		return 0;
+	if (!((mod->n_op == MINUS && getlval(mod->n_right) == 1) ||
+	    (mod->n_op == PLUS && getlval(mod->n_right) == -1)))
+		return 0;
+	/* djnz is backward-only; a forward target is never a win */
+	if (!labseen((int)getlval(p->n_right)))
+		return 0;
+
+	printf("\tdjnz\t%s," LABFMT "\n", rnames[regno(dst)],
+	    (int)getlval(p->n_right));
+	return 1;
+}
+
+/*
  * cbgen: emit a conditional branch.
  */
 void
@@ -1719,11 +1822,144 @@ rmwrename(struct interpass *ipole)
 	}
 }
 
+/*
+ * Recover the read-modify-write shape for a NON-loop store-and-test.
+ *
+ * The loop case above needs removephi's two edge-copies for soundness.
+ * A straight-line "if ((x -= y))" (or &=, |=, ^=, +=) leaves a simpler
+ * residue: SSA numbers the stored and read halves apart but inserts NO
+ * copies, because there is no control-flow merge feeding the read -
+ *
+ *	ASSIGN(TEMP s, expr)			single definition of s
+ *	... (no other reference to s) ...
+ *	CBRANCH(rel(ASSIGN(TEMP d, op(TEMP s, e)), 0))
+ *	... body/afterwards uses TEMP d ...
+ *
+ * so findmops' treecmp(d, s) still fails and the compare is emitted as a
+ * separate test.  Renaming s to d is sound here for a different reason
+ * than the loop copies: in SSA a temp with a SINGLE definition (no phi,
+ * hence sdefs==1 after removephi) has that definition dominating every
+ * use, so the one s-def dominates the RMW; and because s is used ONLY by
+ * the RMW (suses==1) nothing else observes it.  After the rename the s-def
+ * writes d and the RMW reads/writes d in place, exactly the -O0 shape.
+ * Nothing is deleted, so no basic-block boundary needs patching.
+ *
+ * Runs after rmwrename(); a site rmwrename() already collapsed now has
+ * d==s and is skipped here by the d==s guard.  Gated on xssa: only SSA
+ * splits the two halves apart, and the soundness rests on the SSA
+ * single-def-dominates-use property.
+ */
+static void
+rmwrenamesd(struct interpass *ipole)
+{
+	struct interpass *ip, *ip2, *sdef;
+	NODE *p, *q, *rmw, *r;
+	int d, s, seen, bad, ddefs, duses, sdefs, suses, du, dd;
+
+	if (!xssa)
+		return;
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole;
+	    ip = DLIST_NEXT(ip, qelem)) {
+		if (ip->type != IP_NODE)
+			continue;
+		p = ip->ip_node;
+		if (p->n_op != CBRANCH)
+			continue;
+		q = p->n_left;
+		/*
+		 * EQ/NE only: those read the Z flag alone, which every one of
+		 * the ops below sets to (result == 0).  An ordered relop would
+		 * need S/V/C, and after the in-place op those differ from a
+		 * "cp result,$0" - only harmlessly (signed overflow is UB) for
+		 * signed, but genuinely wrong for unsigned wrap - so leave the
+		 * separate compare in place for anything but EQ/NE.
+		 */
+		if (q->n_op != EQ && q->n_op != NE)
+			continue;
+		rmw = q->n_left;
+		if (rmw->n_op != ASSIGN || rmw->n_left->n_op != TEMP)
+			continue;
+		r = rmw->n_right;
+		if (r->n_op != PLUS && r->n_op != MINUS && r->n_op != AND &&
+		    r->n_op != OR && r->n_op != ER)
+			continue;
+		if (r->n_left->n_op != TEMP)
+			continue;
+		d = regno(rmw->n_left);
+		s = regno(r->n_left);
+		if (d == s || rmw->n_left->n_type != r->n_left->n_type)
+			continue;
+		/* the modifier expression may mention neither temp */
+		dd = du = 0;
+		tmpcount(r->n_right, d, &dd, &du);
+		tmpcount(r->n_right, s, &dd, &du);
+		if (dd || du)
+			continue;
+
+		ddefs = duses = sdefs = suses = 0;
+		sdef = NULL;
+		seen = bad = 0;
+		for (ip2 = DLIST_NEXT(ipole, qelem); ip2 != ipole;
+		    ip2 = DLIST_NEXT(ip2, qelem)) {
+			if (ip2->type != IP_NODE)
+				continue;
+			q = ip2->ip_node;
+			if (ip2 == ip) {
+				/* candidate: 1 d-def + 1 s-use by shape,
+				 * counted through the fall-through below */
+				seen = 1;
+			} else if (q->n_op == ASSIGN &&
+			    q->n_left->n_op == TEMP && regno(q->n_left) == s) {
+				/* the definition of s: must be the only one,
+				 * lie before the RMW, and source neither temp */
+				if (seen != 0 || sdef != NULL) {
+					bad = 1;
+					break;
+				}
+				dd = du = 0;
+				tmpcount(q->n_right, d, &dd, &du);
+				tmpcount(q->n_right, s, &dd, &du);
+				if (dd || du) {
+					bad = 1;
+					break;
+				}
+				sdef = ip2;
+				sdefs++;
+				continue;
+			}
+			tmpcount(q, d, &ddefs, &duses);
+			tmpcount(q, s, &sdefs, &suses);
+		}
+		if (bad || ddefs != 1 || suses != 1 || sdefs != 1 ||
+		    sdef == NULL)
+			continue;
+
+		/* rename s to d: the s-def now writes d, the RMW is in place */
+		sdef->ip_node->n_left->n_rval = d;
+		r->n_left->n_rval = d;
+	}
+}
+
+/*
+ * NOTE (attempted, reverted): a "rmwcopyfuse" that handled the LIVE-source
+ * non-loop RMW-test (the majority of the corpus's residual redundant tests,
+ * e.g. "if ((x = a op b))" with a used later) by INSERTING an explicit
+ * copy "d = s" at myoptim and rewriting the op in place -
+ *	ASSIGN(d, s) ; CBRANCH(rel(ASSIGN(d, op(d, e)), 0))
+ * - was semantically correct but destabilised the -xssa register allocator:
+ * inserting a fresh IP node here crashes insnwalk()'s interference build
+ * (rmwrename/rmwrenamesd only rename or delete nodes, which is safe; adding
+ * one is not).  A sound version needs the copy materialised where liveness
+ * is rebuilt (or a post-regalloc peephole), not a mid-stream insert.  Left
+ * for future work; the dead-source case is handled by rmwrenamesd() above.
+ */
+
 void
 myoptim(struct interpass *ip)
 {
 	fusecmp(ip);
 	rmwrename(ip);
+	rmwrenamesd(ip);
 }
 
 /*

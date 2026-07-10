@@ -432,6 +432,12 @@ int pickcolor(int class, int mask);
 	((o) == EQ || (o) == NE || (ch) == PLUS || (ch) == MINUS)
 
 /*
+ * Fuse a decrement-and-test loop branch into a single djnz (see cbfuse in
+ * local2.c).  Consulted by emit() before an RESCC compare/branch is lowered.
+ */
+#define	TARGET_CBRANCH_FUSE(p)	cbfuse(p)
+
+/*
  * sizeof and pointer-difference results are plain 16-bit integers, NOT
  * pointer-sized: the Coherent libc is K&R and unprototyped, and its
  * functions declare sizes and counts as int/unsigned words -

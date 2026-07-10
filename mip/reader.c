@@ -777,6 +777,17 @@ pass2_compile(struct interpass *ip)
 		emit(ip);
 }
 
+#ifndef TARGET_CBRANCH_FUSE
+/*
+ * A target may fuse an RESCC compare-and-branch into a single instruction
+ * (e.g. the Z8000 djnz for a decrement-and-test loop).  The hook is called
+ * with the CBRANCH node before its compare and branch are generated; it
+ * returns non-zero once it has emitted the whole branch itself, otherwise
+ * the default two-instruction path (gencode + cbgen) runs.
+ */
+#define	TARGET_CBRANCH_FUSE(p)	0
+#endif
+
 void
 emit(struct interpass *ip)
 {
@@ -809,8 +820,10 @@ emit(struct interpass *ip)
 			}
 			if (op->rewrite & RESCC) {
 				o = p->n_left->n_op;
-				gencode(r, FORCC);
-				cbgen(o, getlval(p->n_right));
+				if (!TARGET_CBRANCH_FUSE(p)) {
+					gencode(r, FORCC);
+					cbgen(o, getlval(p->n_right));
+				}
 			} else {
 				gencode(r, FORCC);
 			}
