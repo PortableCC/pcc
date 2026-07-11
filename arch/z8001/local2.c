@@ -719,6 +719,17 @@ zzzcode(NODE *p, int c)
 			printf("\n\tadd\t%s,%s\n",
 			    rnames[(n - RR0) * 2 + 1], rnames[r->n_rval]);
 		}
+		/*
+		 * Normalise the segment (high) word.  lda leaves the reserved
+		 * high bit of the segment byte set; a raw &arr[i] pointer must
+		 * have it clear so that pointer equality works (e.g. comparing
+		 * &arr[i] against a differently-formed pointer to the same
+		 * cell).  Mask with $0x7F00 exactly as &local (ZF) and the
+		 * lda-of-name rule (ZM) do.
+		 */
+		printf("\tand\t");
+		prword(getlr(p, '1'), 0);
+		printf(",$32512\n");
 	    }
 		break;
 
