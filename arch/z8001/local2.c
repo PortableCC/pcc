@@ -413,6 +413,39 @@ prword(NODE *p, int lo)
 }
 
 /*
+ * Cost, in bytes, of loading a single 16-bit constant word: clr and ldk
+ * are 2 bytes, a full "ld rN,#imm16" is 4.  Used by the Z0 escape to decide
+ * whether splitting a long constant beats the 6-byte "ldl rrN,#imm32".
+ */
+static int
+wordloadcost(CONSZ w)
+{
+	return (w == 0 || (w >= 1 && w <= 15)) ? 2 : 4;
+}
+
+/*
+ * Emit the cheapest single-word load of constant w into half "lo" of the
+ * pair operand p: clr (zero), ldk (1..15), or ld (anything else).
+ */
+static void
+prwordload(NODE *p, int lo, CONSZ w)
+{
+	if (w == 0) {
+		printf("\tclr\t");
+		prword(p, lo);
+	} else if (w >= 1 && w <= 15) {
+		printf("\tldk\t");
+		prword(p, lo);
+		printf(",$" CONFMT, w);
+	} else {
+		printf("\tld\t");
+		prword(p, lo);
+		printf(",$" CONFMT, w);
+	}
+	printf("\n");
+}
+
+/*
  * prmem: print a memory operand displaced by "plus" bytes.
  * Used for the second halves of multi-word accesses; adrput picks the
  * right encoding (X for frame, DA for names, IR/BA for pair bases).
@@ -992,6 +1025,45 @@ zzzcode(NODE *p, int c)
 	    }
 		break;
 
+	case '0':	/* materialize a numeric long/ptr constant (SLCON) into
+			 * a pair register.  Split into per-word clr/ldk/ld when
+			 * that is no larger than the 6-byte "ldl rrN,#imm32",
+			 * else emit the plain ldl.  The destination is the ASSIGN
+			 * left (RDEST) or the OPLTYPE result (RESC1); the constant
+			 * is the other operand. */
+	    {
+		NODE *dst, *con;
+		CONSZ v, hi, lo;
+
+		if (p->n_op == ASSIGN) {
+			dst = getlr(p, 'L');
+			con = getlr(p, 'R');
+		} else {
+			dst = getlr(p, '1');
+			con = getlr(p, 'L');
+		}
+		v = getlval(con);
+		hi = (v >> 16) & 0xffffLL;
+		lo = v & 0xffffLL;
+		if (v == 0) {
+			/* whole pair zero: 2-byte subl, cf. the ASSIGN
+			 * SBREG<-SZERO rule (OPLTYPE has no zero rule). */
+			printf("\tsubl\t%s,%s\n",
+			    rnames[dst->n_rval], rnames[dst->n_rval]);
+		} else if (wordloadcost(hi) + wordloadcost(lo) >= 6) {
+			/* splitting is no smaller than one ldl #imm32: emit the
+			 * plain ldl, printing the immediate exactly as the
+			 * generic rule's "AR"/"AL" would (adrput). */
+			printf("\tldl\t%s,", rnames[dst->n_rval]);
+			adrput(stdout, con);
+			printf("\n");
+		} else {
+			prwordload(dst, 0, hi);		/* high word */
+			prwordload(dst, 1, lo);		/* low word */
+		}
+	    }
+		break;
+
 	default:
 		comperr("zzzcode: unknown code '%c'", c);
 	}
@@ -1525,6 +1597,12 @@ special(NODE *p, int shape)
 		    getlval(p) >= -32768 && getlval(p) <= 65535)
 			return SRDIR;
 		return SRNOPE;
+	case SLCON:
+		/* any numeric (non-symbolic) constant: the Z0 escape decides
+		 * per-value whether the per-word split beats a plain ldl. */
+		if (p->n_op == ICON && p->n_name[0] == '\0')
+			return SRDIR;
+		return SRNOPE;
 	case SPOW2: {
 		/*
 		 * A nameless ICON that is a single-bit mask within its
@@ -1952,6 +2030,107 @@ rmwrenamesd(struct interpass *ipole)
 }
 
 /*
+ * Recover the -O0 read-modify-write shape for a loop INDUCTION variable
+ * whose value is LIVE across the body - the mirror of rmwrename().
+ *
+ * A "for (t = 0; t < N; t++) use(t)" loop, after SSA + removephi, reads
+ *
+ *	ASSIGN(TEMP s, init)			entry def of s
+ *   L:	... body USES TEMP s (the compare, printf args, ...) ...
+ *	ASSIGN(TEMP d, op(TEMP s, e))		the update, a bare statement
+ *	ASSIGN(TEMP s, TEMP d)			back-edge copy (reads d)
+ *	GOTO L
+ *
+ * Here s is read all over the body, so rmwrename()'s "s used only by the
+ * RMW" (suses==1) never holds and the split shape survives; the register
+ * allocator then fails to make the update in place and emits the classic
+ * "ldl rr2,rr10 ; addl rr2,$1 ; ldl rr10,rr2".
+ *
+ * But d is single-use: defined only by the update and read only by the
+ * immediately-following back-edge copy.  Renaming d to s - the OPPOSITE
+ * direction from rmwrename() - makes the update write s in place and turns
+ * the copy into the dead "s = s", which is deleted.  Soundness: d has
+ * exactly one def (the update) and one use (the copy), so removing it
+ * observes nothing else; and because the copy IMMEDIATELY follows the
+ * update, no reader of the old s value lies between where s is now
+ * overwritten and where the copy originally overwrote it.  Only a rename
+ * and a delete, both safe on the allocator's reused blocks (see fusecmp).
+ *
+ * Gated on xssa; runs after rmwrename()/rmwrenamesd(), whose (compare-
+ * wrapped) sites do not match the bare-statement shape required here.
+ */
+static void
+rmwrenameloop(struct interpass *ipole)
+{
+	struct interpass *ip, *ip2, *backcp;
+	struct basicblock *bb;
+	NODE *p, *q, *r;
+	int d, s, ddefs, duses, dd, du;
+
+	if (!xssa)
+		return;
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole;
+	    ip = DLIST_NEXT(ip, qelem)) {
+		if (ip->type != IP_NODE)
+			continue;
+		p = ip->ip_node;
+		/* the update: a bare top-level "d = op(s, e)" statement */
+		if (p->n_op != ASSIGN || p->n_left->n_op != TEMP)
+			continue;
+		r = p->n_right;
+		if (r->n_op != PLUS && r->n_op != MINUS && r->n_op != AND &&
+		    r->n_op != OR && r->n_op != ER)
+			continue;
+		if (r->n_left->n_op != TEMP)
+			continue;
+		d = regno(p->n_left);
+		s = regno(r->n_left);
+		if (d == s || p->n_left->n_type != r->n_left->n_type)
+			continue;
+		/* the modifier expression may mention neither temp */
+		dd = du = 0;
+		tmpcount(r->n_right, d, &dd, &du);
+		tmpcount(r->n_right, s, &dd, &du);
+		if (dd || du)
+			continue;
+		/* the LITERAL next element must be the back-edge copy "s = d":
+		 * an intervening label would let control reach the copy without
+		 * the update, and any statement between could read the old s. */
+		backcp = DLIST_NEXT(ip, qelem);
+		if (backcp == ipole || backcp->type != IP_NODE)
+			continue;
+		q = backcp->ip_node;
+		if (q->n_op != ASSIGN || q->n_left->n_op != TEMP ||
+		    regno(q->n_left) != s || q->n_right->n_op != TEMP ||
+		    regno(q->n_right) != d)
+			continue;
+		/* d must be defined only by the update and used only by the
+		 * back-edge copy: then eliminating it observes nothing else */
+		ddefs = duses = 0;
+		for (ip2 = DLIST_NEXT(ipole, qelem); ip2 != ipole;
+		    ip2 = DLIST_NEXT(ip2, qelem)) {
+			if (ip2->type != IP_NODE)
+				continue;
+			tmpcount(ip2->ip_node, d, &ddefs, &duses);
+		}
+		if (ddefs != 1 || duses != 1)
+			continue;
+
+		/* rename d to s: the update writes s in place, the back-edge
+		 * copy becomes "s = s" and is removed */
+		p->n_left->n_rval = s;
+		DLIST_FOREACH(bb, &p2env.bblocks, bbelem) {
+			if (bb->first == backcp)
+				bb->first = DLIST_NEXT(backcp, qelem);
+			if (bb->last == backcp)
+				bb->last = DLIST_PREV(backcp, qelem);
+		}
+		tfree(backcp->ip_node);
+		DLIST_REMOVE(backcp, qelem);
+	}
+}
+
+/*
  * NOTE (attempted, reverted): a "rmwcopyfuse" that handled the LIVE-source
  * non-loop RMW-test (the majority of the corpus's residual redundant tests,
  * e.g. "if ((x = a op b))" with a used later) by INSERTING an explicit
@@ -1971,6 +2150,7 @@ myoptim(struct interpass *ip)
 	fusecmp(ip);
 	rmwrename(ip);
 	rmwrenamesd(ip);
+	rmwrenameloop(ip);
 }
 
 /*

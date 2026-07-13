@@ -416,6 +416,12 @@ int pickcolor(int class, int mask);
 				   single bit, either sign representation):
 				   the res rule prints the clear bit's
 				   number via ZY */
+#define	SLCON	(MAXSPECIAL+9)	/* nameless (numeric) ICON loaded into a pair
+				   register: the Z0 escape splits it into
+				   per-word clr/ldk/ld when that is no larger
+				   than the 6-byte "ldl #imm32", else emits the
+				   plain ldl.  Symbolic constants (n_name set)
+				   fail this shape and take the generic ldl. */
 
 /*
  * Compare-vs-zero elision gate (reader.c geninsn): the word logical

@@ -1177,12 +1177,15 @@ struct optab table[] = {
 		0,	0,
 		"	clr	AL\n", },
 
-/* pair reg <- zero (long); RDEST valid: the cleared pair IS the value */
+/* pair reg <- zero (long): "subl rrN,rrN" is 2 bytes and zeroes the whole
+ * pair, vs the 4-byte two-clr ZQ (which memory targets still need, having
+ * no reg-reg subl).  RDEST valid: the cleared pair IS the value.  No FORCC:
+ * subl sets flags for the full long, but nothing here consumes them. */
 { ASSIGN,	FOREFF|INBREG,
 	SBREG,		TLONG|TULONG|TPOINT,
 	SZERO,		TANY,
 		0,	RDEST,
-		"ZQ", },
+		"	subl	AL,AL\n", },
 
 /* pair in memory <- zero; FOREFF ONLY.  ZQ clears the two memory words
  * and leaves NO register holding the value, so this must not offer
@@ -1237,6 +1240,16 @@ struct optab table[] = {
 	SCON,		TANY,
 		0,	0,
 		"	ld	AL,AR\n", },
+
+/* pair reg <- numeric long/ptr constant: Z0 splits into clr/ldk/ld when no
+ * larger than the 6-byte ldl #imm32 (see the Z0 escape), else emits ldl.
+ * SLCON is numeric ICON only; symbolic constants fail it and take the
+ * generic ldl rule below, which this must precede. */
+{ ASSIGN,	FOREFF|INBREG,
+	SBREG,		TLONG|TULONG|TPOINT,
+	SLCON,		TANY,
+		0,	RDEST,
+		"Z0", },
 
 /* pair reg <- pair reg or mem (long/ptr/float).
  * NORIGHT(RR0): clocal rewrites return into ASSIGN(REG-rr0, value); for
@@ -1871,6 +1884,15 @@ struct optab table[] = {
 	SAREG|SCON|SOREG|SNAME,	TWORD|TSHORT|TUSHORT,
 		NAREG,	RESC1,
 		"	ld	A1,AL\n", },
+
+/* materialize a numeric long/ptr constant into a pair register: Z0 splits
+ * into clr/ldk/ld when no larger than the 6-byte ldl #imm32.  Must precede
+ * the generic rule; symbolic constants fail SLCON and take the ldl there. */
+{ OPLTYPE,	INBREG,
+	SANY,	TANY,
+	SLCON,	TLONG|TULONG|TPOINT,
+		NBREG,	RESC1,
+		"Z0", },
 
 /* load long/ptr/float constant/name/oreg into pair register */
 { OPLTYPE,	INBREG,
