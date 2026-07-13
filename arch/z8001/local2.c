@@ -180,6 +180,16 @@ static int framelab;
 static int curframeless;
 
 /*
+ * Prologue's register-save plan, recomputed-invariant parts stashed here for
+ * eoftn() (which cannot re-run usesfp() - it only sees the epilog end of the
+ * list).  curneedfp: r13 is set up as a frame pointer (has autos/spills or the
+ * body addresses a frame slot).  cursavetop: highest register in the saved
+ * contiguous run (R13 when curneedfp, else the top used callee-saved r6..r12).
+ */
+static int curneedfp;
+static int cursavetop;
+
+/*
  * walkf callback: flag any reference to r13 (FPREG) used as a frame base.
  * By emit time canon() has lowered stack args and autos to OREG(FPREG) and
  * &local to ADDROF(OREG(FPREG)) or PLUS(REG FPREG, ICON); all of these carry
@@ -218,10 +228,12 @@ usesfp(struct interpass_prolog *ipp)
 /*
  * Emit the function prologue.
  *
- * Callee-saved word registers are R6-R12.  We always save R13 (the frame
- * pointer) because we change its value.  We find the lowest-numbered
- * callee-saved register that was actually used and save a contiguous run
- * from that register through R13 with a single ldm or ld instruction.
+ * Callee-saved word registers are R6-R12; R13 is the frame pointer.  We save a
+ * contiguous run of the callee-saved registers the body actually used.  R13 is
+ * included in that run (and set to the frame bottom) ONLY when the function
+ * needs a frame pointer - it has autos/spills or addresses a frame slot / stack
+ * argument through r13 (see curneedfp).  A function that uses neither r13 nor
+ * any callee-saved register emits no prologue at all.
  */
 /*
  * Determine the lowest-numbered callee-saved word register that must be
@@ -262,6 +274,38 @@ firstsavereg(void)
 	return firstsave;
 }
 
+/*
+ * Highest-numbered callee-saved word register (R6-R12) actually used, or -1 if
+ * none.  Used when r13 is NOT a frame pointer (see prologue): the save run then
+ * ends at the topmost used callee-saved register instead of always at R13.
+ */
+static int
+lastsavereg(void)
+{
+	int i, last = -1;
+
+	for (i = R6; i <= R12; i++)
+		if (TESTBIT(p2env.p_regs, i))
+			last = i;
+	/* pair RRn's high word is (n-RR0)*2+1: rr6->r7, rr8->r9, rr10->r11 */
+	for (i = RR6; i <= RR10; i++)
+		if (TESTBIT(p2env.p_regs, i)) {
+			int hi = (i - RR0) * 2 + 1;
+			if (hi > last)
+				last = hi;
+		}
+	/* quads: rq4 = r4-r7 (high saved word r7), rq8 = r8-r11 (high r11) */
+	if (TESTBIT(p2env.p_regs, RQ4) && R7 > last)
+		last = R7;
+	if (TESTBIT(p2env.p_regs, RQ8) && R11 > last)
+		last = R11;
+	if (TESTBIT(p2env.p_regs, RL6) && R6 > last)
+		last = R6;
+	if (TESTBIT(p2env.p_regs, RL7) && R7 > last)
+		last = R7;
+	return last;
+}
+
 void
 prologue(struct interpass_prolog *ipp)
 {
@@ -273,28 +317,39 @@ prologue(struct interpass_prolog *ipp)
 	fsize = (p2maxautooff + 1) & ~1;  /* p2maxautooff is bytes; round to word */
 
 	/*
-	 * Frameless fast-path: a function that neither preserves a callee-saved
-	 * word register (firstsave == R13 means none of R6-R12 was used) nor has
-	 * any frame slot (fsize == 0 rules out autos AND spills) nor references
-	 * r13 as a frame base (usesfp() -- no stack-arg reads, no &local) needs
-	 * no frame at all.  Skip the equate, the allocation, the r13 save and the
-	 * "ld r13,r15"; eoftn() then emits only "ret un".  Typical of leaf/no-arg
-	 * helpers (e.g. a usage() that just fprintf()s and exit()s).
+	 * r13 is set up as a frame pointer ONLY when the body needs one: either
+	 * there are autos/spills (fsize>0) or the body addresses a frame slot /
+	 * stack argument through r13 (usesfp()).  When it isn't needed we neither
+	 * save nor load r13 - the caller's r13 is preserved simply by our never
+	 * touching it - and the register-save run stops at the topmost callee-saved
+	 * register the body actually used instead of running through r13.
 	 */
-	curframeless = (firstsave == R13 && fsize == 0 && !usesfp(ipp));
-	if (curframeless)
-		return;
+	curneedfp = (fsize > 0 || usesfp(ipp));
+	if (curneedfp) {
+		cursavetop = R13;		/* always save AND set up r13 */
+	} else {
+		cursavetop = lastsavereg();	/* top used callee-saved, or -1 */
+		if (cursavetop < 0) {
+			/*
+			 * Frameless: no autos, no r13 use, no callee-saved
+			 * register touched.  Emit nothing; eoftn() emits only
+			 * "ret un".  Typical of leaf/no-arg helpers.
+			 */
+			curframeless = 1;
+			return;
+		}
+	}
+	curframeless = 0;
 
-	/* Save firstsave..R13 inclusive (always save R13 since we clobber it) */
-	nsave = R13 - firstsave + 1;
+	nsave = cursavetop - firstsave + 1;
 	total = fsize + nsave * 2;
 
 	/*
-	 * Frame-base equate for stack-segment addressing (see framelab above).
-	 * L<n> = SS|total; slots are then addressed "L<n>+off(r13)" with r13 at
-	 * the frame bottom, so EA = SS:(total + off + r13_bottom) recovers the
-	 * absolute frame offset AND supplies the stack segment.  total >= 2
-	 * always (R13 is always saved).
+	 * Frame-base equate for stack-segment addressing (see framelab above),
+	 * emitted only when r13 is a frame pointer.  L<n> = SS|total; slots are
+	 * addressed "L<n>+off(r13)" with r13 at the frame bottom, so EA =
+	 * SS:(total + off + r13_bottom) recovers the absolute frame offset AND
+	 * supplies the stack segment.
 	 *
 	 * SS is an external symbol pinned per-ABI by the startup: crts0.s sets
 	 * "SS = 0x0000" for user programs (a single flat segment), while the
@@ -307,41 +362,36 @@ prologue(struct interpass_prolog *ipp)
 	 * the earlier outsof() bit-15 drop that motivated the "0|" workaround has
 	 * been fixed in the Coherent "as").
 	 */
-	framelab = getlab2();
-	printf(LABFMT "=SS|%d\n", framelab, total);
+	if (curneedfp)
+		printf(LABFMT "=SS|%d\n", framelab, total);
 
 	/*
-	 * Special case total == 2 (only R13 saved, no autos): a single "push"
-	 * does the SP decrement and the store in one 2-byte instruction, versus
-	 * "dec r15,$2" + "ld (rr14),r13" (4 bytes).  Then set the frame pointer.
+	 * Allocate-and-save.  With no autos (fsize==0, so total==nsave*2) a single
+	 * stack instruction does the SP decrement AND the store:
+	 *   nsave==1               -> push  (2 bytes vs dec + ld  = 4)
+	 *   nsave==2, aligned pair -> pushl (2 bytes vs dec + ldm = 6)
+	 * The pair case is gated to rr6/rr8/rr10 (firstsave even, <= R10); rr12
+	 * would include r13 and only arises on the frame-pointer path anyway.
+	 * Otherwise allocate the frame with dec/sub, then ldm the run at the SP.
 	 */
-	if (total == 2 && nsave == 1) {
-		printf("\tpush\t(rr14),r13\n");
-		printf("\tld\tr13,r15\n");
-		return;
-	}
-
-	/* Step 1: allocate entire frame */
-	if (total > 0) {
-		if (total <= 16)
-			printf("\tdec\tr15,$%d\n", total);
+	if (fsize == 0 && nsave == 1) {
+		printf("\tpush\t(rr14),r%d\n", firstsave);
+	} else if (fsize == 0 && nsave == 2 &&
+	    (firstsave & 1) == 0 && firstsave <= R10) {
+		printf("\tpushl\t(rr14),rr%d\n", firstsave);
+	} else {
+		if (total > 0)
+			printf("\t%s\tr15,$%d\n", total <= 16 ? "dec" : "sub",
+			    total);
+		if (nsave == 1)
+			printf("\tld\t(rr14),r%d\n", firstsave);
 		else
-			printf("\tsub\tr15,$%d\n", total);
+			printf("\tldm\t(rr14),r%d,$%d\n", firstsave, nsave);
 	}
 
-	/* Step 2: save callee-saved registers at current SP (no auto-decrement) */
-	if (nsave == 1)
-		printf("\tld\t(rr14),r13\n");
-	else
-		printf("\tldm\t(rr14),r%d,$%d\n", firstsave, nsave);
-
-	/*
-	 * Step 3: r13 = current SP = frame bottom.  (Native keeps the frame
-	 * pointer at the bottom and reaches slots via the SS|total equate;
-	 * node offsets remain entry-SP-relative and are corrected by the +total
-	 * baked into the equate.)
-	 */
-	printf("\tld\tr13,r15\n");
+	/* r13 = current SP = frame bottom (only when it is the frame pointer). */
+	if (curneedfp)
+		printf("\tld\tr13,r15\n");
 }
 
 /*
@@ -361,36 +411,41 @@ eoftn(struct interpass_prolog *ipp)
 		return;
 	}
 
-	/* Recompute the same values as the prologue */
+	/*
+	 * Recompute the plan.  firstsave/fsize are deterministic from p2env, and
+	 * cursavetop was stashed by prologue() (eoftn cannot re-run usesfp - it
+	 * only sees the epilog end of the interpass list).
+	 */
 	firstsave = firstsavereg();
-	nsave = R13 - firstsave + 1;
 	fsize = (p2maxautooff + 1) & ~1;
+	nsave = cursavetop - firstsave + 1;
 	total = fsize + nsave * 2;
 
 	/*
-	 * Mirror of the prologue "push" special case: "pop r13,(rr14)" restores
-	 * r13 and reclaims the 2-byte frame in one instruction, versus
-	 * "ld r13,(rr14)" + "inc r15,$2".
+	 * Mirror of the prologue allocate-and-save combine: pop / popl restore the
+	 * register(s) AND reclaim the frame in one instruction.
 	 */
-	if (total == 2 && nsave == 1) {
-		printf("\tpop\tr13,(rr14)\n");
+	if (fsize == 0 && nsave == 1) {
+		printf("\tpop\tr%d,(rr14)\n", firstsave);
+		printf("\tret\tun\n");
+		return;
+	}
+	if (fsize == 0 && nsave == 2 && (firstsave & 1) == 0 &&
+	    firstsave <= R10) {
+		printf("\tpopl\trr%d,(rr14)\n", firstsave);
 		printf("\tret\tun\n");
 		return;
 	}
 
-	/* Restore callee-saved registers (neither ld nor ldm changes r15) */
+	/* Restore the saved run (neither ld nor ldm changes r15) */
 	if (nsave == 1)
-		printf("\tld\tr13,(rr14)\n");
+		printf("\tld\tr%d,(rr14)\n", firstsave);
 	else
 		printf("\tldm\tr%d,(rr14),$%d\n", firstsave, nsave);
 
 	/* Reclaim the whole frame */
-	if (total > 0) {
-		if (total <= 16)
-			printf("\tinc\tr15,$%d\n", total);
-		else
-			printf("\tadd\tr15,$%d\n", total);
-	}
+	if (total > 0)
+		printf("\t%s\tr15,$%d\n", total <= 16 ? "inc" : "add", total);
 
 	printf("\tret\tun\n");
 }
