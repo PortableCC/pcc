@@ -505,6 +505,22 @@ struct optab table[] = {
 		0,	RLEFT|RESCC,
 		"	dec	AL,$1\n", },
 
+/* inc word by 2..16: "inc AL,$k" (2 bytes) instead of "add AL,$k" (4).
+ * SP16 is numeric 1..16 but $1 already matched SONE above; symbolic and
+ * out-of-range constants fall to the generic add rule below, which this
+ * must precede.  inc sets flags arithmetically, so RESCC holds. */
+{ PLUS,		FOREFF|INAREG|FORCC,
+	SAREG|SNAME,	TWORD,
+	SP16,		TANY,
+		0,	RLEFT|RESCC,
+		"	inc	AL,AR\n", },
+
+{ PLUS,		FOREFF|FORCC,
+	SNBA,		TWORD,
+	SP16,		TANY,
+		0,	RLEFT|RESCC,
+		"	inc	AL,AR\n", },
+
 /* add word reg + reg/name/const (add src is R/IM/IR/DA/X - no BA) */
 { PLUS,		INAREG|FOREFF|FORCC,
 	SAREG,		TWORD,
@@ -662,6 +678,21 @@ struct optab table[] = {
 	SMONE,		TANY,
 		0,	RLEFT|RESCC,
 		"	inc	AL,$1\n", },
+
+/* dec word by 2..16: "dec AL,$k" (2 bytes) instead of "sub AL,$k" (4).
+ * $1 already matched SONE above; symbolic/out-of-range fall to the generic
+ * sub rule below, which this must precede.  dec sets flags arithmetically. */
+{ MINUS,	FOREFF|INAREG|FORCC,
+	SAREG|SNAME,	TWORD,
+	SP16,		TANY,
+		0,	RLEFT|RESCC,
+		"	dec	AL,AR\n", },
+
+{ MINUS,	FOREFF|FORCC,
+	SNBA,		TWORD,
+	SP16,		TANY,
+		0,	RLEFT|RESCC,
+		"	dec	AL,AR\n", },
 
 /* subtract word reg - reg/name/const (sub src is R/IM/IR/DA/X - no BA) */
 { MINUS,	INAREG|FOREFF|FORCC,
