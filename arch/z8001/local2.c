@@ -172,6 +172,50 @@ deflab(int label)
 static int framelab;
 
 /*
+ * Set by prologue() and consulted by eoftn(): this function needs no
+ * frame-pointer setup at all (no r13 save, no "ld r13,r15", no frame
+ * allocation), so both prologue and epilogue collapse to nothing but the
+ * body and a bare "ret un".  See usesfp() and prologue() for the criteria.
+ */
+static int curframeless;
+
+/*
+ * walkf callback: flag any reference to r13 (FPREG) used as a frame base.
+ * By emit time canon() has lowered stack args and autos to OREG(FPREG) and
+ * &local to ADDROF(OREG(FPREG)) or PLUS(REG FPREG, ICON); all of these carry
+ * FPREG in n_rval, so a single test on OREG/REG suffices.  r13 is a dedicated
+ * frame pointer, never allocated, so a hit is always a genuine frame use.
+ */
+static void
+fpuse(NODE *p, void *arg)
+{
+	if ((p->n_op == OREG || p->n_op == REG) && p->n_rval == FPREG)
+		*(int *)arg = 1;
+}
+
+/*
+ * Does the function body reference the frame pointer r13 at all?  The whole
+ * interpass list (IP_PROLOG .. IP_EPILOG) is still linked when prologue() runs
+ * during the emit walk, so we scan the body forward from the prolog node.  A
+ * function that touches no frame slot needs no frame pointer; combined with a
+ * zero autosize (which also rules out spill slots, since any spill bumps
+ * p2maxautooff) this is the frameless criterion.
+ */
+static int
+usesfp(struct interpass_prolog *ipp)
+{
+	struct interpass *ip;
+	int found = 0;
+
+	for (ip = DLIST_NEXT(&ipp->ipp_ip, qelem); ip->type != IP_EPILOG;
+	    ip = DLIST_NEXT(ip, qelem)) {
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, fpuse, &found);
+	}
+	return found;
+}
+
+/*
  * Emit the function prologue.
  *
  * Callee-saved word registers are R6-R12.  We always save R13 (the frame
@@ -226,10 +270,23 @@ prologue(struct interpass_prolog *ipp)
 	seenlabs = NULL;	/* start a fresh emitted-label set (see cbfuse) */
 
 	firstsave = firstsavereg();
+	fsize = (p2maxautooff + 1) & ~1;  /* p2maxautooff is bytes; round to word */
+
+	/*
+	 * Frameless fast-path: a function that neither preserves a callee-saved
+	 * word register (firstsave == R13 means none of R6-R12 was used) nor has
+	 * any frame slot (fsize == 0 rules out autos AND spills) nor references
+	 * r13 as a frame base (usesfp() -- no stack-arg reads, no &local) needs
+	 * no frame at all.  Skip the equate, the allocation, the r13 save and the
+	 * "ld r13,r15"; eoftn() then emits only "ret un".  Typical of leaf/no-arg
+	 * helpers (e.g. a usage() that just fprintf()s and exit()s).
+	 */
+	curframeless = (firstsave == R13 && fsize == 0 && !usesfp(ipp));
+	if (curframeless)
+		return;
 
 	/* Save firstsave..R13 inclusive (always save R13 since we clobber it) */
 	nsave = R13 - firstsave + 1;
-	fsize = (p2maxautooff + 1) & ~1;  /* p2maxautooff is bytes; round to word */
 	total = fsize + nsave * 2;
 
 	/*
@@ -252,6 +309,17 @@ prologue(struct interpass_prolog *ipp)
 	 */
 	framelab = getlab2();
 	printf(LABFMT "=SS|%d\n", framelab, total);
+
+	/*
+	 * Special case total == 2 (only R13 saved, no autos): a single "push"
+	 * does the SP decrement and the store in one 2-byte instruction, versus
+	 * "dec r15,$2" + "ld (rr14),r13" (4 bytes).  Then set the frame pointer.
+	 */
+	if (total == 2 && nsave == 1) {
+		printf("\tpush\t(rr14),r13\n");
+		printf("\tld\tr13,r15\n");
+		return;
+	}
 
 	/* Step 1: allocate entire frame */
 	if (total > 0) {
@@ -287,11 +355,28 @@ eoftn(struct interpass_prolog *ipp)
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return;
 
+	/* Frameless (see prologue()): nothing to tear down but the return. */
+	if (curframeless) {
+		printf("\tret\tun\n");
+		return;
+	}
+
 	/* Recompute the same values as the prologue */
 	firstsave = firstsavereg();
 	nsave = R13 - firstsave + 1;
 	fsize = (p2maxautooff + 1) & ~1;
 	total = fsize + nsave * 2;
+
+	/*
+	 * Mirror of the prologue "push" special case: "pop r13,(rr14)" restores
+	 * r13 and reclaims the 2-byte frame in one instruction, versus
+	 * "ld r13,(rr14)" + "inc r15,$2".
+	 */
+	if (total == 2 && nsave == 1) {
+		printf("\tpop\tr13,(rr14)\n");
+		printf("\tret\tun\n");
+		return;
+	}
 
 	/* Restore callee-saved registers (neither ld nor ldm changes r15) */
 	if (nsave == 1)
