@@ -29,6 +29,10 @@
 
 #include "pass1.h"
 
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>	/* dup, dup2, close, fileno (output-capture peephole) */
+
 #ifndef LANG_CXX
 #define NODE P1ND
 #undef NIL
@@ -230,9 +234,124 @@ bfcode(struct symtab **sp, int cnt)
  * it would drag the formatter into every FP program whether or
  * not it prints, and would tie generated code to one libc layout.
  */
+/*
+ * Post-emit stack-cleanup peephole.
+ *
+ * A call's caller-cleanup "inc r15,$K" immediately followed by the next
+ * call's first argument push of exactly K bytes is a wasteful SP round-trip:
+ * the inc frees K bytes and the push re-allocates the same K, so the pair
+ * collapses to a single in-place store - drop the inc and turn that push
+ * into a store to (rr14).  SP is unchanged, the value lands in the same slot,
+ * and any further pushes proceed normally from the unchanged SP:
+ *
+ *	inc r15,$2 ; push (rr14),x ; push (rr14),y
+ *   -> store (rr14),x ; push (rr14),y
+ *
+ * The store re-provides the argument from the (callee-saved, preserved)
+ * register, so this stays correct even if the first callee overwrote its own
+ * argument slot; only a *register* push source qualifies (a memory/immediate
+ * push has no legal mem<-mem / mem<-imm store form).  A label between the two
+ * lines is a separate line, so the required adjacency naturally respects
+ * basic-block boundaries (a jump target between them blocks the collapse).
+ *
+ * All pass-2 assembly is printf'd straight to stdout with no instruction or
+ * line buffer to peephole over, so the whole compilation's stdout is captured
+ * to a temp file between bjobcode() and ejobcode() (which bracket every
+ * emission in the combined ccom) and streamed back through the line filter.
+ * z8001-only - no shared MIP changes.  If capture cannot be set up the output
+ * is left direct (no peephole), never wrong.
+ */
+static int argcse_savefd = -1;
+static FILE *argcse_cap;
+
+/* SRC (the text after "(rr14),") a plain word/long register? */
+static int
+argcse_isreg(const char *p, int longp)
+{
+	if (longp) {
+		if (p[0] != 'r' || p[1] != 'r')
+			return 0;
+		p += 2;
+	} else {
+		if (p[0] != 'r')
+			return 0;
+		p += 1;
+	}
+	if (*p < '0' || *p > '9')
+		return 0;
+	while (*p >= '0' && *p <= '9')
+		p++;
+	return *p == '\0';
+}
+
+static void
+argcse_filter(FILE *in, FILE *out)
+{
+	char prev[4096], cur[4096];
+	int haveprev = 0, prevk = 0;
+
+	while (fgets(cur, sizeof(cur), in) != NULL) {
+		char *e;
+		const char *src;
+		int longp, matched = 0;
+
+		/* strip trailing CR/LF; a single \n is re-added on output */
+		e = cur + strlen(cur);
+		while (e > cur && (e[-1] == '\n' || e[-1] == '\r'))
+			*--e = '\0';
+
+		if (haveprev) {
+			src = NULL;
+			longp = 0;
+			if (strncmp(cur, "\tpushl\t(rr14),", 14) == 0) {
+				src = cur + 14;
+				longp = 1;
+			} else if (strncmp(cur, "\tpush\t(rr14),", 13) == 0) {
+				src = cur + 13;
+				longp = 0;
+			}
+			if (src != NULL && prevk == (longp ? 4 : 2) &&
+			    argcse_isreg(src, longp)) {
+				fprintf(out, "\t%s\t(rr14),%s\n",
+				    longp ? "ldl" : "ld", src);
+				haveprev = 0;		/* both lines consumed */
+				matched = 1;
+			}
+		}
+		if (matched)
+			continue;
+
+		if (haveprev)
+			fprintf(out, "%s\n", prev);
+
+		if (strncmp(cur, "\tinc\tr15,$", 10) == 0 ||
+		    strncmp(cur, "\tadd\tr15,$", 10) == 0) {
+			prevk = atoi(cur + 10);
+			strcpy(prev, cur);
+			haveprev = 1;
+		} else {
+			fprintf(out, "%s\n", cur);
+			haveprev = 0;
+		}
+	}
+	if (haveprev)
+		fprintf(out, "%s\n", prev);
+}
+
 void
 ejobcode(int flag)
 {
+	if (argcse_cap != NULL) {
+		fflush(stdout);
+		dup2(argcse_savefd, fileno(stdout));	/* restore real stdout */
+		close(argcse_savefd);
+		argcse_savefd = -1;
+		rewind(argcse_cap);
+		argcse_filter(argcse_cap, stdout);	/* peephole -> real out */
+		fclose(argcse_cap);
+		argcse_cap = NULL;
+		fflush(stdout);
+	}
 }
 
 /*
@@ -266,6 +385,28 @@ bjobcode(void)
 	 * macro not visible in this pass1 file, so the literal 1 is used).
 	 */
 	clregs[1] &= ~1;		/* class B: drop color 0 (== RR0) */
+
+	/*
+	 * Redirect all pass-2 assembly output through a temp file so ejobcode()
+	 * can run the stack-cleanup peephole over the emitted text.  bjobcode
+	 * emits no assembly itself, so capturing from here is complete.  On any
+	 * failure leave stdout untouched (output stays direct, no peephole).
+	 */
+	fflush(stdout);
+	argcse_savefd = dup(fileno(stdout));
+	argcse_cap = tmpfile();
+	if (argcse_savefd >= 0 && argcse_cap != NULL) {
+		dup2(fileno(argcse_cap), fileno(stdout));
+	} else {
+		if (argcse_savefd >= 0) {
+			close(argcse_savefd);
+			argcse_savefd = -1;
+		}
+		if (argcse_cap != NULL) {
+			fclose(argcse_cap);
+			argcse_cap = NULL;
+		}
+	}
 }
 
 /*
