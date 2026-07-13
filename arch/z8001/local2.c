@@ -2759,6 +2759,297 @@ clrfill(struct interpass *ipole)
 	}
 }
 
+/*
+ * PROTOTYPE: common-argument CSE across consecutive calls.
+ *
+ * Two adjacent statements that call different functions with the SAME
+ * fixed-address argument
+ *
+ *	time(&clock);
+ *	tp = localtime(&clock);
+ *
+ * each rematerialise "&clock" (lda + segment-mask "and") before their
+ * push.  There is no cross-statement CSE in the pipeline, so the address
+ * is computed once per call.  When the argument is the address of a frame
+ * object, a global, an address-taken auto, a symbolic address constant
+ * (a global array / function address), or a wide numeric constant, its
+ * value is a compile-time fixed quantity that no intervening call can
+ * perturb - so
+ * evaluating it once into a temp and reusing that temp is unconditionally
+ * safe, regardless of what the calls themselves do.  Register allocation
+ * then keeps the shared address in one (callee-saved, since it is live
+ * across the first call) register:
+ *
+ *	lda   rr8,L0-4(r13) ; and r8,$32512   ; &clock, ONCE
+ *	pushl (rr14),rr8 ; calr time_      ; inc r15,$4
+ *	pushl (rr14),rr8 ; calr localtime_ ; inc r15,$4
+ *
+ * This removes the redundant recompute (the "why not cache it" half of
+ * the observation).  The inter-call pop+repush (inc r15,$4 then pushl of
+ * the same value) is left in place: collapsing it would rely on the
+ * freed stack slot surviving across the call, which Coherent's
+ * same-stack signal delivery does not guarantee.
+ *
+ * The shared address need not be the whole argument list: a call may take
+ * several arguments and only one of them be the shared fixed address
+ *
+ *	fprintf(fp, "%s", &buf[0]);
+ *	fputs(&buf[0], fp);
+ *
+ * so each call's arguments are scanned, and when one call passes several
+ * hoistable addresses the one reused by the longest following run of calls
+ * is chosen.  Runs may overlap (A and B share X; B and C share Y): the scan
+ * advances one call at a time, and an address already rewritten to a temp
+ * is no longer a hoist candidate, so each distinct address is hoisted once.
+ *
+ * Runs from myreader(), before ADDROF/TEMP lowering, canon and optimize,
+ * so the fresh temp and the inserted assignment get the full standard
+ * treatment (this is the only point at which inserting interpass nodes is
+ * safe - doing it at myoptim, after the SSA allocator's CFG is built,
+ * crashes insnwalk(); see the rmwcopyfuse note above).  Gated on xtemps:
+ * without it deltemp spills every temp to the stack, turning the shared
+ * address back into per-use reloads with no benefit.
+ *
+ * The run length at which the transform fires is a per-kind threshold,
+ * because hoisting the address into a register live across a call forces a
+ * callee-saved register (a prologue/epilogue save/restore, ~4-6 bytes when
+ * it grows the ldm range, upgrades ld->ldm, or - worst case - spills and
+ * pushes the frame past 16 so dec/inc become sub/add).  The hoist clears
+ * that cost easily once (uses-1) * recompute_size is large:
+ *   - ADDROF (&auto/&global): recompute is "lda + and" = 8 bytes, so two
+ *     uses already win comfortably -> ARGCSE_MIN_ADDR = 2.
+ *   - an ICON (symbolic address constant "ldl rrN,$sym" = 4 bytes, or a
+ *     wide numeric constant "ldl rrN,$imm32" = 6 bytes): the 4-byte case at
+ *     two uses is a coin-flip (win when a callee-saved reg is free, small
+ *     loss when it forces a save/spill) that cannot be called before
+ *     register allocation; the 6-byte numeric case is at least as profitable.
+ * Measured over the 106-program corpus, ICON at 2 nets about -120 bytes
+ * beyond ICON at 3 (~14 programs shrink, ~4-8 bytes each) at the cost of 7
+ * programs growing by +2..+14.  We take the larger net reduction and accept
+ * those small regressions (project decision); set ARGCSE_MIN_ICON = 3 to
+ * trade -120 bytes of wins for guaranteed no-regression instead.
+ */
+#define	ARGCSE_MIN_ADDR	2
+#define	ARGCSE_MIN_ICON	2
+
+/*
+ * The call node carried by an expression-statement: the bare call of a
+ * void/discarded call, or the right-hand side of "lhs = f(...)".  Only
+ * plain CALL (binary, has an argument list); UCALL has no args, and the
+ * struct-return / Fortran variants carry hidden operands best left alone.
+ */
+static NODE *
+argcse_call(NODE *p)
+{
+	if (p->n_op == ASSIGN)
+		p = p->n_right;
+	return p->n_op == CALL ? p : NULL;
+}
+
+/* Structural equality of two argument trees (same op, type, and leaf
+ * value); enough to prove two "&x" designators name the same object. */
+static int
+argcse_same(NODE *a, NODE *b)
+{
+	if (a->n_op != b->n_op || a->n_type != b->n_type)
+		return 0;
+	switch (optype(a->n_op)) {
+	case BITYPE:
+		if (!argcse_same(a->n_right, b->n_right))
+			return 0;
+		/* FALLTHROUGH */
+	case UTYPE:
+		return argcse_same(a->n_left, b->n_left);
+	default:
+		if (a->n_rval != b->n_rval || getlval(a) != getlval(b))
+			return 0;
+		return strcmp(a->n_name ? a->n_name : "",
+		    b->n_name ? b->n_name : "") == 0;
+	}
+}
+
+/*
+ * An argument-list node (a FUNARG) whose value is a call-invariant quantity
+ * that is expensive enough to rematerialise to be worth caching in a
+ * register across the calls that share it.  Every accepted form is fixed at
+ * compile/link time, so hoisting it past any call is unconditionally safe:
+ *   - ADDROF(NAME|TEMP|OREG(FPREG)): the address of a global/static, an
+ *     address-taken auto (temp before lowering, frame OREG after) - "lda +
+ *     segment-mask", 8 bytes;
+ *   - a nameful ICON: a symbolic address constant (a global array or
+ *     function address, which pass 1 hands us as ICON not ADDROF) - a long
+ *     "ldl rrN,$sym", 4 bytes;
+ *   - a nameless ICON of long/ulong/pointer type: a wide numeric constant,
+ *     which is pushed through a register ("ldl rrN,$imm32; pushl"), 6 bytes.
+ * Returns that node, else NULL.  Deliberately rejected: word/byte numeric
+ * constants (pushed as a direct immediate, nothing to cache), struct-by-value
+ * STARG, and any value load - a register/temp value is already its own cached
+ * form, and a memory load is not call-invariant (the callee may write it).
+ */
+static NODE *
+argcse_addr(NODE *arg)
+{
+	NODE *a, *l;
+	TWORD t;
+
+	if (arg->n_op != FUNARG)
+		return NULL;
+	a = arg->n_left;
+	if (a->n_op == ICON) {
+		if (a->n_name != NULL && a->n_name[0] != '\0')
+			return a;		/* &global_array / func address */
+		t = a->n_type;			/* wide numeric constant only */
+		if (t == LONG || t == ULONG || ISPTR(t))
+			return a;
+		return NULL;			/* word/byte const: push $N */
+	}
+	if (a->n_op != ADDROF)
+		return NULL;
+	l = a->n_left;
+	if (l->n_op == NAME)			/* &global / &static */
+		return a;
+	if (l->n_op == TEMP)			/* &auto (pre-lowering) */
+		return a;
+	if (l->n_op == OREG && l->n_rval == FPREG)  /* &auto (lowered) */
+		return a;
+	return NULL;
+}
+
+/*
+ * The argument list of a call is the left-leaning CM chain hanging off
+ * n_right: each CM's n_right is one argument and the terminal (non-CM)
+ * node is the first argument, all FUNARG-wrapped (see lastcall()).  The
+ * three helpers below walk that list without materialising it.
+ */
+
+/* The k-th hoistable (fixed-address) argument of call, or NULL. */
+static NODE *
+argcse_nth(NODE *call, int k)
+{
+	NODE **pp, *a;
+	int i = 0;
+
+	if (call->n_right == NIL)
+		return NULL;
+	for (pp = &call->n_right; (*pp)->n_op == CM; pp = &(*pp)->n_left)
+		if ((a = argcse_addr((*pp)->n_right)) != NULL && i++ == k)
+			return a;
+	if ((a = argcse_addr(*pp)) != NULL && i == k)
+		return a;
+	return NULL;
+}
+
+/* True if some argument of call is structurally the fixed address x. */
+static int
+argcse_has(NODE *call, NODE *x)
+{
+	NODE *p;
+
+	if (call->n_right == NIL)
+		return 0;
+	for (p = call->n_right; p->n_op == CM; p = p->n_left)
+		if (p->n_right->n_op == FUNARG &&
+		    argcse_same(p->n_right->n_left, x))
+			return 1;
+	return p->n_op == FUNARG && argcse_same(p->n_left, x);
+}
+
+/*
+ * Replace every argument of call that equals x with a fresh TEMP(num).
+ * When keep is set, the first replaced subtree is detached and returned
+ * (to become the single hoisted "tnew = x" evaluation) and any further
+ * matches are freed; otherwise every match is freed and NULL returned.
+ */
+static NODE *
+argcse_subst(NODE *call, NODE *x, int num, TWORD at, int keep)
+{
+	NODE **pp, *slot, *child, *first = NULL;
+
+	for (pp = &call->n_right; ; pp = &(*pp)->n_left) {
+		int cm = (*pp)->n_op == CM;
+		slot = cm ? (*pp)->n_right : *pp;
+		if (slot->n_op == FUNARG && argcse_same(slot->n_left, x)) {
+			child = slot->n_left;
+			slot->n_left = mklnode(TEMP, 0, num, at);
+			if (keep && first == NULL)
+				first = child;
+			else
+				tfree(child);
+		}
+		if (!cm)
+			break;
+	}
+	return first;
+}
+
+static void
+argcse(struct interpass *ipole)
+{
+	struct interpass *ip, *inext, *run, *newip;
+	NODE *c1, *ck, *cand, *best, *arg1;
+	TWORD at;
+	int num, i, k, n, bestn, need;
+
+	if (!xtemps)
+		return;
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole; ip = inext) {
+		inext = DLIST_NEXT(ip, qelem);
+		if (ip->type != IP_NODE)
+			continue;
+		c1 = argcse_call(ip->ip_node);
+		if (c1 == NULL)
+			continue;
+
+		/*
+		 * Among c1's hoistable arguments pick the one shared by the
+		 * longest run of immediately following calls (a call may pass
+		 * several fixed addresses, each shared by a different reach;
+		 * the longest run yields the most reuse for one temp).  Each
+		 * candidate must clear its own kind's threshold (ICON address
+		 * constants need a longer run than ADDROF, being cheaper to
+		 * recompute) before it is eligible.
+		 */
+		best = NULL;
+		bestn = 0;
+		for (k = 0; (cand = argcse_nth(c1, k)) != NULL; k++) {
+			need = cand->n_op == ICON ? ARGCSE_MIN_ICON
+			    : ARGCSE_MIN_ADDR;
+			n = 1;
+			for (run = inext; run != ipole &&
+			    run->type == IP_NODE; run = DLIST_NEXT(run, qelem)) {
+				ck = argcse_call(run->ip_node);
+				if (ck == NULL || !argcse_has(ck, cand))
+					break;
+				n++;
+			}
+			if (n >= need && n > bestn) {
+				bestn = n;
+				best = cand;
+			}
+		}
+		if (best == NULL)
+			continue;
+
+		/* hoist: "tnew = &x" once, immediately before c1, reusing
+		 * c1's own occurrence of the address as the evaluation */
+		at = best->n_type;
+		num = p2env.epp->ip_tmpnum++;
+		arg1 = argcse_subst(c1, best, num, at, 1);
+		newip = ipnode(mkbinode(ASSIGN,
+		    mklnode(TEMP, 0, num, at), arg1, at));
+		DLIST_INSERT_BEFORE(ip, newip, qelem);
+
+		/* rewrite the shared argument to read tnew in the rest of
+		 * the run (arg1 keeps best's structure, so the compares hold) */
+		run = inext;
+		for (i = 1; i < bestn; i++) {
+			ck = argcse_call(run->ip_node);
+			argcse_subst(ck, best, num, at, 0);
+			run = DLIST_NEXT(run, qelem);
+		}
+	}
+}
+
 void
 myreader(struct interpass *ip)
 {
@@ -2767,6 +3058,7 @@ myreader(struct interpass *ip)
 
 	swcpir(ip);
 	clrfill(ip);
+	argcse(ip);
 	DLIST_FOREACH(ip2, ip, qelem) {
 		if (ip2->type != IP_NODE)
 			continue;
