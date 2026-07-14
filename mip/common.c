@@ -568,6 +568,8 @@ struct dopest {
 	{ USTCALL, "USTCALL", UTYPE|CALLFLG, },
 	{ STCLR, "STCLR", BITYPE, },
 	{ ADDROF, "U&", UTYPE, },
+	{ SWDISP, "SWDISP", UTYPE, },
+	{ BCLR, "BCLR", UTYPE, },
 
 	{ -1,	"",	0 },
 };

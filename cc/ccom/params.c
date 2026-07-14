@@ -344,7 +344,15 @@ static void
 pr_wr(int w)
 {
 if (pdebug > 2) printf("pr_wr: %#x\n", w);
-	if (putw(w, pr_file))
+	/*
+	 * putw() return value is not portable: POSIX returns 0 on
+	 * success, but MinGW/Windows _putw returns the value written,
+	 * so checking the return value spuriously fails for any
+	 * nonzero word.  Check the stream error flag instead, like
+	 * pr_rd() below.
+	 */
+	putw(w, pr_file);
+	if (ferror(pr_file))
 		pr_err("pr_wr");
 }
 
