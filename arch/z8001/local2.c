@@ -182,12 +182,26 @@ static int curframeless;
 /*
  * Prologue's register-save plan, recomputed-invariant parts stashed here for
  * eoftn() (which cannot re-run usesfp() - it only sees the epilog end of the
- * list).  curneedfp: r13 is set up as a frame pointer (has autos/spills or the
- * body addresses a frame slot).  cursavetop: highest register in the saved
- * contiguous run (R13 when curneedfp, else the top used callee-saved r6..r12).
+ * list).  curneedfp: the body uses frame addressing (has autos/spills or
+ * addresses a frame slot), so the frame-base equate is emitted and slots are
+ * reached through a base register.  cursavetop: highest register in the saved
+ * contiguous run (R13 when r13 is the base, the top used callee-saved r6..r12
+ * otherwise, or -1 when nothing is saved).
  */
 static int curneedfp;
 static int cursavetop;
+
+/*
+ * The frame base register actually printed for frame OREGs (adrput) and &local
+ * (ZF): normally r13, but r15 when curframer15 is set.  A leaf function - one
+ * that makes no call and so never pushes call arguments - leaves r15 invariant
+ * for its whole body, so r15 already equals what "ld r13,r15" would copy into
+ * r13.  Such a function addresses its frame directly through r15, dropping the
+ * r13 save AND the "ld r13,r15" (and, when it uses no callee-saved register,
+ * the whole register-save run with it).  See prologue().
+ */
+static int curframer15;
+static int framereg = R13;
 
 /*
  * walkf callback: flag any reference to r13 (FPREG) used as a frame base.
@@ -223,6 +237,41 @@ usesfp(struct interpass_prolog *ipp)
 			walkf(ip->ip_node, fpuse, &found);
 	}
 	return found;
+}
+
+/*
+ * walkf callback: flag any call node.  A call is the only thing that pushes
+ * onto the stack in the body (argument pushes, the struct-return hidden
+ * pointer, struct/double argument copies) and so the only thing that moves r15
+ * between prologue and epilogue.  This is exactly the call-node set lastcall()
+ * recognises.
+ */
+static void
+calluse(NODE *p, void *arg)
+{
+	if (p->n_op == CALL || p->n_op == UCALL || p->n_op == STCALL ||
+	    p->n_op == USTCALL || p->n_op == FORTCALL)
+		*(int *)arg = 1;
+}
+
+/*
+ * Is this a leaf function - does the body contain no call at all?  If so r15 is
+ * invariant across the whole body (nothing pushes), so the frame can be
+ * addressed through r15 directly and r13 need never be set up.  Scanned over
+ * the same IP_PROLOG..IP_EPILOG body span as usesfp().
+ */
+static int
+isleaf(struct interpass_prolog *ipp)
+{
+	struct interpass *ip;
+	int found = 0;
+
+	for (ip = DLIST_NEXT(&ipp->ipp_ip, qelem); ip->type != IP_EPILOG;
+	    ip = DLIST_NEXT(ip, qelem)) {
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, calluse, &found);
+	}
+	return !found;
 }
 
 /*
@@ -317,21 +366,29 @@ prologue(struct interpass_prolog *ipp)
 	fsize = (p2maxautooff + 1) & ~1;  /* p2maxautooff is bytes; round to word */
 
 	/*
-	 * r13 is set up as a frame pointer ONLY when the body needs one: either
-	 * there are autos/spills (fsize>0) or the body addresses a frame slot /
-	 * stack argument through r13 (usesfp()).  When it isn't needed we neither
-	 * save nor load r13 - the caller's r13 is preserved simply by our never
-	 * touching it - and the register-save run stops at the topmost callee-saved
-	 * register the body actually used instead of running through r13.
+	 * Frame addressing (the equate + slot references) is needed when the body
+	 * has autos/spills (fsize>0) or addresses a frame slot / stack argument
+	 * (usesfp()).  The base register is normally r13, set from r15 in the
+	 * prologue.  But a LEAF function - no call, so nothing ever pushes - leaves
+	 * r15 invariant across the whole body, so r15 already holds what "ld
+	 * r13,r15" would copy; such a function reaches its frame straight through
+	 * r15, saving both the r13 store and that copy.  The register-save run then
+	 * stops at the topmost callee-saved register the body actually used (r13 is
+	 * no longer part of it), which may be nothing at all.
+	 *
+	 * When no frame addressing is needed at all, r13 is likewise left alone and
+	 * the run stops at the top used callee-saved register; if none, the whole
+	 * prologue collapses (frameless) and eoftn() emits only "ret un".
 	 */
 	curneedfp = (fsize > 0 || usesfp(ipp));
-	if (curneedfp) {
-		cursavetop = R13;		/* always save AND set up r13 */
+	curframer15 = curneedfp && isleaf(ipp);
+	if (curneedfp && !curframer15) {
+		cursavetop = R13;		/* save AND set up r13 as base */
 	} else {
 		cursavetop = lastsavereg();	/* top used callee-saved, or -1 */
-		if (cursavetop < 0) {
+		if (cursavetop < 0 && !curneedfp) {
 			/*
-			 * Frameless: no autos, no r13 use, no callee-saved
+			 * Frameless: no autos, no frame use, no callee-saved
 			 * register touched.  Emit nothing; eoftn() emits only
 			 * "ret un".  Typical of leaf/no-arg helpers.
 			 */
@@ -340,16 +397,17 @@ prologue(struct interpass_prolog *ipp)
 		}
 	}
 	curframeless = 0;
+	framereg = curframer15 ? R15 : R13;
 
-	nsave = cursavetop - firstsave + 1;
+	nsave = cursavetop < 0 ? 0 : cursavetop - firstsave + 1;
 	total = fsize + nsave * 2;
 
 	/*
 	 * Frame-base equate for stack-segment addressing (see framelab above),
-	 * emitted only when r13 is a frame pointer.  L<n> = SS|total; slots are
-	 * addressed "L<n>+off(r13)" with r13 at the frame bottom, so EA =
-	 * SS:(total + off + r13_bottom) recovers the absolute frame offset AND
-	 * supplies the stack segment.
+	 * emitted whenever the body uses frame addressing (curneedfp).  L<n> =
+	 * SS|total; slots are addressed "L<n>+off(BASE)" with BASE (r13, or r15 for
+	 * a leaf) at the frame bottom, so EA = SS:(total + off + frame_bottom)
+	 * recovers the absolute frame offset AND supplies the stack segment.
 	 *
 	 * SS is an external symbol pinned per-ABI by the startup: crts0.s sets
 	 * "SS = 0x0000" for user programs (a single flat segment), while the
@@ -385,12 +443,16 @@ prologue(struct interpass_prolog *ipp)
 			    total);
 		if (nsave == 1)
 			printf("\tld\t(rr14),r%d\n", firstsave);
-		else
+		else if (nsave >= 2)
 			printf("\tldm\t(rr14),r%d,$%d\n", firstsave, nsave);
 	}
 
-	/* r13 = current SP = frame bottom (only when it is the frame pointer). */
-	if (curneedfp)
+	/*
+	 * r13 = current SP = frame bottom.  Only when r13 is the base register; a
+	 * leaf addresses its frame through the (invariant) r15 directly, so it
+	 * needs neither this copy nor the r13 save above.
+	 */
+	if (curneedfp && !curframer15)
 		printf("\tld\tr13,r15\n");
 }
 
@@ -418,7 +480,7 @@ eoftn(struct interpass_prolog *ipp)
 	 */
 	firstsave = firstsavereg();
 	fsize = (p2maxautooff + 1) & ~1;
-	nsave = cursavetop - firstsave + 1;
+	nsave = cursavetop < 0 ? 0 : cursavetop - firstsave + 1;
 	total = fsize + nsave * 2;
 
 	/*
@@ -437,10 +499,10 @@ eoftn(struct interpass_prolog *ipp)
 		return;
 	}
 
-	/* Restore the saved run (neither ld nor ldm changes r15) */
+	/* Restore the saved run, if any (neither ld nor ldm changes r15) */
 	if (nsave == 1)
 		printf("\tld\tr%d,(rr14)\n", firstsave);
-	else
+	else if (nsave >= 2)
 		printf("\tldm\tr%d,(rr14),$%d\n", firstsave, nsave);
 
 	/* Reclaim the whole frame */
@@ -962,7 +1024,8 @@ zzzcode(NODE *p, int c)
 			printf("+");
 		if (off != 0)
 			printf(CONFMT, off);
-		printf("(%s)\n", rnames[p->n_left->n_rval]);
+		/* n_left is REG FPREG (SR13 shape); a leaf uses r15 instead */
+		printf("(%s)\n", rnames[framereg]);
 		printf("\tand\t");
 		prword(res, 0);			/* segment (high) word */
 		printf(",$32512\n");
@@ -1367,7 +1430,7 @@ adrput(FILE *io, NODE *p)
 				fputc('+', io);
 			if (val != 0)
 				fprintf(io, CONFMT, val);
-			fprintf(io, "(%s)", rnames[R13]);
+			fprintf(io, "(%s)", rnames[framereg]);
 		} else if (val != 0) {
 			/*
 			 * Pair-register base + displacement: BASED (BA)
