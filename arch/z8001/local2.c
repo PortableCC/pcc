@@ -3113,6 +3113,250 @@ argcse(struct interpass *ipole)
 	}
 }
 
+/*
+ * Postincrement copy elimination.
+ *
+ * The front end lowers "p++" (rewincop, cc/ccom/trees.c) to the canonical
+ * idiom "(t = p, p = p + 1, t)" - a fresh temp t copies the OLD pointer so
+ * the increment can run before t is used, which is necessary in general (e.g.
+ * "*p++ = *p", whose rhs reads the ALREADY-incremented p).  comops() then
+ * hoists the comma's side effects into separate statements, so by pass2 a
+ * dereferenced "*p++" is a run of interpass nodes (bare "ICON 0" fillers may
+ * sit between them):
+ *
+ *	t = p			(ASSIGN TEMP t, base)
+ *	p = p + 1		(ASSIGN base, PLUS/MINUS(base, ICON))
+ *	... *t ...		(some later statement dereferencing t: UMUL(t))
+ *
+ * When nothing between the increment and that dereference depends on p, this
+ * is equivalent to the temp-free "... *p ... ; p = p + 1;" - use p, then bump.
+ * The copy is pure overhead: on the Z8001 it is a per-iteration "ldl rrN,rrM"
+ * AND, by keeping a third pointer value live, it forces a callee-saved pair
+ * into use and drags in the whole ldm save/restore prologue (_synth/memset).
+ *
+ * Neither -xssa nor -xtemp removes it (it is a reorder, not a copy-prop).  We
+ * find "t = p", locate the single dereference of t, drop "t = p", rewrite the
+ * dereference to go through base directly, and sink the increment to AFTER it.
+ * The dereference can be a store target ("*p++ = x"), an rhs load ("x = *p++")
+ * or both across two postincs ("*d++ = *s++": d is rewritten first, then s on
+ * the same store).  Runs from myreader(), before optimize() builds the CFG, so
+ * the allocator sees only the real pointer values (inserting/removing
+ * interpass nodes is safe in this window - the same one argcse()/clrfill()
+ * use; see the rmwcopyfuse note above for why myoptim is not).
+ *
+ * Conservative by construction:
+ *  - t must be used exactly once besides its def, and that use must be a
+ *    dereference "*t" (a bare-value "q = p++" keeps its temp);
+ *  - the increment must immediately follow "t = p" (past ICON fillers);
+ *  - no statement between the increment and the dereference may touch base,
+ *    and no label/control-flow boundary may be crossed;
+ *  - the incremented base must be a bare TEMP/REG (register-resident, so no
+ *    memory access can alias it);
+ *  - the dereference statement must not otherwise reference base - this
+ *    rejects "*p++ = *p" and any other post-increment-dependent use.
+ */
+
+/* True if the tree p contains a leaf with this op (TEMP/REG) and n_rval. */
+static int
+pinc_refs(NODE *p, int op, int rval)
+{
+	int o = optype(p->n_op);
+
+	if (p->n_op == op && p->n_rval == rval)
+		return 1;
+	if (o == BITYPE)
+		return pinc_refs(p->n_left, op, rval) ||
+		    pinc_refs(p->n_right, op, rval);
+	if (o == UTYPE)
+		return pinc_refs(p->n_left, op, rval);
+	return 0;
+}
+
+/* Full occurrence count of leaf (op,rval) within one tree. */
+static int
+pinc_nrefs(NODE *p, int op, int rval)
+{
+	int o = optype(p->n_op), n = 0;
+
+	if (p->n_op == op && p->n_rval == rval)
+		n++;
+	if (o == BITYPE)
+		n += pinc_nrefs(p->n_left, op, rval) +
+		    pinc_nrefs(p->n_right, op, rval);
+	else if (o == UTYPE)
+		n += pinc_nrefs(p->n_left, op, rval);
+	return n;
+}
+
+/* Count occurrences of leaf (op,rval) across every statement in the list. */
+static int
+pinc_count(struct interpass *ipole, int op, int rval)
+{
+	struct interpass *ip;
+	int n = 0;
+
+	DLIST_FOREACH(ip, ipole, qelem)
+		if (ip->type == IP_NODE)
+			n += pinc_nrefs(ip->ip_node, op, rval);
+	return n;
+}
+
+/* A bare register-resident leaf that rhs cannot alias through memory. */
+static int
+pinc_isleaf(NODE *p)
+{
+	return p->n_op == TEMP || p->n_op == REG;
+}
+
+static int
+pinc_sameleaf(NODE *a, NODE *b)
+{
+	return a->n_op == b->n_op && a->n_rval == b->n_rval;
+}
+
+/* "base = base +/- ICON" for the given base leaf? */
+static int
+pinc_isincr(NODE *st, NODE *base)
+{
+	NODE *r;
+
+	if (st->n_op != ASSIGN || !pinc_isleaf(st->n_left) ||
+	    !pinc_sameleaf(st->n_left, base))
+		return 0;
+	r = st->n_right;
+	if (r->n_op != PLUS && r->n_op != MINUS)
+		return 0;
+	return (pinc_isleaf(r->n_left) && pinc_sameleaf(r->n_left, base) &&
+	    r->n_right->n_op == ICON) ||
+	    (pinc_isleaf(r->n_right) && pinc_sameleaf(r->n_right, base) &&
+	    r->n_left->n_op == ICON);
+}
+
+/* Next real statement, skipping bare-ICON fillers; NULL at a label/boundary. */
+static struct interpass *
+pinc_next(struct interpass *ip, struct interpass *ipole)
+{
+	for (ip = DLIST_NEXT(ip, qelem); ip != ipole;
+	    ip = DLIST_NEXT(ip, qelem)) {
+		if (ip->type != IP_NODE)
+			return NULL;
+		if (ip->ip_node->n_op != ICON)
+			return ip;
+	}
+	return NULL;
+}
+
+/* The UMUL node dereferencing TEMP trval within p, or NULL if none. */
+static NODE *
+pinc_deref(NODE *p, int trval)
+{
+	NODE *r;
+	int o = optype(p->n_op);
+
+	if (p->n_op == UMUL && p->n_left->n_op == TEMP &&
+	    p->n_left->n_rval == trval)
+		return p;
+	if (o == BITYPE) {
+		if ((r = pinc_deref(p->n_left, trval)) != NULL)
+			return r;
+		return pinc_deref(p->n_right, trval);
+	}
+	if (o == UTYPE)
+		return pinc_deref(p->n_left, trval);
+	return NULL;
+}
+
+static void
+postinc(struct interpass *ipole)
+{
+	struct interpass *ip, *next, *s2, *s3, *scan;
+	NODE *st, *base, *t, *umul;
+	int trval, bad;
+
+	for (ip = DLIST_NEXT(ipole, qelem); ip != ipole; ip = next) {
+		next = DLIST_NEXT(ip, qelem);
+		if (ip->type != IP_NODE)
+			continue;
+		st = ip->ip_node;
+		/* s1: t = base, with t a TEMP and base a register-resident leaf */
+		if (st->n_op != ASSIGN || st->n_left->n_op != TEMP ||
+		    !pinc_isleaf(st->n_right))
+			continue;
+		t = st->n_left;
+		trval = t->n_rval;
+		base = st->n_right;
+
+		/* s2: base = base +/- ICON, immediately after s1 (past fillers) */
+		s2 = pinc_next(ip, ipole);
+		if (s2 == NULL || !pinc_isincr(s2->ip_node, base))
+			continue;
+
+		/* t must be used exactly once besides its def in s1 (total 2). */
+		if (pinc_count(ipole, TEMP, trval) != 2)
+			continue;
+
+		/*
+		 * s3: the statement that dereferences t - "*t" as a store target
+		 * (*p++ = x) OR as an rhs load (x = *p++, *d++ = *s++).  Search
+		 * forward from s2; every statement crossed on the way must NOT
+		 * touch base (so the increment can be sunk past it), and we must
+		 * stay inside one basic block: a label ends the search, and any
+		 * control-transfer statement (CBRANCH/GOTO, incl. switch dispatch)
+		 * disqualifies it - the sunk increment would sit on the fall-
+		 * through only and be skipped on the taken edge.  This also
+		 * rejects the deref living IN a branch ("switch (*s++)",
+		 * "while (*p++ != 0)"): that CBRANCH/GOTO is hit here and bails.
+		 */
+		s3 = NULL;
+		bad = 0;
+		for (scan = DLIST_NEXT(s2, qelem); scan != ipole;
+		    scan = DLIST_NEXT(scan, qelem)) {
+			if (scan->type != IP_NODE ||
+			    scan->ip_node->n_op == CBRANCH ||
+			    scan->ip_node->n_op == GOTO) {
+				bad = 1;
+				break;
+			}
+			if (pinc_deref(scan->ip_node, trval) != NULL) {
+				s3 = scan;
+				break;
+			}
+			if (pinc_refs(scan->ip_node, base->n_op, base->n_rval)) {
+				bad = 1;
+				break;
+			}
+		}
+		if (bad || s3 == NULL)
+			continue;
+
+		/*
+		 * Apart from the "*t" we are about to retarget, s3 must not
+		 * reference base: after the rewrite it dereferences base directly
+		 * and base's increment is sunk past it, so any other use of base
+		 * in s3 would see the wrong value.  This is what rejects
+		 * "*p++ = *p" (its rhs reads the base).  t != base, so the "*t"
+		 * itself is never counted here.
+		 */
+		if (pinc_refs(s3->ip_node, base->n_op, base->n_rval))
+			continue;
+		umul = pinc_deref(s3->ip_node, trval);
+
+		/* Don't resume on a node we are about to move out from under us. */
+		if (next == s2)
+			next = DLIST_NEXT(s2, qelem);
+
+		/* Rewrite the dereference to go through base directly ... */
+		nfree(umul->n_left);			/* the TEMP t leaf */
+		umul->n_left = tcopy(base);
+		/* ... drop s1 (t = base) ... */
+		tfree(ip->ip_node);
+		DLIST_REMOVE(ip, qelem);
+		/* ... and sink the increment to after the dereference site. */
+		DLIST_REMOVE(s2, qelem);
+		DLIST_INSERT_AFTER(s3, s2, qelem);
+	}
+}
+
 void
 myreader(struct interpass *ip)
 {
@@ -3121,6 +3365,7 @@ myreader(struct interpass *ip)
 
 	swcpir(ip);
 	clrfill(ip);
+	postinc(ip);
 	argcse(ip);
 	DLIST_FOREACH(ip2, ip, qelem) {
 		if (ip2->type != IP_NODE)
