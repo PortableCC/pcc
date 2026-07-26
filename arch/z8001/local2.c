@@ -1201,24 +1201,30 @@ zzzcode(NODE *p, int c)
 			 * the struct into it with ldirb.
 			 *
 			 * The ldirb dest needs a valid segmented pointer to the
-			 * slot.  We do NOT copy rr14: the SP's segment word is
-			 * not a plain data-segment value usable as an indirect
-			 * base.  Instead build A2 = (segment of the source AL) :
-			 * r15 -- AL is a valid pointer to the struct (for a
-			 * stack/local struct it carries the stack segment) and
-			 * r15 is the reserved slot's offset.  A1 = byte count. */
+			 * slot.  The slot IS the current top of stack, so A2 =
+			 * rr14 (r14:r15): A2.hi = r14 (the STACK segment) and
+			 * A2.lo = r15 (the reserved slot's offset).  A1 = byte
+			 * count.
+			 *
+			 * A2.hi MUST come from r14, NOT from the source AL: AL
+			 * carries the stack segment only when the source struct
+			 * itself lives on the stack.  A malloc'd or global source
+			 * struct lives in the data segment, and copying its
+			 * segment here would build a dest pointer into the wrong
+			 * (source) segment at a stack offset -- a segment-length
+			 * trap (SIGSEGV) the moment the ldirb writes.  r14 is
+			 * already a clean segment word (it is the live @rr14 push
+			 * base), so no $32512 normalisation is needed. */
 	    {
 		struct attr *ap = attr_find(p->n_ap, ATTR_P2STRUCT);
 		int bytes = ap->iarg(0);		/* exact struct size */
 		int slot = (bytes + 1) & ~1;		/* word-rounded slot */
 
 		printf("\tsub\tr15,$%d\n", slot);
-		/* A2.hi = AL.hi (segment); A2.lo = r15 (slot offset) */
+		/* A2.hi = r14 (stack segment); A2.lo = r15 (slot offset) */
 		printf("\tld\t");
 		prword(getlr(p, '2'), 0);
-		printf(",");
-		prword(getlr(p, 'L'), 0);
-		printf("\n\tld\t");
+		printf(",r14\n\tld\t");
 		prword(getlr(p, '2'), 1);
 		printf(",r15\n");
 		printf("\tld\t");
