@@ -1107,6 +1107,16 @@ zzzcode(NODE *p, int c)
 		expand(p, FOREFF, "A1");
 		printf(",$%d\n", sz);
 		expand(p, FOREFF, "\tldirb\t(A2),(AR),A1\n");
+		/* ldirb auto-advances BOTH pointers by the byte count.  The dest
+		 * (A2) is a scratch pair, but the source AR is the right operand's
+		 * register -- which may be a pointer VARIABLE the program still
+		 * needs, since PCC treats a rule's input register as unmodified.
+		 * Restore it by subtracting the (compile-time) size back off.  Only
+		 * the offset (low) word moved: a struct copy stays within one
+		 * segment, so the segment (high) word is untouched. */
+		printf("\tsub\t");
+		prword(getlr(p, 'R'), 1);
+		printf(",$%d\n", sz);
 	    }
 		break;
 
@@ -1231,6 +1241,12 @@ zzzcode(NODE *p, int c)
 		expand(p, FOREFF, "A1");
 		printf(",$%d\n", bytes);
 		expand(p, FOREFF, "\tldirb\t(A2),(AL),A1\n");
+		/* ldirb advanced the source pointer AL by the byte count; restore
+		 * it -- it may be a pointer variable still live after the call, and
+		 * PCC treats a rule's input register as unmodified (see ZS). */
+		printf("\tsub\t");
+		prword(getlr(p, 'L'), 1);
+		printf(",$%d\n", bytes);
 	    }
 		break;
 
