@@ -452,8 +452,17 @@ int pickcolor(int class, int mask);
  * pushes them as words (ls.s qsort call: "push (rr14),$38").  With the
  * pcc default (INTPTR = LONG, since pointers are 32-bit), every
  * malloc(n*sizeof(x)) would push 4 bytes where libc reads 2.
+ *
+ * SIZET is INT, not UNSIGNED: the native compiler builds the sizeof result
+ * as a signed int constant (cc0 "sizeof" case: iconst(typesize(node))), and
+ * Coherent code relies on it -- "(long)-sizeof(x)" as a seek-back offset
+ * (mount, umount, init, ar, dump) wraps to +65466 if sizeof is unsigned, and
+ * "n < sizeof(x)" tests would silently become unsigned comparisons.  Signed
+ * also matches Coherent's own <types.h>, which typedefs size_t as long.
+ * The cost, as on the native compiler, is that sizeof of an object >= 32K is
+ * negative; nothing in the OS tree is that large.
  */
-#define	SIZET		UNSIGNED
+#define	SIZET		INT
 #define	PTRDIFFT	INT
 
 /*
