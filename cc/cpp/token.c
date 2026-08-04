@@ -926,6 +926,11 @@ cleanup(FILE *ifd)
 				numlf++;
 				continue;
 			}
+			if (c2 == '\\') {
+				fputc(ch, ofd);
+				fputc(ch, ofd);
+				continue;
+			}
 			ungetc(c2, ifd);
 		}
 		if (beginning) {
