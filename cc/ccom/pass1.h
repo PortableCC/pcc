@@ -702,6 +702,42 @@ void dwarf_end(void);
 #error int size unknown
 #endif
 
+/*
+ * Type of a sizeof/offsetof result and of a pointer difference.
+ * Both default to the pointer-sized integer, but a target may override
+ * them in macdefs.h: ABIs built around a K&R libc pass sizes and counts
+ * as plain (16-bit) ints even where pointers are wider, so sizeof
+ * results fed to unprototyped functions must not widen.
+ */
+#ifndef SIZET
+#define SIZET	INTPTR
+#endif
+#ifndef PTRDIFFT
+#define PTRDIFFT	INTPTR
+#endif
+
+/*
+ * optim() folds x+0 and x-0 to plain x.  A target where a bare frame
+ * register is not a valid pointer value (segmented addressing needs an
+ * explicit address computation to supply the segment) can override this
+ * to keep the op when the left side is such a register.
+ */
+#ifndef OPTIM_KEEPZERO
+#define OPTIM_KEEPZERO(p)	0
+#endif
+
+/*
+ * rmcops() rewrites relationals used for their value (f = (a < b)) into
+ * a branch diamond storing 1/0 to a temp.  A target whose instruction
+ * set can materialize a truth value directly (Z8000 tcc, ...) overrides
+ * this to keep the bare relop in the tree; pass2 then needs table rules
+ * matching OPLOG in value (register) context.  ANDAND/OROR/NOT are
+ * still rewritten regardless: they require lazy evaluation.
+ */
+#ifndef KEEPLOGOPVALUE
+#define KEEPLOGOPVALUE(p)	0
+#endif
+
 /* Generate a bitmask from a given type size */
 #define SZMASK(y) ((((1LL << ((y)-1))-1) << 1) | 1)
 

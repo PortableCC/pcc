@@ -253,6 +253,13 @@ case "$target_os" in
 	esac
 	;;
 
+    coherent*)
+	targos=coherent
+	case "$target_cpu" in
+	    z8001*) targmach=z8001 endian=big ;;
+	esac
+	;;
+
     sysv4*)
 	targos=sysv4
 	abi=elf

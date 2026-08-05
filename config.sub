@@ -317,7 +317,7 @@ case $basic_machine in
 	| visium \
 	| we32k \
 	| x86 | xc16x | xstormy16 | xtensa \
-	| z8k | z80)
+	| z8k | z8001 | z80)
 		basic_machine=$basic_machine-unknown
 		;;
 	c54x)
@@ -449,7 +449,7 @@ case $basic_machine in
 	| x86-* | x86_64-* | xc16x-* | xps100-* \
 	| xstormy16-* | xtensa*-* \
 	| ymp-* \
-	| z8k-* | z80-*)
+	| z8k-* | z8001-* | z80-*)
 		;;
 	# Recognize the basic CPU types without company name, with glob match.
 	xtensa*)
@@ -1379,7 +1379,7 @@ case $os in
 	      | -hpux* | -unos* | -osf* | -luna* | -dgux* | -auroraux* | -solaris* \
 	      | -sym* | -kopensolaris* | -plan9* \
 	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
-	      | -aos* | -aros* | -cloudabi* | -sortix* \
+	      | -aos* | -aros* | -cloudabi* | -sortix* | -coherent* \
 	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
 	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
 	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \

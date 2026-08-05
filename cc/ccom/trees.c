@@ -1166,6 +1166,10 @@ chkpun(P1ND *p)
 				if (ISARY(t2))
 					++d2;
 			} else if (ISFTN(t1)) {
+				if (!ISFTN(t2))
+					break; /* t2 has no df: (char *)0
+						* assigned to a function
+						* pointer crashed here */
 				if (pr_ckproto(d1->dlst, d2->dlst, 0)) {
 					werror("illegal function "
 					    "pointer combination");
@@ -1460,6 +1464,13 @@ oconvert(register P1ND *p)
 	case MINUS:
 		p->n_type = INTPTR;
 		p = (clocal(VBLOCK(p, bpsize(p->n_left), INT, 0, 0)));
+		/*
+		 * The subtraction and the element-size division stay
+		 * pointer-sized; only the result narrows to the target's
+		 * pointer-difference type.
+		 */
+		if (PTRDIFFT != INTPTR)
+			p = clocal(makety(p, mkqtyp(PTRDIFFT)));
 		return( p );
 		}
 
@@ -1527,6 +1538,13 @@ ptmatch(P1ND *p)
 				}
 				if (BTYPE(td2->type) == VOID)
 					break;
+			}
+			if (traditional && ISPTR(td1->type) && ISPTR(td2->type)) {
+				/* mismatched pointers: K&R code does
+				 * e.g. "m ? (char *)0 : fp"; warn and
+				 * use the left type */
+				werror("illegal pointer combination");
+				break;
 			}
 			uerror("illegal types in :");
 		}
@@ -1980,8 +1998,8 @@ doszof(P1ND *p)
 		df++;
 		ty = DECREF(ty);
 	}
-	rv = buildtree(MUL, rv, 
-	    xbcon(tsize(ty, p->n_df, p->pss)/SZCHAR, NULL, INTPTR));
+	rv = buildtree(MUL, rv,
+	    xbcon(tsize(ty, p->n_df, p->pss)/SZCHAR, NULL, SIZET));
 	p1tfree(p);
 	return rv;
 }
@@ -2365,6 +2383,20 @@ rmcops(P1ND *p)
 	case LT:
 	case GE:
 	case GT:
+		/*
+		 * A relational used for its value.  Targets that can
+		 * materialize a truth value directly keep the bare relop
+		 * in the tree (pass2 matches it with a value-context
+		 * OPLOG rule); everyone else gets the branch diamond
+		 * below.  The operands are ordinary expressions - just
+		 * clean them up recursively.
+		 */
+		if (KEEPLOGOPVALUE(p)) {
+			rmcops(p->n_left);
+			rmcops(p->n_right);
+			break;
+		}
+		/* FALLTHROUGH */
 	case ANDAND:
 	case OROR:
 	case NOT:
