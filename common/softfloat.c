@@ -259,11 +259,6 @@ FPI fpi_binary16 = { 11, 1-15-11+1,
                         30-15-11+1, 1, 0,
         0, 1, 1, 0,  16,   15+11-1 };
 #endif
-#ifdef notyet
-FPI fpi_binary128 = { 113,   1-16383-113+1,
-                         32766-16383-113+1, 1, 0,
-        0, 1, 1, 0,   128,     16383+113-1 };
-#endif
 
 #ifdef USE_IEEEFP_32
 #define	IEEEFP_32_ISINF(x)	(((x)->fp[0] & 0x7fffffff) == 0x7f800000)
@@ -454,6 +449,161 @@ FPI fpi_binary64 = {
 	.unmake = ieee64_unmake,
 	.classify = ieee64_classify,
 };      
+#endif
+
+#ifdef USE_IEEEFP_128
+#define IEEEFP_128_ISINF(x) \
+    ((((x)->fp[3] & 0x7fffffff) == 0x7fff0000) && \
+     (x)->fp[2] == 0 && (x)->fp[1] == 0 && (x)->fp[0] == 0)
+
+#define IEEEFP_128_ISZERO(x) \
+    ((((x)->fp[3] & 0x7fffffff) == 0) && \
+     (x)->fp[2] == 0 && (x)->fp[1] == 0 && (x)->fp[0] == 0)
+
+#define IEEEFP_128_ISNAN(x) \
+    ((((x)->fp[3] & 0x7fffffff) == 0x7fff8000) && \
+     (x)->fp[2] == 0 && (x)->fp[1] == 0 && (x)->fp[0] == 0)
+
+static int
+ieee128_classify(SFP sfp)
+{
+    /* Mask out the sign bit (31), check the 15-bit exponent */
+    int e = sfp->fp[3] & 0x7fff0000;
+
+    if (IEEEFP_128_ISINF(sfp))
+        return SOFT_INFINITE;
+    if (IEEEFP_128_ISNAN(sfp))
+        return SOFT_NAN;
+    if (IEEEFP_128_ISZERO(sfp))
+        return SOFT_ZERO;
+    if (e)
+        return SOFT_NORMAL;
+    return SOFT_SUBNORMAL;
+}
+
+static int
+ieee128_unmake(SFP sfp, int *sign, int *exp, MINT *m)
+{
+    int t, v = ieee128_classify(sfp);
+
+    *sign = (sfp->fp[3] >> 31) & 1;
+    /* Exponent is bits 30-16 (15 bits) of high word */
+    *exp = ((sfp->fp[3] >> 16) & 0x7fff) - fpi_binary128.bias;
+
+    /* * Unpack 128 bits into MINT. 
+     * We need 112 bits of stored mantissa. 
+     * Assuming MINT val[] are 16-bit chunks.
+     * We need 7 chunks (112/16) just for stored bits.
+     */
+    minit(m, sfp->fp[0]); // Initialize with LSB? Depends on your minit impl.
+    
+    // Low word (bits 0-31)
+    m->val[0] = sfp->fp[0] & 0xffff;
+    m->val[1] = (sfp->fp[0] >> 16);
+    
+    // Mid-low word (bits 32-63)
+    m->val[2] = sfp->fp[1] & 0xffff;
+    m->val[3] = (sfp->fp[1] >> 16);
+    
+    // Mid-high word (bits 64-95)
+    m->val[4] = sfp->fp[2] & 0xffff;
+    m->val[5] = (sfp->fp[2] >> 16);
+
+    // High word (bits 96-111 stored here)
+    m->val[6] = sfp->fp[3] & 0xffff;
+    // val[7] will hold the implicit bit later
+    m->val[7] = 0; 
+
+    m->len = 8; // Ensure MINT treats this as 8 chunks
+
+    if (v == SOFT_SUBNORMAL) {
+        v = SOFT_NORMAL;
+        chomp(m);
+        t = topbit(m);
+        /* Adjust for 113 bits precision */
+        *exp = fpi_binary128.minexp - (fpi_binary128.nbits - t) + 1;
+    } else if (v == SOFT_NORMAL) {
+        /* * Implicit bit is at bit 112. 
+         * 112 / 16 = 7. Remainder 0.
+         * So it is bit 0 of val[7].
+         */
+        m->val[7] |= 1;
+    }
+    return v;
+}
+static void
+ieee128_make(SFP sfp, int typ, int sign, int exp, MINT *m)
+{
+    sfp->fp[0] = 0;
+    sfp->fp[1] = 0;
+    sfp->fp[2] = 0;
+    /* Initialize high word with just the sign bit */
+    sfp->fp[3] = (sign << 31);
+
+    SD(("ieee128_make: typ %s sign %d exp %d M ... %04x%04x\n",
+       sftyp[typ], sign, exp, m->val[1], m->val[0]));
+
+    if (typ == SOFT_NORMAL)
+        typ = mknormal(&fpi_binary128, &exp, m);
+
+    SD(("ieee128_make2: typ %s sign %d exp %d\n", sftyp[typ], sign, exp));
+
+    switch (typ) {
+    case SOFT_ZERO:
+        break;
+    case SOFT_INFINITE:
+        sfp->fp[3] |= 0x7fff0000;
+        break;
+    case SOFT_NAN:
+        sfp->fp[3] |= 0x7fff8000;
+        break;
+    case SOFT_NORMAL:
+        /* * FIX: Do not subtract 1 from bias.
+         * The 64-bit code subtracted 1 because the implicit bit in val[3] 
+         * overflowed into the exponent field. 
+         * We are not packing val[7] (the implicit bit) into fp[3], 
+         * so we do not need to compensate for it.
+         */
+        exp += fpi_binary128.bias;
+        
+        /* Pack LSBs */
+        sfp->fp[0] = ((uint32_t)m->val[1] << 16) | m->val[0];
+        sfp->fp[1] = ((uint32_t)m->val[3] << 16) | m->val[2];
+        sfp->fp[2] = ((uint32_t)m->val[5] << 16) | m->val[4];
+        
+        /* Pack MSBs: val[6] contains the top 16 stored bits (96-111) */
+        sfp->fp[3] |= (uint32_t)m->val[6] & 0xffff;
+        
+        /* Add Exponent (bits 16-30) */
+        sfp->fp[3] |= (uint32_t)(exp & 0x7fff) << 16;
+        break;
+    case SOFT_SUBNORMAL:
+        sfp->fp[0] = ((uint32_t)m->val[1] << 16) | m->val[0];
+        sfp->fp[1] = ((uint32_t)m->val[3] << 16) | m->val[2];
+        sfp->fp[2] = ((uint32_t)m->val[5] << 16) | m->val[4];
+        sfp->fp[3] |= (uint32_t)m->val[6] & 0xffff;
+        break;
+    }
+    SD(("ieee128_make3: fp %08x %08x %08x %08x\n", 
+        sfp->fp[3], sfp->fp[2], sfp->fp[1], sfp->fp[0]));
+}
+
+/* Ensure struct is updated if you haven't already */
+FPI fpi_binary128 = {
+    .nbits = IEEEFP_128_MANT_DIG,
+    .storage = 128,
+    .bias = 16383,
+    .minexp = IEEEFP_128_MIN_EXP - 1,
+    .maxexp = IEEEFP_128_MAX_EXP - 1,
+    .min10exp = IEEEFP_128_MIN_10_EXP - 1,
+    .max10exp = IEEEFP_128_MAX_10_EXP - 1,
+    .dig = IEEEFP_128_DIG,
+    .expadj = 1, /* This stays 1, it interacts with mknormal */
+
+    .make = ieee128_make,
+    .unmake = ieee128_unmake,
+    .classify = ieee128_classify,
+};
 #endif
 
 #ifdef USE_IEEEFP_X80
