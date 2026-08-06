@@ -1072,7 +1072,16 @@ strcvt(struct initctx *ctx, NODE *p)
 		else
 			i = (unsigned char)*s++;
 		asginit(ctx, bcon(i));
-	} 
+	}
+	/* An empty string emitted no characters at all, so nothing above
+	 * advanced into the element being initialized: as the LAST
+	 * initializer of an open array (the classic `""' terminator of a
+	 * struct nlist table) the element was never counted and the array
+	 * came out one entry short -- nlist() then scanned and zeroed
+	 * memory past it.  Emit the string's NUL so the element exists;
+	 * the rest is zero-filled as usual. */
+	if (s == p->n_sp->sname)
+		asginit(ctx, bcon(0));
 	tfree(q);
 }
 
