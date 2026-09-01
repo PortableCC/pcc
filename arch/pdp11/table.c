@@ -877,7 +877,7 @@ struct optab table[] = {
 	SAREG|SOREG|SNAME|SCON,	TWORD|TPOINT,
 	SAREG|SOREG|SNAME|SCON,	TWORD|TPOINT,
 		0, 	RESCC,
-		"cmp	AL,AR\n", },
+		"cmp	AR,AL\n", },
 
 { OPLOG,	FORCC,
 	SCREG|SCON,	TFLOAT,
@@ -895,7 +895,7 @@ struct optab table[] = {
 	SAREG|SCON,	TCHAR|TUCHAR,
 	SAREG|SCON,	TCHAR|TUCHAR,
 		0, 	RESCC,
-		"cmp	AL,AR\n", },
+		"cmp	AR,AL\n", },
 
 { OPLOG,	FORCC,
 	SBREG|SOREG|SNAME,	TLONG|TULONG,
