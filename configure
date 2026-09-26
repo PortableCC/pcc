@@ -727,6 +727,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_multiarch
+with_sysroot
 with_incdir
 with_libdir
 with_assembler
@@ -1388,6 +1389,7 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-sysroot=<path>   Specify the default sysroot.
   --with-incdir=<path>    Specify the default include path.
   --with-libdir=<path>    Specify the default library path.
   --with-assembler=<path> Specify alternate assember.
@@ -3309,6 +3311,13 @@ esac
 fi
 
 
+# Check whether --with-sysroot was given.
+if test ${with_sysroot+y}
+then :
+  withval=$with_sysroot; sysrootdir=$withval
+fi
+
+
 # Check whether --with-incdir was given.
 if test ${with_incdir+y}
 then :
@@ -3508,6 +3517,11 @@ fi
 if test -n "$altincdir"; then
 
 printf "%s\n" "#define STDINC \"$altincdir\"" >>confdefs.h
+
+fi
+if test -n "$sysrootdir"; then
+
+printf "%s\n" "#define SYSROOT \"$sysrootdir\"" >>confdefs.h
 
 fi
 if test -n "$altlibdir"; then
@@ -7236,6 +7250,8 @@ echo "Has TLS support .................. $tls"
 echo "Has GCC compatibility ............ $gcccompat"
 echo "Has PCC debugging ................ $pccdebug"
 echo "Type of wchar_t is ............... ${wchar_type} (${wchar_size} chars)"
+test -n "${sysrootdir}" && \
+echo "Default sysroot is ............... ${sysrootdir}"
 echo
 echo "Configure finished.  Do 'make && make install' to compile and install.
 "

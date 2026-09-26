@@ -190,6 +190,9 @@
 /* Define alternate standard include directory */
 #undef STDINC
 
+/* Define default sysroot directory */
+#undef SYSROOT
+
 /* Define if target defaults to BIG endian */
 #undef TARGET_BIG_ENDIAN
 
