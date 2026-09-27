@@ -2407,7 +2407,13 @@ colfind(int okColors, REGW *r)
 		RDEBUG(("colfind: Recommend color from %d\n", ASGNUM(w)));
 		return COLOR(w);
 	}
+#ifdef PICKCOLOR
+	/* let the target choose among the remaining colors (e.g. to keep
+	 * the callee-save range in the prologue minimal) */
+	return color2reg(PICKCOLOR(CLASS(r), okColors), CLASS(r));
+#else
 	return color2reg(ffs(okColors)-1, CLASS(r));
+#endif
 }
 
 static void
@@ -2444,6 +2450,28 @@ AssignColors(struct interpass *ip)
 				okColors &= ~c;
 			}
 		}
+#ifdef SPILLSHADOW
+		/*
+		 * A permreg shadow that cannot keep its own register is
+		 * cheaper spilled (the target prologue saves the register)
+		 * than parked in another callee-save register with entry/
+		 * exit moves.  Force the spill path; the ONLYPERM rewrite
+		 * then marks the register in nsavregs and recolors.
+		 */
+		if (okColors != 0 &&
+		    w >= &nblock[tempmin] && w < &nblock[basetemp]) {
+			int own = permregs[(int)(w - nblock) - tempmin];
+			for (c = 0; c < regK[CLASS(w)]; c++)
+				if (color2reg(c, CLASS(w)) == own)
+					break;
+			if (c == regK[CLASS(w)] ||
+			    ((1 << c) & okColors) == 0) {
+				RDEBUG(("shadow %d loses %s: spill\n",
+				    ASGNUM(w), rnames[own]));
+				okColors = 0;
+			}
+		}
+#endif
 		if (okColors == 0) {
 			PUSHWLIST(w, spilledNodes);
 #ifdef PCC_DEBUG
@@ -3020,9 +3048,20 @@ onlyperm: /* XXX - should not have to redo all */
 	memset(edgehash, 0, sizeof(edgehash));
 
 	/* clear adjacent node list */
-	for (i = 0; i < MAXREGS; i++)
+	for (i = 0; i < MAXREGS; i++) {
 		for (j = 0; j < NUMCLASS+1; j++)
 			NCLASS(&ablock[i], j) = 0;
+		/*
+		 * Clear the precolored move lists like the nblock memset
+		 * below does for the temporaries: a stale entry from the
+		 * previous round makes moveadd()'s already-there check
+		 * drop the move, so it never re-enters worklistMoves and
+		 * the temp loses its coalesce hint (a "return 0" temp
+		 * colored away from the return register emitted
+		 * "clr r0; ld r1,r0" instead of "clr r1").
+		 */
+		ablock[i].r_moveList = NULL;
+	}
 
 	if (tbits) {
 		memset(nblock+tempmin, 0, tbits * sizeof(REGW));

@@ -679,8 +679,13 @@ findops(NODE *p, int cookie)
 		F2WALK(r);
 
 		/* Help register assignment after SSA by preferring */
-		/* 2-op insns instead of 3-ops */
+		/* 2-op insns instead of 3-ops.  Not for SPECIAL shapes:
+		 * their low bits are a shape number, not register-class
+		 * bits, and demoting a direct special match forces the
+		 * operand into a register class picked from those bits
+		 * (e.g. SPECIAL|8 reads as INCREG). */
 		if (xssa && (q->rewrite & RLEFT) == 0 &&
+		    (n2osh(q->lshape) & SPECIAL) == 0 &&
 		    (n2osh(q->lshape) & (INREGS)) && shl == SRDIR)
 			shl = SRREG;
 
@@ -715,8 +720,12 @@ findops(NODE *p, int cookie)
 	    qq->rewrite & RRIGHT, gor);
 
 	if (sh == -1) {
-		if (cookie == FOREFF || cookie == FORCC)
-			sh = 0;
+		if (cookie == FOREFF ||
+		    (cookie & qq->visit & INREGS) == 0)
+			sh = 0; /* no result register: FOREFF, or a rule
+				 * visited only for its condition codes
+				 * (ffs()-1 on an empty mask would collide
+				 * with FFAIL) */
 		else
 			sh = ffs(cookie & qq->visit & INREGS)-1;
 	}
@@ -745,7 +754,7 @@ findops(NODE *p, int cookie)
  *	REG	REG	4	# put both in reg
  */
 int
-relops(NODE *p)
+relops(NODE *p, int cookie)
 {
 	extern int *qtable[];
 	struct optab *q;
@@ -765,6 +774,14 @@ relops(NODE *p)
 
 		F2DEBUG(("relops: ixp %d\n", ixp[i]));
 		if (!acceptable(q))		/* target-dependent filter */
+			continue;
+
+		/* Historically every relop rule was FORCC-only and the
+		 * context was implied.  A target keeping relops in value
+		 * context adds rules that materialize the truth value in
+		 * a register; those must not be picked under a branch,
+		 * nor a flags-only rule where a result is wanted. */
+		if (cookie != FOREFF && (q->visit & cookie) == 0)
 			continue;
 
 		if (ttype(l->n_type, q->ltype) == 0 ||
@@ -811,11 +828,19 @@ relops(NODE *p)
 		sh = ffs(n2osh(q->lshape) & INREGS)-1;
 	else if (q->rewrite & RRIGHT)
 		sh = ffs(n2osh(q->rshape) & INREGS)-1;
+	else if (cookie != FORCC && (cookie & q->visit & INREGS) != 0)
+		/* value-context relop delivering its 0/1 result in a
+		 * scratch register (RESC1-style rule): the class comes
+		 * from the rule's visit mask, exactly as in findops */
+		sh = ffs(cookie & q->visit & INREGS)-1;
 
 	F2DEBUG(("relops: node %p\n", p));
 	p->n_su = MKIDX(idx, 0);
 	SCLASS(p->n_su, sh);
-	return 0;
+	/* like findops: the return value is the result class - shswitch
+	 * feeds it to a rewriting parent (a value-context relop under
+	 * RLEFT would otherwise leave the parent classless, n_reg -1) */
+	return sh;
 }
 
 /*

@@ -55,6 +55,15 @@
 
 static int dfsnum;
 
+/*
+ * Enables tail merging (comjump/xjump) inside deljumps.  Only set for
+ * the deljumps runs that happen before register allocation: after
+ * ngenregs the trees carry register assignments (n_reg/n_su), and two
+ * structurally equal trees may still use different scratch registers,
+ * so merging them would be wrong there.
+ */
+static int tailmerge;
+
 void saveip(struct interpass *ip);
 void deljumps(struct p2env *);
 void optdump(struct interpass *ip);
@@ -114,8 +123,11 @@ optimize(struct p2env *p2e)
 		printip(ipole);
 	}
 
-	if (xdeljumps)
+	if (xdeljumps) {
+		tailmerge = 1;
 		deljumps(p2e); /* Delete redundant jumps and dead code */
+		tailmerge = 0;
+	}
 
 	if (xssa)
 		add_labels(p2e) ;
@@ -203,8 +215,11 @@ optimize(struct p2env *p2e)
 #endif
 
 		/* Now, clean up the gotos we do not need any longer */
-		if (xdeljumps)
-			deljumps(p2e); /* Delete redundant jumps and dead code */
+		if (xdeljumps) {
+			tailmerge = 1;
+			deljumps(p2e); /* Delete jumps and dead code */
+			tailmerge = 0;
+		}
 
 		bblocks_build(p2e);
 		BDEBUG(("Calling cfg_build\n"));
@@ -561,10 +576,196 @@ ivloop:
 #endif
 }
 
+/*
+ * Strict statement tree equality for tail merging.  Unlike treecmp()
+ * in match.c (which deliberately matches loosely for FINDMOPS), a
+ * false match here becomes wrong code, so n_type must agree on every
+ * node and any op not explicitly handled compares unequal.  Ops that
+ * carry state outside the common node fields (struct size/alignment,
+ * bitfield descriptors packed in n_rval, xasm constraint strings)
+ * never merge.
+ */
+static int
+dltcmp(NODE *p1, NODE *p2)
+{
+	if (p1->n_op != p2->n_op || p1->n_type != p2->n_type)
+		return 0;
+
+	switch (p1->n_op) {
+	case NAME:
+	case ICON:
+		if (getlval(p1) != getlval(p2) ||
+		    strcmp(p1->n_name, p2->n_name) != 0)
+			return 0;
+		return 1;
+
+	case OREG:
+		if (getlval(p1) != getlval(p2) || p1->n_rval != p2->n_rval ||
+		    strcmp(p1->n_name, p2->n_name) != 0)
+			return 0;
+		return 1;
+
+	case REG:
+	case TEMP:
+		return p1->n_rval == p2->n_rval;
+
+	case STASG:
+	case STARG:
+	case STCALL:
+	case USTCALL:
+	case STCLR:
+	case FLD:
+	case XASM:
+	case XARG:
+		return 0;
+	}
+
+	switch (optype(p1->n_op)) {
+	case BITYPE:
+		if (dltcmp(p1->n_right, p2->n_right) == 0)
+			return 0;
+		/* FALLTHROUGH */
+	case UTYPE:
+		return dltcmp(p1->n_left, p2->n_left);
+	default:
+		return 0;	/* unknown leaf, play safe */
+	}
+}
+
+/*
+ * Two dlnods are mergeable if both are plain statement trees
+ * (IP_ASM also hides behind STMT op) that compare equal.
+ */
+static int
+equop(struct dlnod *p1, struct dlnod *p2)
+{
+	if (p1 == 0 || p2 == 0 || p1->op != STMT || p2->op != STMT)
+		return 0;
+	if (p1->dlip->type != IP_NODE || p2->dlip->type != IP_NODE)
+		return 0;
+	return dltcmp(p1->dlip->ip_node, p2->dlip->ip_node);
+}
+
+/*
+ * Insert a new label directly before the statement p, in both the
+ * dlnod list and the interpass list.  The interpass is tmpalloc'd
+ * and must survive this pass, which is why deljumps skips its
+ * markset/markfree when tail merging is enabled.
+ */
+static struct dlnod *
+insertl(struct dlnod *p)
+{
+	struct interpass *ip;
+	struct dlnod *lp;
+
+	ip = tmpalloc(sizeof(struct interpass));
+	ip->type = IP_DEFLAB;
+	ip->lineno = p->dlip->lineno;
+	ip->ip_lbl = getlab2();
+
+	lp = tmpalloc(sizeof(struct dlnod));
+	lp->op = LABEL;
+	lp->labno = ip->ip_lbl;
+	lp->dlip = ip;
+	lp->ref = 0;
+	lp->refc = 0;
+
+	lp->back = p->back;
+	lp->forw = p;
+	p->back->forw = lp;
+	p->back = lp;
+
+	DLIST_INSERT_BEFORE(p->dlip, ip, qelem);
+	return lp;
+}
+
+/*
+ * Cross-jumping: when the statement ahead of a jump is identical to
+ * the statement ahead of the jump's target label, put a new label in
+ * front of the target's copy and replace our copy with a jump there;
+ * repeat until the tails differ.  Labels between the merged statement
+ * and the jump (or the target) are unaffected: paths entering there
+ * never executed the merged statement.
+ */
+static void
+xjump(struct dlnod *p)
+{
+	struct dlnod *p1, *p2, *p3;
+
+	if ((p2 = p->ref) == 0)
+		return;
+	p1 = p;
+	for (;;) {
+		while ((p1 = p1->back) && p1->op == LABEL)
+			;
+		while ((p2 = p2->back) && p2->op == LABEL)
+			;
+		if (p1 == p2 || equop(p1, p2) == 0)
+			return;
+		p3 = insertl(p2);
+		tfree(p1->dlip->ip_node);
+		p1->dlip->ip_node = mkunode(GOTO,
+		    mklnode(ICON, p3->labno, 0, INT), 0, INT);
+		p1->op = JBR;
+		p1->labno = p3->labno;
+		p1->ref = p3;
+		p3->refc++;
+		nchange++;
+	}
+}
+
+/*
+ * Merge the identical tails of two jumps to the same label: insert
+ * a label ahead of the earlier jump's copy of the tail and let the
+ * later jump enter the shared tail there instead, one statement at
+ * a time.  Deletions happen only on the later side; a label found
+ * there means another path joins in, which ends the merge.
+ */
+static void
+backjmp(struct dlnod *p1, struct dlnod *p2)
+{
+	struct dlnod *p3;
+
+	for (;;) {
+		while (p1->back && p1->back->op == LABEL)
+			p1 = p1->back;
+		p1 = p1->back;
+		p2 = p2->back;
+		if (p1 == p2 || equop(p1, p2) == 0)
+			return;
+		p3 = insertl(p1);
+		iprem(p2);		/* frees tree, unlinks interpass */
+		p2->back->forw = p2->forw;
+		p2->forw->back = p2->back;
+		p2 = p2->forw;		/* the jump that lost its tail */
+		decref(p2->ref);
+		setlab(p2, p3->labno);
+		p2->ref = p3;
+		p3->refc++;
+		nchange++;
+	}
+}
+
+/*
+ * Find pairs of jumps to the same (shared) label and merge their
+ * identical tails.
+ */
+static void
+comjump(struct dlnod *dl)
+{
+	struct dlnod *p1, *p2, *p3;
+
+	for (p1 = dl->forw; p1 != 0; p1 = p1->forw)
+		if (p1->op == JBR && (p2 = p1->ref) != 0 && p2->refc > 1)
+			for (p3 = p1->forw; p3 != 0; p3 = p3->forw)
+				if (p3->op == JBR && p3->ref == p2)
+					backjmp(p1, p3);
+}
+
 static void
 iterate(struct p2env *p2e, struct dlnod *dl)
 {
-	NODE *q, *r;
+	NODE *q;
 	struct dlnod *p, *rp, *p1;
 	int i;
 
@@ -605,20 +806,27 @@ iterate(struct p2env *p2e, struct dlnod *dl)
 				p1->forw->back = p;
 				p->forw = p1->forw;
 
+				/*
+				 * Invert the branch condition by negating
+				 * the operator, keeping the operand order:
+				 * the old c2-style LE/GT/ULE/UGT cases
+				 * swapped the operands instead, which moved
+				 * compare-against-constant operands to the
+				 * left where no imm-compare insn matches.
+				 */
 				q = p->dlip->ip_node->n_left;
 				i = q->n_op;
-#define	SWAP(p)	r = p->n_left, p->n_left = p->n_right, p->n_right = r
 				switch (i) {
 				case EQ: i = NE; break;
 				case NE: i = EQ; break;
-				case LE: SWAP(q); i = LT; break;
+				case LE: i = GT; break;
 				case LT: i = GE; break;
 				case GE: i = LT; break;
-				case GT: SWAP(q); i = GE; break;
-				case ULE: SWAP(q); i = ULT; break;
+				case GT: i = LE; break;
+				case ULE: i = UGT; break;
 				case ULT: i = UGE; break;
 				case UGE: i = ULT; break;
-				case UGT: SWAP(q); i = UGE; break;
+				case UGT: i = ULE; break;
 				default:
 					comperr("deljumps: unexpected op");
 				}
@@ -654,7 +862,8 @@ iterate(struct p2env *p2e, struct dlnod *dl)
 			}
 		}
 		if (p->op == JBR) {
-			/* xjump(p); * needs tree rewrite; not yet */
+			if (tailmerge)
+				xjump(p);
 			p = codemove(p);
 		}
 	}
@@ -667,7 +876,14 @@ deljumps(struct p2env *p2e)
 	struct dlnod dln;
 	MARK mark;
 
-	markset(&mark);
+	/*
+	 * Tail merging creates label interpasses that must survive
+	 * this pass, so the temp heap cannot be rolled back then.
+	 * The dlnods are then freed with everything else when the
+	 * function is done.
+	 */
+	if (tailmerge == 0)
+		markset(&mark);
 
 	memset(&dln, 0, sizeof(dln));
 	listsetup(ipole, &dln);
@@ -676,12 +892,12 @@ deljumps(struct p2env *p2e)
 		do {
 			iterate(p2e, &dln);
 		} while (nchange);
-#ifdef notyet
-		comjump();
-#endif
+		if (tailmerge)
+			comjump(&dln);
 	} while (nchange);
 
-	markfree(&mark);
+	if (tailmerge == 0)
+		markfree(&mark);
 }
 
 void
@@ -872,8 +1088,24 @@ cfg_build(struct p2env *p2e)
 				SLIST_INSERT_LAST(&bb->child, cnode, chld);
 			} else {
 				int *l;
-				/* XXX assume all labels are valid as dest */
-				for (l = p2e->epp->ip_labels; *l; l++) {
+				/*
+				 * Computed goto.  A switch-dispatch GOTO(SWDISP)
+				 * carries its OWN null-terminated target list in
+				 * the GOTO's n_name - edge only to those, so the
+				 * case bodies of one switch are not falsely made
+				 * predecessors-of/reachable-from every other
+				 * computed goto in the function (that over-
+				 * connection makes every case body a multi-pred
+				 * merge, and SSA removephi then floods the single
+				 * dispatch point with phi copies -> spills).  A
+				 * true "goto *p" (no SWDISP) still assumes any
+				 * address-taken label in ip_labels.
+				 */
+				if (p->n_left->n_op == SWDISP)
+					l = (int *)p->n_name;
+				else
+					l = p2e->epp->ip_labels;
+				for (; *l; l++) {
 					cnode->bblock = p2e->labinfo.arr[*l - p2e->labinfo.low];
 					SLIST_INSERT_LAST(&cnode->bblock->parents, pnode, cfgelem);
 					SLIST_INSERT_LAST(&bb->child, cnode, chld);

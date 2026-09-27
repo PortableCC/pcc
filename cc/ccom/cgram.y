@@ -288,7 +288,7 @@ struct savbc {
 %type <g>	gen_ass_list gen_assoc
 %type <strp>	string svstr moe
 %type <rp>	str_head
-%type <symp>	xnfdeclarator enum_head
+%type <symp>	xnfdeclarator enum_head notype_xnfdcl
 %type <ctx>	begbr clbrace
 
 %%
@@ -299,9 +299,57 @@ ext_def_list:	   ext_def_list external_def
 
 external_def:	   funtype kr_args compoundstmt { fend(); }
 		|  declaration  { blevel = 0; symclear(0); }
+		|  notype_init_dcl_list ';' { blevel = 0; symclear(0); }
 		|  asmstatement ';'
 		|  ';'
 		|  error { blevel = 0; }
+		;
+
+/*
+ * K&R-style external declaration with no type specifier at all:
+ *	unixbug = 0;	extlist(), extfn();
+ * The type defaults to int (as gcc does, with a warning).  No conflict
+ * with funtype: its reduction is chosen on lookahead '{' or a
+ * declaration specifier (K&R argument declarations), while these
+ * productions reduce on '=', ',' or ';'.
+ */
+notype_init_dcl_list:
+		   notype_init_dcl { symclear(blevel); }
+		|  notype_init_dcl_list ',' notype_init_dcl { symclear(blevel); }
+		;
+
+notype_init_dcl:   declarator attr_var {
+			P1ND *tn = mkty(INT, 0, 0);
+			if (traditional)
+				werror("type defaults to int in declaration");
+			else
+				uerror("type specifier missing");
+			init_declarator(tn, $1, 0, $2, 0);
+			p1tfree(tn);
+		}
+		|  notype_xnfdcl '=' e {
+			if ($1->sclass == STATIC || $1->sclass == EXTDEF)
+				statinit++;
+			simpleinit($1, eve($3));
+			if ($1->sclass == STATIC || $1->sclass == EXTDEF)
+				statinit--;
+			xnf = NULL;
+		}
+		|  notype_xnfdcl '=' begbr init_list optcomma '}' {
+			endinit($3, 0);
+			xnf = NULL;
+		}
+		;
+
+notype_xnfdcl:	   declarator attr_var {
+			P1ND *tn = mkty(INT, 0, 0);
+			if (traditional)
+				werror("type defaults to int in declaration");
+			else
+				uerror("type specifier missing");
+			$$ = xnf = init_declarator(tn, $1, 1, $2, 0);
+			p1tfree(tn);
+		}
 		;
 
 funtype:	  /* no type given */ declarator {
@@ -940,10 +988,16 @@ statement:	   e ';' { ecomp(eve($1)); symclear(blevel); }
 		}
 		|  C_RETURN  ';' {
 			branch(retlab);
-			if (cftnsp->stype != VOID && 
+			if (cftnsp->stype != VOID &&
 			    (cftnsp->sflags & NORETYP) == 0 &&
-			    cftnsp->stype != VOID+FTN)
-				uerror("return value required");
+			    cftnsp->stype != VOID+FTN) {
+				/* legal in C89 (constraint is C99);
+				 * common in K&R code */
+				if (traditional)
+					werror("return value required");
+				else
+					uerror("return value required");
+			}
 			rch:
 			if (!reached)
 				warner(Wunreachable_code);
@@ -1234,7 +1288,7 @@ term:		   term C_INCOP {  $$ = biop($2, $1, bcon(1)); }
 				$$ = $5;
 			}
 			$$ = biop(ADDROF, $$, NULL);
-			$3 = block(NAME, NULL, NULL, ENUNSIGN(INTPTR), 0, 0);
+			$3 = block(NAME, NULL, NULL, ENUNSIGN(SIZET), 0, 0);
 			$$ = biop(CAST, $3, $$);
 		}
 		|  C_ICON { $$ = bdty(ICON, &($1)); }
@@ -1925,6 +1979,7 @@ olddecl(P1ND *p, P1ND *a)
 
 	s->stype = p->n_type;
 	s->sdf = p->n_df;
+	s->sss = p->pss;
 	s->sap = p->n_ap;
 	if (a)
 		attr_add(s->sap, gcc_attr_wrapper(a));

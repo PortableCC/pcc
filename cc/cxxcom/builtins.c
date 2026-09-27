@@ -594,10 +594,17 @@ builtin_nanx(const struct bitable *bt, NODE *a)
 		uerror("%s bad argument", bt->name);
 		a = bcon(0);
 	} else if (a->n_op == STRING && *a->n_name == '\0') {
+		/* nLDOUBLE holds only the meaningful representation bytes,
+		 * which may be fewer than sizeof(long double) (e.g. a
+		 * 10-byte x87 pattern in a 16-byte long double): bound the
+		 * copy like VALX does and zero-fill the rest. */
+		long double d = 0.0;
+
 		a->n_op = FCON;
 		a->n_type = bt->rt;
 		a->n_dcon = fltallo();
-		memcpy(&FCAST(a->n_dcon)->fp, nLDOUBLE, sizeof(long double));
+		memcpy(&d, nLDOUBLE, MIN(sizeof(nLDOUBLE), sizeof(d)));
+		FCAST(a->n_dcon)->fp = d;
 	} else
 		a = binhelp(eve(a), bt->rt, &bt->name[10]);
 	return a;
