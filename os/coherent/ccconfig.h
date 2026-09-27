@@ -66,5 +66,6 @@
  * Assembler and linker paths are not set here; they are
  * configured at build time via --with-assembler / --with-linker.
  */
-#define STDINC		"/include/"
-#define STDINCS		{ "/include/", "/usr/include/", 0 }
+#ifndef STDINC	/* Overridden if cross-compiling */
+#define STDINC		"/include/", "/usr/include/"
+#endif
