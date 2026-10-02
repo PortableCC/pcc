@@ -1,5 +1,3 @@
-/*	$Id$	*/
-
 /*
  * Copyright (c) 2004, 2007 Anders Magnusson (ragge@ludd.ltu.se).
  * All rights reserved.
@@ -1072,7 +1070,7 @@ strcvt(struct initctx *ctx, NODE *p)
 		else
 			i = (unsigned char)*s++;
 		asginit(ctx, bcon(i));
-	} 
+	}
 	tfree(q);
 }
 
@@ -1221,6 +1219,18 @@ simpleinit(struct symtab *sp, NODE *p)
 		strcvt(ctx, p);
 		if (ctx->psym->sdf->ddim == NOOFFSET)
 			scalinit(ctx, bcon(0), NULL); /* Null-term arrays */
+		endinit(ctx, 0);
+		return;
+	}
+
+	/* K&R laxness: a scalar initializer for an array initializes
+	 * its first element, as if braced ("char tapedev[10] = '\0';").
+	 * Falling through would build ASSIGN(array, scalar) and give
+	 * "lvalue required". */
+	if (ISARY(sp->stype) && !ISARY(p->n_type)) {
+		werror("array initialized with scalar; braces assumed");
+		ctx = beginit(sp);
+		scalinit(ctx, p, NULL);
 		endinit(ctx, 0);
 		return;
 	}
