@@ -953,10 +953,7 @@ statement:	   e ';' { ecomp(eve($1)); symclear(blevel); }
 			    cftnsp->stype != VOID+FTN) {
 				/* legal in C89 (constraint is C99);
 				 * common in K&R code */
-				if (traditional)
 					werror("return value required");
-				else
-					uerror("return value required");
 			}
 			rch:
 			if (!reached)
