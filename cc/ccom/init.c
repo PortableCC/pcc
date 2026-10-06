@@ -1048,13 +1048,14 @@ desinit(struct initctx *ctx, NODE *p)
 
 /*
  * Convert a string to an array of char/wchar for asginit.
+ * Returns nonzero if any characters were emitted.
  */
-static void
+static int
 strcvt(struct initctx *ctx, NODE *p)
 {
 	NODE *q = p;
 	char *s;
-	int i;
+	int i, n;
 
 #ifdef mach_arm
 	/* XXX */
@@ -1071,7 +1072,9 @@ strcvt(struct initctx *ctx, NODE *p)
 			i = (unsigned char)*s++;
 		asginit(ctx, bcon(i));
 	}
+	n = s != p->n_sp->sname;
 	tfree(q);
+	return n;
 }
 
 /*
@@ -1145,8 +1148,12 @@ asginit(struct initctx *ctx, P1ND *p)
 			if ((g = ctx->pstk->in_fl) == 0)
 				ctx->pstk->in_fl = 1; /* simulate ilbrace */
 
-			strcvt(ctx, p);
-			if (ctx->pstk->in_df->ddim == NOOFFSET)
+			/* An empty string emits nothing, so a fixed-size
+			 * char array in an element of an open array (the
+			 * `{ "" }' terminator of an nlist table) would
+			 * never be counted: emit its NUL explicitly. */
+			if (strcvt(ctx, p) == 0 ||
+			    ctx->pstk->in_df->ddim == NOOFFSET)
 				asginit(ctx, bcon(0));
 			if (g == 0)
 				irbrace(ctx); /* will fill with zeroes */
