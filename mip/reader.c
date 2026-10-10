@@ -941,7 +941,7 @@ again:	switch (o = p->n_op) {
 				break;
 #endif
 		}
-		rv = relops(p);
+		rv = relops(p, cookie);
 		break;
 
 	case PLUS:

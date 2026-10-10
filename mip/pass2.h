@@ -245,7 +245,7 @@ int findasg(NODE *p, int);
 int finduni(NODE *p, int);
 int findumul(NODE *p, int);
 int findleaf(NODE *p, int);
-int relops(NODE *p);
+int relops(NODE *p, int);
 #ifdef FINDMOPS
 int findmops(NODE *p, int);
 int treecmp(NODE *p1, NODE *p2);
