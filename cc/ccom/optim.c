@@ -159,6 +159,14 @@ again:	o = p->n_op;
 		/* Do not discard ADDROF TEMP's */
 		if (LO(p) == ADDROF && LO(p->n_left) != TEMP) {
 			q = p->n_left->n_left;
+			/*
+			 * Type might have changed during UMUL & ADDROF.
+			 * This can occur when the first field of a struct
+			 * in the first element of a struct array is accessed.
+			 *
+			 * Patch the type to be equivalent to the type in UMUL.
+			 */
+			q->n_type = p->n_type;
 			nfree(p->n_left);
 			nfree(p);
 			p = q;

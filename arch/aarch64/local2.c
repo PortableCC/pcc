@@ -1,6 +1,7 @@
 /*      $Id$    */
 
  /*
+ * Copyright (c) 2025, 2026 Hakan Candar (hakan@candar.tr).
  * Copyright (c) 2020 Puresoftware Ltd.
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -21,53 +22,105 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "pass1.h" /* for astypnames, talign and defalign */
 #include "pass2.h"
+
+#define SZFPSP		16
 
 extern void defalign(int);
 
-int isConverstion=0;
-int addStack=0;
+static int isShrink=0;
+static int isExtend=0;
+#ifndef MACHOABI
 #define	exname(x) x
+#endif
 
 /*
 In a 32-bit context,registers are specified by using w0-w30 in A64 instruction set
 */
 char *wnames[] = {
-	"w0", "w1", "w2", "w3","w4","w5", "w6", "w7",
-	"w8", "w9", "w10","w11","w12","w13","w14",
-	"w15", "w16","w17","w18","w19","w20", "w21",
-	"w22","w23","w24","w25","w26","w27","w28",
-	"w29","w30",
+	 "w0",  "w1",  "w2",  "w3",  "w4",  "w5",  "w6",
+	 "w7",  "w8",  "w9", "w10", "w11", "w12", "w13",
+	"w14", "w15", "w16", "w17", "w18", "w19", "w20",
+	"w21", "w22", "w23", "w24", "w25", "w26", "w27",
+	"w28", "w29", "w30",  "sp",
+	
+	 "s0",  "s1",  "s2",  "s3",  "s4",  "s5",  "s6",
+	 "s7",  "s8",  "s9", "s10", "s11", "s12", "s13",
+	"s14", "s15", "s16", "s17", "s18", "s19", "s20",
+	"s21", "s22", "s23", "s24", "s25", "s26", "s27",
+	"s28", "s29", "s30", "s31"
 };
 
 /*
 In a 64-bit context,registers are specified by using x0-x30 in A64 instruction set
 */
 char *rnames[] = {
-	"x0", "x1", "x2", "x3","x4","x5", "x6", "x7",
-	"x8", "x9", "x10","x11","x12","x13","x14", 
-	"x15", "x16","x17","x18","x19","x20", "x21",
-	"x22","x23","x24","x25","x26","x27","x28",
-	"x29","x30","sp",
+	 "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",
+	 "x7",  "x8",  "x9", "x10", "x11", "x12", "x13",
+	"x14", "x15", "x16", "x17", "x18", "x19", "x20",
+	"x21", "x22", "x23", "x24", "x25", "x26", "x27",
+	"x28", "x29", "x30",  "sp",
+	
+	 "d0",  "d1",  "d2",  "d3",  "d4",  "d5",  "d6",
+	 "d7",  "d8",  "d9", "d10", "d11", "d12", "d13",
+	"d14", "d15", "d16", "d17", "d18", "d19", "d20",
+	"d21", "d22", "d23", "d24", "d25", "d26", "d27",
+	"d28", "d29", "d30", "d31"
 };
 
+extern int p1maxstacksize;
+
 /*
- * Handling of integer constants.  We have 8 bits + an even
- * number of rotates available as a simple immediate.
+ * Handling of integer constants for 12-bit immediates.
+ * We have 8 bits + an even number of rotates available
+ * as a simple immediate.
  * If a constant isn't trivially representable, use an ldr
  * and a subsequent sequence of orr operations.
  */
 
 static int
-trepresent(const unsigned int val)
+t12represent(long long val)
 {
-	int i;
-#define rotate_left(v, n) (v << n | v >> (32 - n))
+	unsigned long long i = (unsigned long long)val;
+#define rotate_left32(v, n) (v << n | v >> (32 - n))
 
 	for (i = 0; i < 32; i += 2)
-		if (rotate_left(val, i) <= 0xff)
+		if (rotate_left32(val, i) <= 0xff)
 			return 1;
 	return 0;
+#undef rotate_left32
+}
+
+/*
+ * Handling of integer constants for 16-bit immediates.
+ *
+ * Return 1 if VAL can be synthesized with a single "mov" pseudo-op,
+ * i.e. either MOVZ or MOVN (one 16-bit chunk at shift 0/16/32/48).
+ * Return 0 otherwise.
+ */
+static int
+t16represent(long long val)
+{
+	unsigned long long u = (unsigned long long)val;
+	int nz_z = 0; /* halfwords that are non-zero (MOVZ pattern) */
+	int nz_n = 0; /* halfwords that are not 0xFFFF (MOVN pattern) */
+
+	for (int shift = 0; shift <= 48; shift += 16) {
+		unsigned hw = (unsigned)((u >> shift) & 0xFFFFULL);
+
+		/* MOVZ: all halfwords must be 0 except possibly one */
+		if (hw != 0)
+			if (++nz_z > 1)
+				nz_z = 2; /* clamp */
+
+		/* MOVN: all halfwords must be 0xFFFF except possibly one */
+		if (hw != 0xFFFFU)
+			if (++nz_n > 1)
+				nz_n = 2; /* clamp */
+	}
+
+	return (nz_z <= 1) || (nz_n <= 1);
 }
 
 /*
@@ -116,34 +169,97 @@ static TWORD ftype;
 
 /*
  * calculate stack size and offsets
+ * 0 - total stack size
+ * 1 - permanent register end offset (0 means no permregs saved)
+ * 2 - max function call stack end offset (0 means no funcalls)
  */
-static int
-offcalc(struct interpass_prolog *ipp)
+static void
+offcalc(struct interpass_prolog *ipp, int *values)
 {
-	int addto;
+#define SETALIGN(x,y) x = (x) + (((y) - ((x) % (y))) % (y))
+	int i, prcount;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
 		printf("offcalc: p2maxautooff=%d\n", p2maxautooff);
 #endif
 
-	addto = p2maxautooff;
+	values[0] = p2maxautooff;
+	values[1] = values[2] = 0;
+	prcount = 0;
+
+	/* count used permanent registers */
+	for (i = 0; i < MAXREGS; i++)
+		if (TESTBIT(p2env.p_regs, i))
+			prcount++;
+
+	/* calculate permanent register save area */
+	if (prcount) {
+	        values[0] += prcount * SZLONGLONG/SZCHAR;
+		SETALIGN(values[0], ALSTACK/SZCHAR);
+		values[1] = values[0];
+	}
+
+	/* XXX - move calculation from pass1 to pass2.
+	 * it works, but it is hacky. we are crossing
+	 * the pass1-pass2 boundary informally.
+	 */
+	if (p1maxstacksize) {
+		values[0] += p1maxstacksize;
+		SETALIGN(values[0], ALSTACK/SZCHAR);
+		values[2] = values[0];
+	}
+
+	SETALIGN(values[0], ALSTACK/SZCHAR);
 
 #ifdef PCC_DEBUG
 	if (x2debug)
-		printf("offcalc: addto=%d\n", addto);
+		printf("offcalc: total=%d proff=%d funoff=%d autos=%d\n",
+		       values[0], values[1], values[2], p2maxautooff);
 #endif
-
-	addto -= AUTOINIT / SZCHAR;
-
-	return addto;
+#undef SETALIGN
 }
+
+/*
+ * print instructions to move stack down
+ */
+static void
+movspdown(int val)
+{
+	int vals[4], nc, i;
+	if (t12represent(val)) {
+		printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], val);
+        } else {
+		nc = encode_constant(val, vals);
+		for (i = 0; i < nc; i++)
+			printf("\tsub %s,%s,#%d\n",
+			       rnames[SP], rnames[SP], vals[i]);
+        }
+}
+
+/*
+ * print instructions to move stack up
+ */
+static void
+movspup(int val)
+{
+	int vals[4], nc, i;
+	if (t12represent(val)) {
+		printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], val);
+	} else {
+		nc = encode_constant(val, vals);
+		for (i = 0; i < nc; i++)
+			printf("\tadd %s,%s,#%d\n",
+			       rnames[SP], rnames[SP], vals[i]);
+	}
+}
+
+static int fframe[4];
 
 void
 prologue(struct interpass_prolog *ipp)
 {
-        int addto;
-        int vals[4], nc, i;
+	int i, pi;
 
 #ifdef PCC_DEBUG
 	if (x2debug)
@@ -159,30 +275,30 @@ prologue(struct interpass_prolog *ipp)
 #endif
 
 	ftype = ipp->ipp_type;
-        printf("%s:\n", exname(ipp->ipp_name));
-        addto = offcalc(ipp);
-        if (addto < 64){
-		addto = 64;       
-        }
-        if((addto % 16)){
-                addto = addto + (16 - (addto % 16));
-        }
-        if (trepresent(addto)) {
-                printf("\tsub %s,%s,#%d\n", rnames[SP], rnames[SP], addto);
-        } else {
-                nc = encode_constant(addto, vals);
-                for (i = 0; i < nc; i++)
-                        printf("\tsub %s,%s,#%d\n",
-                            rnames[SP], rnames[SP], vals[i]);
-        }
-        printf("\tstp %s,%s,[%s]\n", rnames[FP],rnames[LR],rnames[SP]);
-        printf("\tmov %s,%s\n", rnames[FP], rnames[SP]);
-        addStack=addto;
+	printf("%s:\n", ipp->ipp_name);
+
+	offcalc(ipp, fframe);
+
+	printf("\tstp %s,%s,[%s,#%d]!\n", rnames[FP], rnames[LR], rnames[SP], -SZFPSP);
+	printf("\tmov %s,%s\n", rnames[FP], rnames[SP]);
+
+	if (fframe[1]) {
+		/* save permanent registers */
+		movspdown(fframe[1]);
+		for (i = 0, pi = 0; i < MAXREGS; i++)
+			if (TESTBIT(p2env.p_regs, i))
+				printf("\tstr %s,[%s,#%d]\n",
+				       rnames[i], rnames[SP], pi++ * (SZLONGLONG/SZCHAR));
+	}
+
+	movspdown(fframe[0] - fframe[1]);
 }
 
 void
 eoftn(struct interpass_prolog *ipp)
 {
+	int i, pi;
+
 	if (ipp->ipp_ip.ip_lbl == 0)
 		return; /* no code needs to be generated */
 
@@ -190,17 +306,21 @@ eoftn(struct interpass_prolog *ipp)
 	if (ftype == STRTY || ftype == UNIONTY) {
 		assert(0);
 	} else {
-                if (addStack == 0){
-                        printf("\tldp %s,%s,[%s],#%d \n", rnames[FP], rnames[LR],
-                                rnames[SP], 64);
-                        printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], 64);
-                }
-                else{
-                        printf("\tldp %s,%s,[%s] \n", rnames[FP], rnames[LR],
-                                rnames[SP]);
-                        printf("\tadd %s,%s,%d\n", rnames[SP], rnames[SP], addStack);
-                }
+		movspup(fframe[0] - fframe[1]);
+
+		if (fframe[1]) {
+			/* load permanent registers */
+			for (i = 0, pi = 0; i < MAXREGS; i++)
+				if (TESTBIT(p2env.p_regs, i))
+					printf("\tldr %s,[%s,#%d]\n",
+					       rnames[i], rnames[SP], pi++ * (SZLONGLONG/SZCHAR));
+			movspup(fframe[1]);
+		}
+
+		printf("\tldp %s,%s,[%s],#%d\n", rnames[FP], rnames[LR],
+		       rnames[SP], SZFPSP);
 	}
+
 	printf("\tret\n");
 #ifndef MACHOABI
 	printf("\t.size %s,.-%s\n", exname(ipp->ipp_name),
@@ -341,7 +461,7 @@ stasg(NODE *p)
 	int val = getlval(l);
 
 	/* R0 = dest, R1 = src, R2 = len */
-	load_constant_into_reg(R2, attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0));
+	load_64constant_into_reg(R2, attr_find(p->n_ap, ATTR_P2STRUCT)->iarg(0));
 	if (l->n_op == OREG) {
 		if (R2TEST(regno(l))) {
 			int r = regno(l);
@@ -350,11 +470,11 @@ stasg(NODE *p)
 			printf("\tadd %s,%s,%s\n", rnames[R0], rnames[R0],
 			    rnames[R2UPK1(r)]);
 		} else  {
-			if (trepresent(val)) {
+			if (t12represent(val)) {
 				printf("\tadd %s,%s,#%d\n",
 				    rnames[R0], rnames[regno(l)], val);
 			} else {
-				load_constant_into_reg(R0, val);
+				load_64constant_into_reg(R0, val);
 				printf("\tadd %s,%s,%s\n", rnames[R0],
 				    rnames[R0], rnames[regno(l)]);
 			}
@@ -515,49 +635,6 @@ emul(NODE *p)
 }
 
 static void
-halfword(NODE *p)
-{
-	NODE *r = getlr(p, 'R');
-	NODE *l = getlr(p, 'L');
-	int idx0 = 0;
-	CONSZ lval;
-
-	if (features(FEATURE_BIGENDIAN)) {
-		idx0 = 1;
-	}
-
-	if (p->n_op == ASSIGN && r->n_op == OREG) {
-                /* load */
-		lval = getlval(r);
-		expand(p, 0, "\tldrh A1,");
-		printf("[%s,#" CONFMT "]\n", rnames[r->n_rval], lval+idx0);
-        } else if (p->n_op == ASSIGN && l->n_op == OREG) {
-                /* store */
-		lval = getlval(l);
-		expand(p, 0, "\tstrh AR,");
-		printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
-        } else if (p->n_op == SCONV || p->n_op == UMUL) {
-                /* load */
-		lval = getlval(l);
-		expand(p, 0, "\tldrh A1,");
-		printf("[%s,#" CONFMT "]\n", rnames[l->n_rval], lval+idx0);
-        } else if (p->n_op == NAME || p->n_op == ICON || p->n_op == OREG) {
-                /* load */
-		lval = getlval(p);
-		switch (p->n_type) {
-			case SHORT:
-				expand(p, 0, "\tldrsh A1,");
-				break;
-			default:
-				expand(p, 0, "\tldrh A1,");
-		}
-		printf("[%s,#" CONFMT "]\n", rnames[p->n_rval], lval+idx0);
-	} else {
-		comperr("halfword");
-	}
-}
-
-static void
 bfext(NODE *p)
 {
 	int sz;
@@ -587,25 +664,67 @@ argsiz(NODE *p)
 	return 0;
 }
 
+static void
+addrload(NODE *p)
+{
+	NODE *l = getlr(p, 'L');
+
+	if (l->n_op == NAME) {
+		if (kflag) { /* PIC load */
+			if (l->n_name[0] != '@') { /* non-extern/got */
+#ifdef MACHOABI
+				expand(p, 0, "\tadrp ZXA1,AL@page\n");
+				expand(p, 0, "\tadd ZXA1,ZXA1,AL@pageoff\n");
+#else
+				expand(p, 0, "\tadrp ZXA1,AL\n");
+				expand(p, 0, "\tadd ZXA1,ZXA1,:lo12:AL\n");
+#endif
+			} else { /* got */
+#ifdef MACHOABI
+				expand(p, 0, "\tadrp ZXA1,AL@gotpage\n");
+				expand(p, 0, "\tldr ZXA1,[ZXA1,AL@gotpageoff]\n");
+#else
+				expand(p, 0, "\tadrp ZXA1,:got:AL\n");
+				expand(p, 0, "\tldr ZXA1,[ZXA1,:got_lo12:AL]\n");
+#endif
+			}
+		} else { /* non-PIC load from near pool */
+			expand(p, 0, "\tadr ZXA1,AL\n");
+		}
+	} else {
+		comperr("addrload");
+	}
+}
+
 void
 zzzcode(NODE *p, int c)
 {
-	int pr;
-
 	switch (c) {
+		case 'A': /* load address of NAME */
+			addrload(p);
+			break;
+
 		case 'B': /* bit-field sign extension */
 			bfext(p);
 			break;
 
 		case 'C':  /* remove from stack after subroutine call */
+/* XXX - we use a fixed stack that can hold the
+ * maximum stack space required by any subroutine call,
+ * so we don't need to move the SP mid-function.
+ * however, we might want to change this in the future.
+ */
+#if 0
 			pr = p->n_qual;
+
 			if (p->n_op == UCALL)
 				return; /* XXX remove ZC from UCALL */
 			if (pr > 0)
 				printf("\tadd %s,%s,#%d\n", rnames[SP], rnames[SP], pr);
+#endif
 			break;
-	        case 'D':
-			isConverstion= 1;
+	        case 'W':
+			isShrink = 1;
                 	break;
 		case 'E': /* print out emulated ops */
 			emul(p);
@@ -615,10 +734,6 @@ zzzcode(NODE *p, int c)
 			fpemul(p);
 			break;
 
-		case 'H':		/* do halfword access */
-			halfword(p);
-			break;
-
 		case 'I':		/* init constant */
 			if (p->n_name[0] != '\0')
 				comperr("named init");
@@ -626,12 +741,16 @@ zzzcode(NODE *p, int c)
 			    getlval(p) & 0xffffffff);
         		break;
 		case 'J':		/* init longlong constant */
-			load_64constant_into_reg(DECRA(p->n_reg, 1)-R16,
+			load_64constant_into_reg(DECRA(p->n_reg, 1),
 			    getlval(p) & 0xffffffffffffffff);
 			break;
 
 		case 'Q': /* emit struct assign */
 			stasg(p);
+			break;
+
+		case 'X':
+			isExtend = 1;
 			break;
 
 		default:
@@ -753,12 +872,15 @@ adrput(FILE *io, NODE *p)
 		p = p->n_left;
 	switch (p->n_op) {
 		case NAME:
+			const char *name;
 			if (p->n_name[0] != '\0') {
-				fputs(p->n_name, io);
+				/* skip GOT prefix '@' if exists */
+				name = p->n_name[0] == '@' ? p->n_name+1 : p->n_name;
+				fputs(name, io);
 				if (getlval(p) != 0)
 					fprintf(io, "+%lld", getlval(p));
 			} else
-				fprintf(io, "#" CONFMT, getlval(p));
+				fprintf(io, LABFMT, (int)getlval(p));
 			return;
 
 		case OREG:
@@ -776,6 +898,7 @@ adrput(FILE *io, NODE *p)
 	
 		case REG:
 			switch (p->n_type) {
+				case FLOAT:
 				case CHAR:
 				case UCHAR:
 				case INT:
@@ -783,31 +906,24 @@ adrput(FILE *io, NODE *p)
 				case USHORT:
 				case BOOL:
 				case UNSIGNED:
-					if (!ISPTR(p->n_type)) {
-						if (isConverstion) {
-							fprintf(io, "%s", wnames[0]);
-							isConverstion = 0;
-						}
-						else
-							fprintf(io, "%s", wnames[p->n_rval]);
-					}
-					else
+					if (isExtend)
 						fprintf(io, "%s", rnames[p->n_rval]);
+					else
+						fprintf(io, "%s", wnames[p->n_rval]);
 					break;
 				case DOUBLE:
 				case LDOUBLE:
-					if (features(FEATURE_HARDFLOAT)) {
-						fprintf(io, "%s", rnames[p->n_rval]);
-						break;
-					}
-					/* FALLTHROUGH */
 				case LONGLONG:
 				case ULONGLONG:
-					fprintf(io, "%s", rnames[p->n_rval-R16]);
+				default: /* PTR */
+					if (isShrink)
+						fprintf(io, "%s", wnames[p->n_rval]);
+					else
+						fprintf(io, "%s", rnames[p->n_rval]);
 					break;
-				default:
-					fprintf(io, "%s", rnames[p->n_rval]);
 			}
+			isExtend = 0;
+		        isShrink = 0;
 		return;
 
 	default:
@@ -913,7 +1029,7 @@ prtaddr(NODE *p, void *arg)
 		p->n_op = ADDROF;
 	}
 
-	if (p->n_op != ADDROF || l->n_op != NAME)
+	if (p->n_op != NAME || kflag)
 		return;
 
 	/* if we passed 1k nodes printout list */
@@ -928,8 +1044,8 @@ prtaddr(NODE *p, void *arg)
 	/* write address to byte stream */
 
 	SLIST_FOREACH(el, &aslist, link) {
-		if (el->num == getlval(l) && el->name[0] == l->n_name[0] &&
-		    strcmp(el->name, l->n_name) == 0) {
+		if (el->num == getlval(p) && el->name[0] == p->n_name[0] &&
+		    strcmp(el->name, p->n_name) == 0) {
 			found = 1;
 			break;
 		}
@@ -938,25 +1054,25 @@ prtaddr(NODE *p, void *arg)
 		/* we know that this is text segment */
 		lab = prtnumber++;
 		if (nodcnt <= 1000 && notfirst == 0) {
-			if (getlval(l))
+			if (getlval(p))
 				printf(PRTLAB ":\n\t.dword %s+%lld\n",
-				    lab, l->n_name, getlval(l));
+				    lab, p->n_name, getlval(p));
 			 else
                                 printf(PRTLAB ":\n\t.dword %s\n",
-                                    lab, l->n_name);	
+                                    lab, p->n_name);
 		}
 		el = tmpalloc(sizeof(struct addrsymb));
-		el->num = getlval(l);
-		el->name = l->n_name;
+		el->num = getlval(p);
+		el->name = p->n_name;
 		el->str = tmpalloc(32);
 		snprintf(el->str, 32, PRTLAB, lab);
 		SLIST_INSERT_LAST(&aslist, el, link);
 	}
 
-	nfree(l);
-	p->n_op = NAME;
 	setlval(p, 0);
-	p->n_name = el->str;
+	p->n_left = mklnode(NAME, getlval(p), 0, PTR|p->n_type);
+	p->n_left->n_name = el->str;
+	p->n_op = UMUL;
 }
 
 void
@@ -969,11 +1085,6 @@ myreader(struct interpass *ipole)
 
 	DLIST_FOREACH(ip, ipole, qelem) {
 		switch (ip->type) {
-			case IP_NODE:
-				lineno = ip->lineno;
-				ipbase = ip;
-				walkf(ip->ip_node, prtaddr, 0);
-				break;
 			case IP_EPILOG:
 				ipbase = ip;
 				if (notfirst)
@@ -983,19 +1094,27 @@ myreader(struct interpass *ipole)
 				break;
 		}
 	}
+
 	if (x2debug)
 		printip(ipole);
 }
 
-/*
- * Remove some PCONVs after OREGs are created.
- */
 static void
-pconv2(NODE *p, void *arg)
+fixtree2(NODE *p, void *arg)
 {
 	NODE *q;
 
-	if (p->n_op == PLUS) {
+	if (p->n_op == PLUS || p->n_op == MINUS) {
+		/*
+		 * Convert INT ICONs that slipped into PTR additions to LONGLONG.
+		 */
+		if (ISPTR(p->n_left->n_type) &&
+		    p->n_right->n_type == INT && p->n_right->n_op == ICON)
+			p->n_right->n_type = LONGLONG;
+
+		/*
+		 * Remove some PCONVs after OREGs are created.
+		 */
 		if (p->n_type == (PTR+SHORT) || p->n_type == (PTR+USHORT)) {
 			if (p->n_right->n_op != ICON)
 				return;
@@ -1011,17 +1130,84 @@ pconv2(NODE *p, void *arg)
 			 */
 		}
 	}
+
+	/* Remove unnecessary UMUL & ADDROF combinations. */
+	if (p->n_op == ADDROF && p->n_left->n_op == UMUL) {
+		q = p->n_left;
+		*p = *p->n_left->n_left;
+		q = nfree(q);
+		nfree(q);
+	}
 }
 
 void
 mycanon(NODE *p)
 {
-	walkf(p, pconv2, 0);
+}
+
+static unsigned int lastimmtype;
+
+/*
+ * Put big immediates in literal pools.
+ */
+static void
+immput(NODE *p, void *arg)
+{
+	/*
+	 * Late legalization: pass2 and backend rewrites may introduce new ICON nodes
+	 * (e.g. TEMP -> stack/OREG lowering). After these transformations, some ICON
+	 * values may no longer be representable as immediate operands in AArch64
+	 * instructions. Convert such ICONs to literal-pool loads here so the backend
+	 * never emits an unencodable immediate.
+	 *
+	 * Float literals are handled earlier in pass1; integers require a pass2 sweep
+	 * to catch ICONs generated after pass1 has finished.
+	 */
+	int lab;
+	TWORD t;
+	U_CONSZ uval;
+
+        if (p->n_op == ICON && !t16represent(getlval(p))) {
+		t = p->n_type;
+		uval = (glval(p) & SZMASK(sztable[t]));
+
+		if (lastimmtype != t)
+			defalign(talign(t, NULL));
+
+		lab = getlab2();
+	        deflab(lab);
+		printf("%s 0x%llx\n", astypnames[t], uval);
+
+		p->n_op = NAME;
+		setlval(p,lab);
+		p->n_name = "";
+		lastimmtype = p->n_type;
+	}
 }
 
 void
 myoptim(struct interpass *ipp)
 {
+	lastimmtype = 0;
+	struct interpass *ip;
+
+	DLIST_FOREACH(ip, ipp, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, prtaddr, 0);
+
+	DLIST_FOREACH(ip, ipp, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, immput, 0);
+
+	DLIST_FOREACH(ip, ipp, qelem)
+		if (ip->type == IP_NODE)
+			walkf(ip->ip_node, fixtree2, 0);
+
+#ifndef ALFTN
+#define ALFTN	ALINT
+#endif
+	if (lastimmtype != 0)
+		defalign(ALFTN);
 }
 
 /*
@@ -1030,7 +1216,7 @@ myoptim(struct interpass *ipp)
 void
 rmove(int s, int d, TWORD t)
 {
-        switch (t) {
+	switch (t) {
 		case DOUBLE:
 		case LDOUBLE:
 			if (features(FEATURE_HARDFLOAT)) {
@@ -1040,8 +1226,7 @@ rmove(int s, int d, TWORD t)
 			/* FALLTHROUGH */
 	        case LONGLONG:
         	case ULONGLONG:
-		#define LONGREG(x, y) rnames[(x)-(R16-(y))]
-			printf("\tmov %s,%s\n",LONGREG(d,0), LONGREG(s,0));
+			printf("\tmov %s,%s\n",rnames[d], rnames[s]);
                		break;
 		case FLOAT:
 			if (features(FEATURE_HARDFLOAT)) {
@@ -1084,6 +1269,7 @@ rmove(int s, int d, TWORD t)
 int
 COLORMAP(int c, int *r)
 {
+	/* XXX - investigate */
 	int num = 0;	/* number of registers used */
 	switch (c) {
 		case CLASSA:
@@ -1108,20 +1294,11 @@ COLORMAP(int c, int *r)
 int
 gclass(TWORD t)
 {
-	if (t == DOUBLE || t == LDOUBLE) {
-		if (features(FEATURE_HARDFLOAT))
+	if (features(FEATURE_HARDFLOAT)) {
+		if (t == DOUBLE || t == LDOUBLE || t == FLOAT)
 			return CLASSC;
-		else
-			return CLASSB;
 	}
-	if (t == FLOAT) {
-		if (features(FEATURE_HARDFLOAT))
-			return CLASSC;
-		else
-			return CLASSA;
-	}
-	if (DEUNSIGN(t) == LONGLONG || DEUNSIGN(t) == LONG || t == LONGLONG || t == LONG)
-		return CLASSB;
+
 	return CLASSA;
 }
 
@@ -1129,8 +1306,8 @@ int
 retreg(int t)
 {
 	int c = gclass(t);
-	if (c == CLASSB)
-		return R16;
+	if (c == CLASSC)
+		return V0;
 	return R0;
 }
 
@@ -1165,9 +1342,9 @@ special(NODE *p, int shape)
  * default to ARMv2
  */
 #ifdef TARGET_BIG_ENDIAN
-#define DEFAULT_FEATURES	FEATURE_BIGENDIAN | FEATURE_MUL
+#define DEFAULT_FEATURES	FEATURE_BIGENDIAN | FEATURE_EXTEND | FEATURE_FPSIMD
 #else
-#define DEFAULT_FEATURES	FEATURE_MUL
+#define DEFAULT_FEATURES	FEATURE_EXTEND | FEATURE_FPSIMD
 #endif
 
 static int fset = DEFAULT_FEATURES;
@@ -1178,8 +1355,16 @@ static int fset = DEFAULT_FEATURES;
 void
 mflags(char *str)
 {
-	//Handling needs to be done for ARMv8
+	if (strcasecmp(str, "soft-float") == 0) {
+		fset &= ~FEATURE_HARDFLOAT;
+	} else if (strcasecmp(str, "hard-float") == 0) {
+		fset |= FEATURE_HARDFLOAT;
+	} else {
+		fprintf(stderr, "unknown m option '%s'\n", str);
+		exit(1);
+	}
 }
+
 int
 features(int mask)
 {

@@ -1057,7 +1057,7 @@ strcvt(struct initctx *ctx, NODE *p)
 	char *s;
 	int i, n;
 
-#ifdef mach_arm
+#if defined(mach_arm) || defined(mach_aarch64)
 	/* XXX */
 	if (p->n_op == UMUL && p->n_left->n_op == ADDROF)
 		p = p->n_left->n_left;
@@ -1299,6 +1299,9 @@ simpleinit(struct symtab *sp, NODE *p)
 		    (p->n_sp->sflags & SMASK) == SSTRING)
 			p->n_sp->sflags |= SASG;
 		p = optloop(buildtree(ASSIGN, nt, p));
+		/* for structure assignment */
+		if (p->n_op == UMUL)
+			p = p1nfree(p);
 		q = p->n_right;
 		t = q->n_type;
 		sz = (int)tsize(t, q->n_df, q->pss);
