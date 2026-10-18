@@ -1,5 +1,3 @@
-/*	$Id$	*/
-
 /*
  * Copyright (c) 2004, 2007 Anders Magnusson (ragge@ludd.ltu.se).
  * All rights reserved.
@@ -1236,7 +1234,7 @@ simpleinit(struct symtab *sp, NODE *p)
 	 * its first element, as if braced ("char tapedev[10] = '\0';").
 	 * Falling through would build ASSIGN(array, scalar) and give
 	 * "lvalue required". */
-	if (traditional && ISARY(sp->stype) && !ISARY(p->n_type)) {
+	if (ISARY(sp->stype) && !ISARY(p->n_type)) {
 		werror("array initialized with scalar; braces assumed");
 		ctx = beginit(sp);
 		scalinit(ctx, p, NULL);

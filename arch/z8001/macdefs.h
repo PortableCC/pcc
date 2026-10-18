@@ -442,6 +442,8 @@ int pickcolor(int class, int mask);
  * local2.c).  Consulted by emit() before an RESCC compare/branch is lowered.
  */
 #define	TARGET_CBRANCH_FUSE(p)	cbfuse(p)
+struct node;
+int cbfuse(struct node *p); /* optional TARGET_CBRANCH_FUSE hook (backend) */
 
 /*
  * sizeof and pointer-difference results are plain 16-bit integers, NOT

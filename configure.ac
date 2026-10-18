@@ -401,6 +401,11 @@ AC_ARG_ENABLE(multiarch,
 	AS_HELP_STRING([--enable-multiarch=yes/no/auto/<triplet>],
 		[Enable use of Linux Multi-Arch paths (default: auto)]),
 	[multiarch=$enableval], [multiarch=auto])
+AC_ARG_WITH(sysroot,
+	AS_HELP_STRING([--with-sysroot=<path>],
+		[Specify the default sysroot.]),
+	sysrootdir=$withval,
+	[])
 AC_ARG_WITH(incdir,
 	AS_HELP_STRING([--with-incdir=<path>],
 		[Specify the default include path.]),
@@ -565,6 +570,10 @@ if test -n "$altincdir"; then
 	AC_DEFINE_UNQUOTED(STDINC, "$altincdir",
 		[Define alternate standard include directory])
 fi
+if test -n "$sysrootdir"; then
+	AC_DEFINE_UNQUOTED(SYSROOT, "$sysrootdir",
+		[Define default sysroot directory])
+fi
 if test -n "$altlibdir"; then
 	AC_DEFINE_UNQUOTED(LIBDIR, "${altlibdir}/",
 		[Define alternate standard lib directory])
@@ -683,7 +692,7 @@ AC_HEADER_SYS_WAIT
 ##  AC_FUNC_STRTOD
 # AC_FUNC_VPRINTF
 # AC_CHECK_FUNCS([memset strchr strdup strrchr strtol])
-AC_CHECK_FUNCS([strtold vsnprintf snprintf mkstemp strlcat strlcpy getopt ffs vfork])
+AC_CHECK_FUNCS([strtold vsnprintf snprintf mkstemp strlcat strlcpy getopt ffs vfork fgetln])
 AC_FUNC_ALLOCA
 AC_CHECK_LIB([m],[lroundl])
 AC_CHECK_FUNCS([lroundl])
@@ -754,6 +763,8 @@ echo "Has TLS support .................. $tls"
 echo "Has GCC compatibility ............ $gcccompat"
 echo "Has PCC debugging ................ $pccdebug"
 echo "Type of wchar_t is ............... ${wchar_type} (${wchar_size} chars)"
+test -n "${sysrootdir}" && \
+echo "Default sysroot is ............... ${sysrootdir}"
 echo
 echo "Configure finished.  Do 'make && make install' to compile and install.
 "

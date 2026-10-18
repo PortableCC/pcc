@@ -1,5 +1,3 @@
-/*	$Id$	*/
-
 /*-
  * Copyright (c) 2011 Joerg Sonnenberger <joerg@NetBSD.org>.
  * All rights reserved.
@@ -166,13 +164,16 @@
 #ifndef CXX1
 #define CXX1	"cxx1"
 #endif
+#ifndef SYSROOT
+#define SYSROOT	""
+#endif
 
 char	*passp = PREPROCESSOR;
 char	*pass0 = COMPILER;
 char	*passxx0 = CXXCOMPILER;
 char	*as = ASSEMBLER;
 char	*ld = LINKER;
-char	*sysroot = "", *isysroot;
+char	*sysroot = SYSROOT, *isysroot;
 
 
 /* crt files using pcc default names */

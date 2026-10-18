@@ -1166,11 +1166,10 @@ chkpun(P1ND *p)
 				if (ISARY(t2))
 					++d2;
 			} else if (ISFTN(t1)) {
-				if (!ISFTN(t2))
-					break; /* t2 has no df: (char *)0
-						* assigned to a function
-						* pointer crashed here */
-				if (pr_ckproto(d1->dlst, d2->dlst, 0)) {
+				int dlst = 0;
+				if (ISFTN(t2))
+					dlst = d2->dlst;
+				if (pr_ckproto(d1->dlst, dlst, 0)) {
 					werror("illegal function "
 					    "pointer combination");
 					return;
@@ -1539,7 +1538,7 @@ ptmatch(P1ND *p)
 				if (BTYPE(td2->type) == VOID)
 					break;
 			}
-			if (traditional && ISPTR(td1->type) && ISPTR(td2->type)) {
+			if (ISPTR(td1->type) && ISPTR(td2->type)) {
 				/* mismatched pointers: K&R code does
 				 * e.g. "m ? (char *)0 : fp"; warn and
 				 * use the left type */

@@ -297,7 +297,10 @@ ext_def_list:	   ext_def_list external_def
 		| { ftnend(); }
 		;
 
-external_def:	   funtype kr_args compoundstmt { fend(); }
+external_def:	   noinitdcl funtype kr_args compoundstmt { fend(); }
+		|  noinitdcl init_declarator_list ';'
+		|  declaration_specifiers declarator { fundef($1,$2); }
+			kr_args compoundstmt { fend(); }
 		|  declaration  { blevel = 0; symclear(0); }
 		|  notype_init_dcl_list ';' { blevel = 0; symclear(0); }
 		|  asmstatement ';'
@@ -305,58 +308,16 @@ external_def:	   funtype kr_args compoundstmt { fend(); }
 		|  error { blevel = 0; }
 		;
 
-/*
- * K&R-style external declaration with no type specifier at all:
- *	unixbug = 0;	extlist(), extfn();
- * The type defaults to int (as gcc does, with a warning).  No conflict
- * with funtype: its reduction is chosen on lookahead '{' or a
- * declaration specifier (K&R argument declarations), while these
- * productions reduce on '=', ',' or ';'.
- */
-notype_init_dcl_list:
-		   notype_init_dcl { symclear(blevel); }
-		|  notype_init_dcl_list ',' notype_init_dcl { symclear(blevel); }
-		;
-
-notype_init_dcl:   declarator attr_var {
-			P1ND *tn = mkty(INT, 0, 0);
-			if (traditional)
-				werror("type defaults to int in declaration");
-			else
-				uerror("type specifier missing");
-			init_declarator(tn, $1, 0, $2, 0);
-			p1tfree(tn);
-		}
-		|  notype_xnfdcl '=' e {
-			if ($1->sclass == STATIC || $1->sclass == EXTDEF)
-				statinit++;
-			simpleinit($1, eve($3));
-			if ($1->sclass == STATIC || $1->sclass == EXTDEF)
-				statinit--;
-			xnf = NULL;
-		}
-		|  notype_xnfdcl '=' begbr init_list optcomma '}' {
-			endinit($3, 0);
-			xnf = NULL;
-		}
-		;
-
-notype_xnfdcl:	   declarator attr_var {
-			P1ND *tn = mkty(INT, 0, 0);
-			if (traditional)
-				werror("type defaults to int in declaration");
-			else
-				uerror("type specifier missing");
-			$$ = xnf = init_declarator(tn, $1, 1, $2, 0);
-			p1tfree(tn);
+noinitdcl:	  {
+			$<nodep>$ = mkty(INT, 0, 0);
+			warner(Wimplicit_int);
 		}
 		;
 
 funtype:	  /* no type given */ declarator {
-		    fundef(mkty(INT, 0, 0), $1);
+		    fundef($<nodep>0, $1);
 		    cftnsp->sflags |= NORETYP;
 		}
-		| declaration_specifiers declarator { fundef($1,$2); }
 		;
 
 kr_args:	  /* empty */
@@ -801,8 +762,8 @@ struct_declarator: declarator attr_var {
 xnfdeclarator:	   declarator attr_var {
 			$$ = xnf = init_declarator($<nodep>0, $1, 1, $2, 0);
 		}
-		|  declarator C_ASM '(' svstr ')' {
-			$$ = xnf = init_declarator($<nodep>0, $1, 1, NULL, $4);
+		|  declarator C_ASM '(' svstr ')' attr_var {
+			$$ = xnf = init_declarator($<nodep>0, $1, 1, $6, $4);
 		}
 		;
 
@@ -993,10 +954,7 @@ statement:	   e ';' { ecomp(eve($1)); symclear(blevel); }
 			    cftnsp->stype != VOID+FTN) {
 				/* legal in C89 (constraint is C99);
 				 * common in K&R code */
-				if (traditional)
 					werror("return value required");
-				else
-					uerror("return value required");
 			}
 			rch:
 			if (!reached)

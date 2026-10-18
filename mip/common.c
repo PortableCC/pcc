@@ -569,7 +569,6 @@ struct dopest {
 	{ STCLR, "STCLR", BITYPE, },
 	{ ADDROF, "U&", UTYPE, },
 	{ SWDISP, "SWDISP", UTYPE, },
-	{ BCLR, "BCLR", UTYPE, },
 
 	{ -1,	"",	0 },
 };

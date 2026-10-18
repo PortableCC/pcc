@@ -1088,6 +1088,7 @@ cfg_build(struct p2env *p2e)
 				SLIST_INSERT_LAST(&bb->child, cnode, chld);
 			} else {
 				int *l;
+#ifdef mach_z8001
 				/*
 				 * Computed goto.  A switch-dispatch GOTO(SWDISP)
 				 * carries its OWN null-terminated target list in
@@ -1104,6 +1105,7 @@ cfg_build(struct p2env *p2e)
 				if (p->n_left->n_op == SWDISP)
 					l = (int *)p->n_name;
 				else
+#endif
 					l = p2e->epp->ip_labels;
 				for (; *l; l++) {
 					cnode->bblock = p2e->labinfo.arr[*l - p2e->labinfo.low];

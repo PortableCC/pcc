@@ -839,7 +839,10 @@ zzzcode(NODE *p, int c)
 		printf("\tinc\t");
 		prword(getlr(p, 'D'), 1);		/* dst = &buf[1] */
 		printf(",$1\n");
-		printf("\tld\t%s,$%d\n", rnames[cnt], p->n_rval - 1);
+		if (p->n_right->n_op != ICON)
+			comperr("ZA not ICON");
+		printf("\tld\t%s,$%d\n",
+		    rnames[cnt], (int)getlval(p->n_right) - 1);
 		printf("\tldirb\t(%s),(%s),%s\n",
 		    rnames[dst], rnames[src], rnames[cnt]);
 	    }
@@ -2815,7 +2818,8 @@ clrfill(struct interpass *ipole)
 			/* INCREF type -> the node result slot is a B pair, used
 			 * as the dst scratch by ZA.  The byte count rides in
 			 * n_rval (n_lval would alias n_left, the child). */
-			p = mkunode(BCLR, l, len, INCREF(CHAR));
+			p = mkbinode(STCLR, l,
+			    mklnode(ICON, len, 0, INT), INCREF(CHAR));
 			ip->ip_node = p;
 			for (d = DLIST_NEXT(ip, qelem); d != past; d = dn) {
 				dn = DLIST_NEXT(d, qelem);

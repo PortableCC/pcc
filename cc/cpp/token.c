@@ -1,5 +1,3 @@
-/*	$Id$	*/
-
 /*
  * Copyright (c) 2004,2009 Anders Magnusson. All rights reserved.
  *
@@ -52,25 +50,30 @@
  * 5.1.1.2 Translation phases:
  *	1) Convert UCN to UTF-8 which is what pcc uses internally (chkucn).
  *	   Remove \r (unwanted)
- *	2) Remove \\\n.  Need extra care for identifiers and #line.
+ *	2) Remove \\\n.	 Need extra care for identifiers and #line.
  *	3) Tokenize.
  *	   Remove comments (fastcmnt)
+ *
+ * Handling of newline:
+ *	- In a define with \\n, print out \n when found and inc lineno.
+ *	- While expanding a macro whose args spans multiple lines, 
+ *	  save in escln.
  */
-/*  (low address)                                             (high address)
- *  pbeg                                                                pend
- *  |                                                                     |
+/*  (low address)					      (high address)
+ *  pbeg								pend
+ *  |									  |
  *  _______________________________________________________________________
  * |_______________________________________________________________________|
- *          |               |               |
- *          |<-- waiting -->|               |<-- waiting -->
- *          |    to be      |<-- current -->|    to be
- *          |    written    |    token      |    scanned
- *          |               |               |
- *          outp            inp             p
+ *	    |		    |		    |
+ *	    |<-- waiting -->|		    |<-- waiting -->
+ *	    |	 to be	    |<-- current -->|	 to be
+ *	    |	 written    |	 token	    |	 scanned
+ *	    |		    |		    |
+ *	    outp	    inp		    p
  *
  *  *outp   first char not yet written to output file
  *  *inp    first char of current token
- *  *p      first char not yet scanned
+ *  *p	    first char not yet scanned
  */
 
 #ifndef pdp11
@@ -103,7 +106,7 @@ static void undefstmt(void);
 static void pragmastmt(void);
 static void elifstmt(void);
 
-#define	unch(x)	*--inp = x
+#define unch(x) *--inp = x
 
 /* protection against recursion in #include */
 #define MAX_INCLEVEL	100
@@ -118,9 +121,9 @@ usch *pbeg, *inp, *pend;
 /* used by yylex() buffer expansion */
 static struct iobuf *lb;
 static usch *lpbeg, *lpend, *linp;
-static FILE *lifp;
+static struct rdline *lifp;
 
-static int ucn(int ch, usch *p, int len);
+static void ucn(int ch, FILE *ifp, FILE *ofp);
 static void fastcmnt2(int);
 static int chktg(int ch);
 
@@ -132,15 +135,15 @@ static int chktg(int ch);
 #define C_NBS	(C_SPEC|C_Q|C_PACK|C_ESTR)
 
 #define FIRST_128							\
-	C_NBS,	0,	0,	0,	C_SPEC,	C_SPEC,	0,	0,	\
-	0,	C_WSNL,	C_NL,	0,	0,	C_PACK, 0,	0,	\
+	C_NBS,	0,	0,	0,	C_SPEC, C_SPEC, 0,	0,	\
+	0,	C_WSNL, C_NL,	0,	0,	C_PACK, 0,	0,	\
 	0,	0,	0,	0,	0,	0,	0,	0,	\
 	0,	0,	0,	0,	0,	0,	0,	0,	\
 	\
-	C_WSNL,	C_2,	C_SPEC|C_ESTR, 0, 0,	0,	C_2,	C_SPEC|C_ESTR, \
+	C_WSNL, C_2,	C_SPEC|C_ESTR, 0, 0,	0,	C_2,	C_SPEC|C_ESTR, \
 	0,	0,	0,	C_2,	0,	C_2,	0,	C_SPEC|C_Q, \
 	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	C_DX,	\
-	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_PACK,	\
+	C_DX,	C_DX,	0,	0,	C_2,	C_2,	C_2,	C_PACK, \
 	\
 	0,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_IX,	C_I,	\
 	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	C_I,	\
@@ -178,21 +181,52 @@ short spechr[256] = {
 	FIRST_128 LAST_128
 };
 
-#define	ENDFREE	4	/* space left at end of buffer */
+char cppmap[256] = {
+	0,	0,	0,	0,	F_BID,	F_BID,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,
 
-#define	INFLIRD	(CPPBUF-ENDFREE)
+	0,	0,	F_STR,	0,	0,	0,	0,	F_STR,
+	0,	0,	0,	0,	0,	0,	F_DOT,	F_SLASH,
+	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,	F_NUM,
+	F_NUM,	F_NUM,	0,	0,	0,	0,	0,	0,
 
-static usch *
-addch(int len)
-{
-	if (len == ifiles->maxend)
-		pbeg = realloc(pbeg, ifiles->maxend += 5);
-	return pbeg;
-}
-#define	ADDCH(ninp, len, ch)	{			\
-	if (len == ifiles->maxend) ninp = addch(len);	\
-	ninp[len++] = ch;				\
-}
+	0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_LU,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_LU,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	0,	0,	0,	0,	F_ID0,
+
+	0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_LU,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	0,	0,	0,	0,	0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,	F_ID0,
+};
+
+
+#define ENDFREE 4	/* space left at end of buffer */
+
+#define INFLIRD (CPPBUF-ENDFREE)
 
 /*
  * fill up the input buffer
@@ -202,51 +236,20 @@ addch(int len)
 int
 inpbuf(void)
 {
-	register usch *ninp;
-	register int len, ch;
-	int latelf = 0;
+	struct rdline *rdp = ifiles->rdp;
 
-	if (ifiles->ifp == NULL)
+	if (rdp == NULL)
 		return 0;
 
 	if (inp < pend)
 		error("inp < pend");
 
-	ninp = pbeg;
+	if (templine(ifiles->rdp) == NULL)
+		return 0;
 
-	for (len = 0;;) {
-		if ((ch = getc(ifiles->ifp)) < 0)
-			break;
-		if (ch == '\\') {
-			ADDCH(ninp, len, ch);
-			ch = fgetc(ifiles->ifp);
-			if (ch == '\\') {
-				ADDCH(ninp, len, ch);
-				continue;
-			}
-			if (ch == '\n') {
-				/* \\n */
-				len--;
-				latelf++;
-			} else if (ch == 'u' || ch == 'U') {
-				len = ucn(ch, ninp, len-1);
-			} else
-				ungetc(ch, ifiles->ifp);
-			continue;
-		}
-		ADDCH(ninp, len, ch);
-		if (ch == '\n')
-			break;
-	}
-	while (latelf) {
-		ADDCH(ninp, len, '\n');
-		latelf--;
-	}
-
-	ADDCH(ninp, len, 0);
-	inp = pbeg;
-	pend = ninp + len - 1;
-	return len-1;
+	inp = (usch *)rdp->curpos;
+	pend = inp + rdp->len;
+	return rdp->len;
 }
 
 /*
@@ -258,15 +261,20 @@ qcchar(void)
 {
 	register int ch;
 
-newone:	if (ISCQ(ch = *inp++) == 0)
+newone: ch = *inp++;
+	if (ISCQ(ch) == 0)
 		return ch;
 
 	switch (ch) {
+	case '\n':
+		*--inp = 0;
+		return ch;
+
 	case 0:
 		inp--;
 		if (lb) {
 			pend = lpend, pbeg = lpbeg, inp = linp;
-			ifiles->ifp = lifp;
+			ifiles->rdp = lifp;
 			bufree(lb);
 			lb = 0;
 			goto newone;
@@ -355,11 +363,59 @@ fastcmnt2(register int ch)
 }
 
 /*
- * check for universal-character-name on input, and
- * unput to the pushback buffer encoded as UTF-8.
+ * Skip over a comment.
  */
-static int
-ucn(register int ch, register usch *buf, register int len)
+static char *
+skpcmnt(char *s)
+{
+	char *lastw = s;
+
+	s+=2;	/* skip initial / + * */
+	for (;;) {
+		while (*s != '*' && *s != '\n')
+			s++;
+		if (*s == '\n') {
+			if (Cflag)
+				putblk(lastw, s);
+			putch('\n');
+			ifiles->lineno++;
+			if (templine(ifiles->rdp) == NULL)
+				error("EOF in comment");
+			lastw = s = ifiles->rdp->curpos;
+			continue;
+		}
+		/* found a '*' */
+		s++;
+		if (*s == '/') {
+			if (Cflag)
+				putblk(lastw, s+1);
+			return ++s;
+		}
+	}
+}
+
+/*
+ * Skip over whitespaces and comments to next char.
+ */
+static char *
+skpwscmnt(char *s)
+{
+	for (;;) {
+		while (ISWS(*s))
+			s++;
+		if (*s == '/' && s[1] == '*')
+			s = skpcmnt(s);
+		else
+			return s;
+	}
+}
+
+/*
+ * check for universal-character-name on input, and
+ * write to the output buffer, encoded as UTF-8.
+ */
+static void
+ucn(register int ch, FILE *ifp, FILE *ofp)
 {
 	unsigned long cp, m;
 	usch bs[6], *p;
@@ -368,12 +424,12 @@ ucn(register int ch, register usch *buf, register int len)
 	n = ch == 'u' ? 4 : 8;
 	cp = 0;
 	while (n-- > 0) {
-		if ((ch = fgetc(ifiles->ifp)) < 0 ||
+		if ((ch = fgetc(ifp)) < 0 ||
 		    (ISDIGIT(ch) || ((ch|040) >= 'a' && (ch|040) <= 'f')) == 0) {
-#if 0 			/* leave untouched */
+#if 0			/* leave untouched */
 			warning("invalid universal character name");
 #endif
-			return len;
+			return;
 		}
 		cp = cp * 16 + dig2num(ch);
 	}
@@ -388,7 +444,7 @@ ucn(register int ch, register usch *buf, register int len)
 #endif
 
 	if (cp == 0)
-		return len; /* ignore zeroes */
+		return; /* ignore zeroes */
 	n = 0;
 	m = 0x7f;
 	p = bs;
@@ -399,9 +455,8 @@ ucn(register int ch, register usch *buf, register int len)
 	}
 	*p++ = (((m << 1) ^ 0xfe) | cp);
 	while (p > bs) {
-		ADDCH(buf, len, *--p);
+		fputc(*--p, ofp);
 	}
-	return len;
 }
 
 /*
@@ -513,170 +568,139 @@ fastscan(void)
 	struct iobuf *ob;
 	struct symtab *nl;
 	register int ch, c2;
-	register usch *p;
+	struct rdline *rdp = ifiles->rdp;
+	char *s, *p, *lastw;
 
-	goto run;
-
+	/*
+	 * An outer and an inner loop.
+	 * The outer loop reads in lines (terminated by \n), the inner loop
+	 * checks each character.
+	 * lastw is the last char written to the output buffer, and either
+	 * when a macro is found or when the whole line is read the chars
+	 * between s and lastw are written out.
+	 */
 	for (;;) {
-		/* tight loop to find special chars */
-		/* should use getchar/putchar here */
-		for (;;) {
-			if (inp < pend)
-				ch = *inp++;
-			else
-				ch = qcchar();
+		while (escln > 0) {
+			ifiles->lineno++;
+			putch('\n'), escln--;
+		}
+		if (templine(rdp) == NULL)
+			return;
+		s = lastw = rdp->curpos;
+		if (Cflag == 0 && *s == '/' && s[1] == '*') {
+			/* Remove leading comments */
+			lastw = s = skpwscmnt(s);
+		}
+		// XXX compat
+		inp = (usch *)s;
+		pend = (usch *)rdp->curpos + rdp->len;
+		// XXX end compat
 
-			if ((ISSPEC(ch)) != 0)
-				break;
-			putch(ch);
+		if (*s == '#') {
+			inp++;
+			ppdir(++s);
+			escln++;
+			s = skpwscmnt((char *)inp);
+			continue;
 		}
 
-		switch (ch) {
-		case 0:
-			return;
-
-		case WARN:
-		case CONC:
-			error("bad char passed");
-			break;
-
-		case '/': /* Comments */
-			incmnt++;
-			ch = qcchar();
-			incmnt--;
-			if (ch  == '/' || ch == '*') {
-				if (Cflag == 0) {
-					int n = ifiles->lineno;
-					fastcmnt2(ch);
-					if (n == ifiles->lineno)
-						putch(' '); /* 5.1.1.2 p3 */
-				} else {
-					ob = getobuf(BNORMAL);
-					Ccmnt2(ob, ch);
-					ob->buf[ob->cptr] = 0;
-					putstr(ob->buf);
-					bufree(ob);
-				}
-			} else {
-				putch('/');
-				unch(ch);
-			}
-			break;
-
-		case '\n': /* newlines, for pp directives */
-			/* take care of leftover \n */
-			while (escln > 0) {
-				putch('\n');
-				escln--;
-				ifiles->lineno++;
-			}
-			putch('\n');
-			ifiles->lineno++;
-
-			/* search for a # */
-run:			while ((ch = qcchar()) == '\t' || ch == ' ')
-				putch(ch);
-			if (ch == 0)
-				return;
-			if (ch == '%') {
-				if ((c2 = qcchar()) != ':')
-					unch(c2);
-				else
-					ch = '#';
-			}
-			if (ch  == '#')
-				ppdir();
-			else
-				unch(ch);
-			break;
-
-		case '\'': /* character constant */
-			if (tflag) {
-				putch(ch);
-				break;	/* character constants ignored */
-			}
-			/* FALLTHROUGH */
-		case '\"': /* strings */
-			if (skpows)
-				cntline();
-			p = inp;
-			*--inp = ch;
-			for (;;) {
-				while (ISESTR(*p++) == 0)
-					;
-				if ((c2 = *--p) == 0) {
-					putstr(inp);
-					inp = p;
-					inpbuf();
-					p = inp-1;
-				} else if (c2 == '\\') {
-					p++;
-				} else if (c2 == '\n') {
-					warning("unterminated literal");
-					p--;
-					break;
-				} else if (c2 == ch) 
-					break;
-				p++;
-			}
-			while (inp <= p)
-				putch(*inp++);
-			break;
-
-		case '0': case '1': case '2': case '3': case '4':
-		case '5': case '6': case '7': case '8': case '9':
-			if (skpows)
-				cntline();
-			for (;;) {
-				putch(ch);
-				if (*inp == 0 || *inp == '\\')
-					ch = qcchar();
-				else
-					ch = *inp++;
-				if (ch == 0)
-					break;
-				if ((ISID(ch)) == 0 && ch != '.')
-					break;
-				if ((ch|040) == 'e' || (ch|040) == 'p') {
-					if ((c2 = qcchar()) == '-' || c2 == '+') {
-						putch(ch);
-						ch = c2;
-					} else
-						unch(c2);
-				}
-			}
-			*--inp = ch;
-			break;
-
-		case 'L':
-		case 'U':
-		case 'u':
-			if (*inp == 0)
-				inpbuf();
-			if ((c2 = *inp) == '\"' || c2 == '\'') {
-				putch(ch);
-				break;
-			}
-			if (c2 == '8' && ch == 'u') {
-				if (inp[1] == 0)
-					inpbuf();
-				if (inp[1] == '\"') {
-					inp++;
-					putstr((usch *)"u8");
+		/*
+		 * Loop over string. Search for:
+		 * - strings
+		 * - Character constants
+		 * - Comments (if Cflag)
+		 * - cpp numbers
+		 * - identifiers
+		 *
+		 * A continue statement will fetch next char for parsing.
+		 * A break will:
+		 * - flush unwritten parts of the input to output.
+		 * - add the \n to the output.
+		 * - write eventual saved \n to the output.
+		 */
+		for (;;) {
+			ch = *s++;
+			switch (F_TYP(ch)) {
+			case 0:
+				if (ch == '\n') {
+					s--;
 					break;
 				}
-			}
-			/* FALLTHROUGH */
-		default:
-#ifdef PCC_DEBUG
-			if ((ISID(ch)) == 0)
-				error("fastscan");
-#endif
-			if (flslvl)
-				error("fastscan flslvl");
+				continue;
 
-			p = readid(ch);
-			if ((nl = lookup(p, FIND)) != NULL) {
+			case F_STR:
+				while ((c2 = *s) && c2 != ch) {
+					if (c2 == '\n') {
+						warning("unterminated literal");
+						break;
+					}
+					if (c2 == '\\')
+						s++;
+					s++;
+				}
+				s++;
+				continue;
+
+			case F_SLASH:
+				if (*s == '/') { /* C++-style comment */
+					s--; /* skip first / */
+					if (Cflag)
+						s = ifiles->rdp->line +
+						    ifiles->rdp->len - 1;
+					break;
+				}
+				if (*s != '*')
+					continue;
+				putblk(lastw, --s);
+				lastw = s = skpcmnt(s);
+				// XXX compat
+				inp = (usch *)s;
+				pend = (usch *)rdp->line + rdp->len;
+				// XXX end compat
+				continue;
+
+			case F_DOT:
+				if (F_TYP(*s) != F_NUM)
+					continue;
+				/* FALLTHROUGH */
+			case F_NUM:
+				for (;;) {
+					ch = *s++;
+					if ((F_ISID(ch)) == 0 && ch != '.')
+						break;
+					if ((ch|040) == 'e' || (ch|040) == 'p') 
+{
+						if ((c2 = *s) == '-' || c2 == '+')
+							s++;
+					}
+				}
+				s--;
+				continue;
+
+			case F_LU:
+				if (*s == '\"' || *s == '\'')
+					continue;
+				if (ch == 'u' && *s == '8' && s[1] == '\"') {
+					s++;
+					continue;
+				}
+				/* FALLTHROUGH */
+
+			case F_ID0:
+				/*
+				 * Search for identifier (quick look).
+				 */
+				p = s-1;
+				while (F_ISID(*s))
+					s++;
+				if (flslvl)
+					continue;
+				if ((nl = lookup((usch *)p, FIND)) == NULL)
+					continue;
+				putblk(lastw, p);
+				lastw = p;
+				rdp->curpos = s;
+				inp = (usch *)s;
 				if ((ob = kfind(nl)) != NULL) {
 					if (*ob->buf == '-' || *ob->buf == '+')
 						putch(' ');
@@ -690,11 +714,19 @@ run:			while ((ch = qcchar()) == '\t' || ch == ' ')
 						putch(' ');
 					bufree(ob);
 				}
-			} else {
-				putstr(p);
+				s = (char *)inp;
+				rdp->curpos = s;
+				lastw = s;
+				continue;
+
+			default:
+				continue;
 			}
 			break;
 		}
+		if (s != lastw)
+			putblk(lastw, s);
+		escln++;
 	}
 }
 
@@ -827,7 +859,7 @@ ident:		if (ISID0(t) == 0)
 				if ((ob = kfind(nl))) {
 					ob->buf[ob->cptr] = 0;
 					lpbeg = pbeg, lpend = pend, linp = inp;
-					lifp = ifiles->ifp, ifiles->ifp = 0;
+					lifp = ifiles->rdp, ifiles->rdp = 0;
 					lb = ob;
 					inp = pbeg = ob->buf,
 					    pend = pbeg + ob->cptr;
@@ -844,35 +876,83 @@ pb:	*--inp = c2;
 }
 
 /*
- * Scan over an input file and convert its trigraphs before doing
- * anything else.  This is only called if -T (convert trigraphs) is given.
- * Trigraphs is deprecated in C23.
+ * Cleanup input file before parsing.
+ *	- Convert trigraphs (if -T)
+ *	- Convert UCN
+ *	- Complain (and remove) unwanted characters
+ *	- Remove \\n
+ *	- Remove initial whitespace
+ *	- Convert initial digraphs.
  */
 static FILE *
-trigraphs(FILE *ifd)
+cleanup(FILE *ifd)
 {
-	register int ch, c2, c3;
 	FILE *ofd = tmpfile();
+	int ch, c2, beginning, numlf;
 
-	ch = fgetc(ifd);
-	c2 = fgetc(ifd);
-	c3 = fgetc(ifd);
-
-	while (c3 >= 0) {
-		if (ch == '?' && c2 == '?' && chktg(c3)) {
-			ch = chktg(c3);
-			c2 = fgetc(ifd);
-			c3 = fgetc(ifd);
+	beginning = 1;
+	numlf = 0;
+	while ((ch = getc(ifd)) != EOF) {
+		if (ch < ' ') {
+			if (ch == '\r' || ch == '\f')
+				continue;
+			if (ch != '\n' && ch != '\t')
+				warning("input file has char %d, ignored", ch);
 		}
-		fputc(ch, ofd);
-		ch = c2;
-		c2 = c3;
-		c3 = fgetc(ifd);
+		if (Tflag && ch == '?') {
+	chk2:		if ((ch = fgetc(ifd)) == '?') {
+				if (chktg(ch = fgetc(ifd))) {
+					ch = chktg(ch);
+				} else {
+					ungetc(ch, ifd);
+					fputc('?', ofd);
+					goto chk2;
+				}
+			} else {
+				ungetc(ch, ifd);
+				ch = '?';
+			}
+		}
+		if (ch == '\\') {
+			if ((c2 = fgetc(ifd)) == 'u' || c2 == 'U') {
+				/* UCN */
+				ucn(c2, ifd, ofd);
+				continue;
+			}
+
+			if (c2 == '\r')
+				c2 = fgetc(ifd);
+			if (c2 == '\n') {
+				numlf++;
+				continue;
+			}
+			if (c2 == '\\') {
+				fputc(ch, ofd);
+				fputc(ch, ofd);
+				continue;
+			}
+			ungetc(c2, ifd);
+		}
+		if (beginning) {
+			if (ch == ' ' || ch == '\t')
+				continue;
+			if (ch == '%') {
+				if ((c2 = fgetc(ifd)) == ':')
+					ch = '#';
+				else
+					ungetc(c2, ifd);
+			}
+		}
+		beginning = 0;
+		putc(ch, ofd);
+		if (ch == '\n') {
+			beginning = 1;
+			while (numlf) {
+				fputc('\n', ofd);
+				numlf--;
+			}
+		}
 	}
-	if (ch >= 0)
-		fputc(ch, ofd);
-	if (c2 >= 0)
-		fputc(c2, ofd);
 	fclose(ifd);
 	rewind(ofd);
 	return ofd;
@@ -885,17 +965,18 @@ void
 pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 {
 	struct includ ibuf;
+	struct rdline rdline;
 	register struct includ *ic;
 	register int otrulvl;
+	struct rdline *rdp = &rdline;
 
-	if (Tflag)
-		ifp = trigraphs(ifp);
+	rdp = tempfile(cleanup(ifp));
 
 	ic = &ibuf;
 	ic->next = ifiles;
 	ifiles = ic;
 
-	ic->ifp = ifp;
+	ic->rdp = rdp;
 	ic->orgfn = ic->fname = file;
 
 	ic->opend = pend - pbeg;
@@ -923,6 +1004,8 @@ pushfile(FILE *ifp, const usch *file, int idx, void *incs)
 	pbeg = ic->opbeg;
 	pend = pbeg + ic->opend;
 	inp = pbeg + ic->oinp;
+
+	tempclose(rdp);
 }
 
 /*
@@ -1094,9 +1177,9 @@ elsestmt(void)
 	chknl(1);
 }
 
-#define	TYP_ELIF	1
-#define	TYP_ELIFDEF	2
-#define	TYP_ELIFNDEF	3
+#define TYP_ELIF	1
+#define TYP_ELIFDEF	2
+#define TYP_ELIFNDEF	3
 static void elifcommon(int typ);
 static int chktyp(int typ);
 
@@ -1177,7 +1260,7 @@ chktyp(int typ)
 	rv = lookup(bp, FIND) == NULL;
 	if (typ == TYP_ELIFDEF)
 		rv = !rv;
-        chknl(0);
+	chknl(0);
 	return rv;
 }
 
@@ -1235,6 +1318,8 @@ prwoe(void)
 static void
 cpperror(void)
 {
+	if (flslvl)
+		return;
 	fflush(stdout);
 
 	fprintf(stderr, "#error");
@@ -1247,6 +1332,8 @@ cppwarning(void)
 {
 	extern int warnings;
 
+	if (flslvl)
+		return;
 	fprintf(stderr, "#warning");
 	prwoe();
 	warnings++;
@@ -1259,6 +1346,8 @@ undefstmt(void)
 	register usch *bp;
 	register int ch;
 
+	if (flslvl)
+		return;
 	if (!ISID0(ch = fastspc()))
 		error("bad #undef");
 	bp = readid(ch);
@@ -1272,6 +1361,8 @@ identstmt(void)
 {
 	int x = 0;
 
+	if (flslvl)
+		return;
 	if (yylex() == STRING) {
 		bufree(yynode.nd_ob);
 		x = yylex();
@@ -1285,6 +1376,8 @@ pragmastmt(void)
 {
 	register int ch;
 
+	if (flslvl)
+		return;
 	putstr((const usch *)"\n#pragma");
 	while ((ch = qcchar()) != '\n' && ch > 0)
 		putch(ch);
@@ -1299,8 +1392,8 @@ cinput(void)
 	return qcchar();
 }
 
-#define	DIR_FLSLVL	001
-#define	DIR_FLSINC	002
+#define DIR_FLSLVL	001
+#define DIR_FLSINC	002
 static struct {
 	const char *name;
 	void (*fun)(void);
@@ -1326,7 +1419,7 @@ static struct {
 	{ "include_next", include_next, 0 },
 #endif
 };
-#define	NPPD	(int)(sizeof(ppd) / sizeof(ppd[0]))
+#define NPPD	(int)(sizeof(ppd) / sizeof(ppd[0]))
 
 static void
 skpln(void)
@@ -1343,121 +1436,47 @@ skpln(void)
 }
 
 /*
- * do an even faster scan than fastscan while at flslvl.
- * just search for a new directive.
- */
-static void
-flscan(void)
-{
-	register int ch;
-
-	for (;;) {
-		ch = qcchar();
-again:		switch (ch) {
-		case 0:
-			return;
-		case '\n':
-			putch('\n');
-			ifiles->lineno++;
-			while ((ch = qcchar()) == ' ' || ch == '\t')
-				;
-			if ((ch == '#') ||
-			    (ch == '%' && (ch = qcchar()) == ':')) {
-				while ((ch = qcchar()) == ' ' || ch == '\t')
-					;
-				if (ISID0(ch)) {
-					unch(ch);
-					return;
-				}
-			}
-			goto again;
-		case '\'':
-			while ((ch = qcchar()) != '\'') {
-				if (ch == '\\')
-					qcchar();
-				if (ch == '\n')
-					goto again;
-			}
-			break;
-		case '\"':
-			instr = 1;
-			while ((ch = qcchar()) != '\"') {
-				switch (ch) {
-				case '\\':
-					incmnt = 1;
-					qcchar();
-					incmnt = 0;
-					break;
-				case '\n':
-					goto again;
-				case 0:
-					instr = 0;
-					return;
-				}
-			}
-			instr = 0;
-			break;
-		case '/':
-			ch = qcchar();
-			if (ch == '/' || ch == '*')
-				fastcmnt2(ch);
-			goto again;
-		}
-        }
-}
-
-
-/*
  * Handle a preprocessor directive.
  * # is already found.
  */
 void
-ppdir(void)
+ppdir(char *s)
 {
-	register int ch, i, oldC;
-	usch *bp;
+	register int ch, i;
+	char *bp;
 
-	oldC = Cflag;
-redo:	Cflag = 0;
-	if ((ch = fastspc()) == '\n') { /* empty directive */
-		unch(ch);
-		Cflag = oldC;
+	s = skpwscmnt(s);
+	if (*s == '\n') {
+		inp = (usch *)s;
 		return;
 	}
-	Cflag = oldC;
-	if ((ISID0(ch)) == 0)
-		goto out;
-	bp = readid(ch);
 
-	/* got some keyword */
-	for (i = 0; i < NPPD; i++) {
-		if (bp[0] == ppd[i].name[0] &&
-		    strcmp((char *)bp, ppd[i].name) == 0) {
-			if (flslvl == 0) {
-				(*ppd[i].fun)();
-				if (flslvl == 0)
-					return;
-			} else {
-				if (ppd[i].flags & DIR_FLSLVL) {
-					(*ppd[i].fun)();
-					if (flslvl == 0)
-						return;
-				} else if (ppd[i].flags & DIR_FLSINC)
-					flslvl++;
-			}
-			flscan();
-			goto redo;
-		}
-	}
+	for (bp = s; F_ISID(*s); s++)
+		;
+	ch = *s, *s = 0;
+	for (i = 0; i < NPPD; i++)
+		if (strcmp(bp, ppd[i].name) == 0)
+			break;
+	if (i == NPPD || !F_ISWSNL(ch))
+		goto bad;
+
+	*s = ch;
+	inp = (usch *)s;
 	if (flslvl == 0) {
-		if (Aflag)
-			skpln();
-		return;
+		(*ppd[i].fun)();
+		if (flslvl == 0)
+			return;
+	} else {
+		if (ppd[i].flags & DIR_FLSLVL) {
+			(*ppd[i].fun)();
+			if (flslvl == 0)
+				return;
+		} else if (ppd[i].flags & DIR_FLSINC)
+			flslvl++;
 	}
-	flscan();
-	goto redo;
+	return;
 
-out:
+bad:
 	if (flslvl == 0 && Aflag == 0)
 		error("invalid preprocessor directive");
 
