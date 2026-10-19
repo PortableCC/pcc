@@ -19,7 +19,6 @@
  * We define location operations which operate on the expression tree
  * during the first pass (before sending to the backend for code generation.)
  */
-
 #include <assert.h>
 
 #include "pass1.h"
@@ -30,6 +29,7 @@
 #ifdef LANG_CXX
 #define p1listf listf
 #define p1tfree tfree
+#define sss sap
 #else
 #define NODE P1ND
 #define talloc p1alloc
@@ -45,6 +45,7 @@
 #endif
 
 extern void defalign(int);
+static NODE * stret(NODE *p);
 
 static char *
 getsoname(struct symtab *sp)
@@ -54,9 +55,49 @@ getsoname(struct symtab *sp)
 	    ap->sarg(0) : sp->sname;
 }
 
-#ifndef LANG_CXX
-#define	sap sss
-#endif
+#define IALLOC(sz)	(isinlining ? permalloc(sz) : tmpalloc(sz))
+
+/*
+ * Make a symtab entry for PIC use.
+ */
+static struct symtab *
+picsymtab(char *p, char *s, char *s2)
+{
+	struct symtab *sp = IALLOC(sizeof(struct symtab));
+	size_t len = strlen(p) + strlen(s) + strlen(s2) + 1;
+
+	sp->sname = IALLOC(len);
+	strlcpy(sp->sname, p, len);
+	strlcat(sp->sname, s, len);
+	strlcat(sp->sname, s2, len);
+	sp->sap = attr_new(ATTR_SONAME, 1);
+	sp->sap->sarg(0) = sp->sname;
+	sp->sclass = EXTERN;
+	sp->sflags = sp->slevel = 0;
+	return sp;
+}
+
+/*
+ * Create a reference for an extern variable or function.
+ */
+static NODE *
+picext(NODE *p)
+{
+	struct symtab *sp;
+	char *c;
+	if (ISFTN(p->n_type))
+		return p;
+	if (attr_find(p->n_sp->sap, ATTR_AARCH64_BEENHERE))
+		return p;
+
+	c = getexname(p->n_sp);
+	/* prefix got symbols with '@'. handle instrs in local2.c */
+	sp = picsymtab("", "@", c);
+	p->n_sp = sp;
+
+	sp->sap = attr_add(sp->sap, attr_new(ATTR_AARCH64_BEENHERE, 1));
+	return p;
+}
 
 /*
  * clocal() is called to do local transformations on
@@ -68,9 +109,25 @@ clocal(NODE *p)
 	struct symtab *q;
 	NODE *l, *r, *t;
 	int o;
-	int ty;
-	int tmpnr, isptrvoid = 0;
+	int ty, tyl;
 	char *n;
+
+	/*
+	 * Canonicalize LONG to LONGLONG as a safety net.
+	 *
+	 * The frontend normally normalizes target types via ctype(), mapping
+	 * LONG/ULONG to LONGLONG/ULONGLONG for backends that do not support C long
+	 * natively. However, some IR nodes (notably ICONs and SCONVs originating
+	 * from INTPTR handling on trees.c) are constructed without passing their types
+	 * through ctype(), allowing raw LONG to leak into pass2.
+	 *
+	 * This backend mandates that all integer types are already canonicalized
+	 * (i.e. no LONG survives past pass1), so we defensively rewrite LONG here
+	 * to avoid inconsistent IR. This is a workaround; the proper fix is to
+	 * ensure all IR construction paths apply ctype() consistently.
+	 */
+	if (p->n_type == LONG)
+		p->n_type = LONGLONG;
 
 	o = p->n_op;
 	switch (o) {
@@ -97,29 +154,9 @@ clocal(NODE *p)
 			}
 			return r;
 
-		case CALL:
 		case STCALL:
 		case USTCALL:
-			if (p->n_type == VOID)
-				break;
-			/*
-			 * if the function returns void*, ecode() invokes
-			 * delvoid() to convert it to uchar*.
-			 * We just let this happen on the ASSIGN to the temp,
-			 * and cast the pointer back to void* on access
-			 * from the temp.
-			 */
-			if (p->n_type == PTR+VOID)
-				isptrvoid = 1;
-			r = tempnode(0, p->n_type, p->n_df, p->n_ap);
-			tmpnr = regno(r);
-			r = block(ASSIGN, r, p, p->n_type, p->n_df, p->n_ap);
-
-			p = tempnode(tmpnr, r->n_type, r->n_df, r->n_ap);
-			if (isptrvoid) {
-				p = block(PCONV, p, NIL, PTR+VOID, p->n_df, 0);
-			}
-			p = buildtree(COMOP, r, p);
+			p = stret(p);
 			break;
 
 		case NAME:
@@ -134,13 +171,20 @@ clocal(NODE *p)
 					/* fake up a structure reference */
 					r = block(REG, NIL, NIL, PTR+STRTY, 0, 0);
 					slval(r, 0);
-					r->n_rval = SPREG;
+					r->n_rval = FPREG;
 					p = stref(block(STREF, r, p, 0, 0, 0));
 					break;
 				case REGISTER:
 					p->n_op = REG;
 					slval(p, 0);
 					p->n_rval = q->soffset;
+					break;
+				case EXTERN:
+				case EXTDEF:
+					if (kflag == 0 || statinit)
+						break;
+					if (blevel > 0)
+						p = picext(p);
 					break;
 				case STATIC:
 					if (q->slevel > 0) {
@@ -184,23 +228,26 @@ clocal(NODE *p)
 				nfree(p);
 				return l;
 			}
-			if ((p->n_type & TMASK) == 0 && (l->n_type & TMASK) == 0 &&
-			    tsize(p->n_type, p->n_df, p->n_ap) == tsize(l->n_type, l->n_df, l->n_ap)) {
-				if (p->n_type != FLOAT && p->n_type != DOUBLE &&
-				    l->n_type != FLOAT && l->n_type != DOUBLE &&
-				    l->n_type != LDOUBLE && p->n_type != LDOUBLE) {
-					if (l->n_op == NAME || l->n_op == UMUL ||
-					    l->n_op == TEMP) {
-						l->n_type = p->n_type;
-						nfree(p);
-						return l;
-					}
+
+			/* fix LONG that slipped due to INTPTR in trees.c */
+			if (l->n_type == LONG)
+				l->n_type = LONGLONG;
+
+			/* (u)longlong to (u)longlong conversion is free. */
+			ty = DEUNSIGN(p->n_type);
+			tyl = DEUNSIGN(l->n_type);
+			if ((ty == LONGLONG || ISPTR(p->n_type)) &&
+			    (tyl == LONGLONG || ISPTR(l->n_type))) {
+				if (l->n_op == NAME || l->n_op == UMUL || l->n_op == TEMP) {
+					l->n_type = p->n_type;
+					nfree(p);
+					return l;
 				}
 			}
 
 			if (l->n_op == ICON) {
 				CONSZ val = glval(l);
-				CONSZ lval;
+				CONSZ lval = 0;
 
 				if (!ISPTR(p->n_type)) /* Pointers don't need to be conv'd */
 				switch (p->n_type) {
@@ -259,6 +306,14 @@ clocal(NODE *p)
 				p->n_left->n_type = INT;
 				return p;
 			}
+			if ((p->n_type == FLOAT || p->n_type == DOUBLE ||
+			    p->n_type == LDOUBLE) &&
+			    (DEUNSIGN(l->n_type) == CHAR ||
+			    DEUNSIGN(l->n_type) == SHORT)) {
+				p = block(SCONV, p, NIL, p->n_type, p->n_df, p->n_ap);
+				p->n_left->n_type = INT;
+				return p;
+			}
 			break;
 
 		case PCONV:
@@ -267,8 +322,8 @@ clocal(NODE *p)
 				slval(l, (unsigned)glval(l));
 				goto delp;
 			}
-			if (l->n_type < INT || DEUNSIGN(l->n_type) == LONGLONG) {
-				p->n_left = block(SCONV, l, NIL, UNSIGNED, 0, 0);
+			if (l->n_type < LONGLONG) {
+				p->n_left = block(SCONV, l, NIL, LONGLONG, 0, 0);
 				break;
 			}
 			if (l->n_op == SCONV)
@@ -293,6 +348,59 @@ clocal(NODE *p)
 }
 
 /*
+ * Handle the return value from a call returning a struct.
+ *
+ * XXX - This routine would ideally live under code.c, but
+ * funcode() only gets invoked for function calls that take
+ * arguments. This routine applies to all struct returning calls.
+ */
+static NODE *
+stret(NODE *p)
+{
+	NODE *l, *t, *r;
+	int tmpnr, sz, szb, i, num;
+
+	sz = tsize(DECREF(p->n_type), p->n_df, p->n_ap);
+	szb = sz / SZCHAR;
+	num = (sz+SZLONGLONG-1) / SZLONGLONG;
+
+	if (szb > 16) {
+		t = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+		regno(t) = R8;
+		l = cstknode(DECREF(p->n_type), p->n_df, p->n_ap);
+		l = buildtree(ADDROF, l, NIL);
+		l = buildtree(ASSIGN, t, l);
+
+		r = tempnode(0, p->n_type, p->n_df, p->n_ap);
+		tmpnr = regno(r);
+		t = block(REG, NIL, NIL, p->n_type, p->n_df, p->n_ap);
+		regno(t) = R8;
+		r = buildtree(ASSIGN, r, t);
+
+		r = buildtree(COMOP, l, r);
+		r = buildtree(COMOP, r, p);
+
+		p = tempnode(tmpnr, p->n_type, p->n_df, p->n_ap);
+		p = buildtree(COMOP, r, p);
+	} else {
+		r = p;
+		for (i = 0; i < num; i++) {
+			l = cstknode(LONGLONG, 0, 0);
+			t = block(REG, NIL, NIL, LONGLONG, 0, 0);
+			regno(t) = R0 + num-i-1;
+			l = buildtree(ASSIGN, l, t);
+			p = buildtree(COMOP, p, l);
+		}
+		t = block(REG, NIL, NIL, PTR+STRTY, r->n_df, r->n_ap);
+		regno(t) = FPREG;
+		t = block(PLUS, t, bcon((AUTOINIT-autooff)/SZCHAR), PTR+STRTY, r->n_df, r->n_ap);
+		p = buildtree(COMOP, p, t);
+	}
+
+	return p;
+}
+
+/*
  * Called before sending the tree to the backend.
  */
 void
@@ -307,15 +415,17 @@ myp2tree(NODE *p)
 
 	sp = IALLOC(sizeof(struct symtab));
 	sp->sclass = STATIC;
+	sp->sss = 0;
 	sp->sap = 0;
 	sp->slevel = 1; /* fake numeric label */
 	sp->soffset = getlab();
 	sp->sflags = 0;
 	sp->stype = p->n_type;
 	sp->squal = (CON >> TSHIFT);
+	sp->sname = NULL;
 
 	defloc(sp);
-	inval(0, tsize(sp->stype, sp->sdf, sp->sap), p);
+	inval(0, tsize(sp->stype, sp->sdf, sp->sss), p);
 
 	p->n_op = NAME;
 	slval(p, 0);
@@ -385,50 +495,32 @@ spalloc(NODE *t, NODE *p, OFFSZ off)
 int
 ninval(CONSZ off, int fsz, NODE *p)
 {
-	union { float f; double d; int i[2]; } u;
 	struct symtab *q;
 	TWORD t;
-	int i, j;
+	U_CONSZ uval;
 
 	t = p->n_type;
 	if (t > BTMASK)
-		t = p->n_type = INT; /* pointer */
+		t = p->n_type = LONGLONG; /* pointer */
 
-	if (p->n_op == ICON && p->n_sp != NULL && DEUNSIGN(t) != INT)
+	if (t == FLOAT || t == DOUBLE) /* non-integer value */
+		return 0;
+
+	if (p->n_op == ICON && p->n_sp != NULL
+	    && !(DEUNSIGN(t) == INT || DEUNSIGN(t) == LONGLONG))
 		uerror("element not constant");
 
-	switch (t) {
-		case LONGLONG:
-		case ULONGLONG:
-			i = (glval(p) >> 32);
-			j = (glval(p) & 0xffffffff);
-			p->n_type = INT;
-			if (features(FEATURE_BIGENDIAN)) {
-				slval(p, i);
-				ninval(off+32, 32, p);
-				slval(p, j);
-				ninval(off, 32, p);
-			} else {
-				slval(p, j);
-				ninval(off, 32, p);
-				slval(p, i);
-				ninval(off+32, 32, p);
-			}
-			break;
-		case INT:
-		case UNSIGNED:
-			printf("\t.word 0x%x", (int)glval(p));
-			if ((q = p->n_sp) != NULL) {
-				if ((q->sclass == STATIC && q->slevel > 0)) {
-					printf("+" LABFMT, q->soffset);
-				} else
-					printf("+%s", getexname(q));
-			}
-			printf("\n");
-			break;
-		default:
-			return 0;
+	uval = (glval(p) & SZMASK(sztable[t]));
+
+	printf("%s 0x%llx", astypnames[t], uval);
+	if ((q = p->n_sp) != NULL) {
+		if ((q->sclass == STATIC && q->slevel > 0)) {
+			printf("+" LABFMT, q->soffset);
+		} else
+			printf("+%s", getexname(q));
 	}
+	printf("\n");
+
 	return 1;
 }
 
@@ -438,7 +530,26 @@ ninval(CONSZ off, int fsz, NODE *p)
 char *
 exname(char *p)
 {
+#ifdef MACHOABI
+
+#define NCHNAM  256
+	static char text[NCHNAM+1];
+	int i;
+
+	if (p == NULL)
+		return "";
+
+	text[0] = '_';
+	for (i=1; *p && i<NCHNAM; ++i)
+		text[i] = *p++;
+
+	text[i] = '\0';
+	text[NCHNAM] = '\0';  /* truncate */
+
+	return (text);
+#else
 	return (p == NULL ? "" : p);
+#endif
 }
 
 /*
@@ -483,7 +594,7 @@ defzero(struct symtab *sp)
 {
 	int off;
 
-	off = tsize(sp->stype, sp->sdf, sp->sap);
+	off = tsize(sp->stype, sp->sdf, sp->sss);
 	off = (off+(SZCHAR-1))/SZCHAR;
 	printf("	.%scomm ", sp->sclass == STATIC ? "l" : "");
 	if (sp->slevel == 0)

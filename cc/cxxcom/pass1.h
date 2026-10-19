@@ -132,6 +132,7 @@ union dimfun {
 };
 #define	dlst dfun	/* XXX workaround for ccom changes */
 int pr_hasell(union arglist *df);
+int pr_ellidx(union arglist *df);
 
 /*
  * Argument list member info when storing prototypes.

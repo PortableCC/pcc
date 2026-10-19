@@ -3343,3 +3343,30 @@ pr_hasell(union arglist *al)
 	}
 	return 1;
 }
+
+/*
+ * Obtain the vararg start index of a function.
+ * Return index if the function has varargs.
+ * Return -1 if the function does not have varargs.
+ */
+int
+pr_ellidx(union arglist *al)
+{
+        int t, i, idx;
+	i = idx = 0;
+
+	for (; al->type != TELLIPSIS; al++) {
+		t = al->type;
+		if (t == TNULL)
+			return -1;
+                if (ISSOU(BTYPE(t)))
+                        al++;
+		for (i = 0; t > BTMASK; t = DECREF(t))
+			if (ISARY(t) || ISFTN(t))
+				i++;
+		if (i)
+			al++;
+		idx++;
+        }
+        return i;
+}
