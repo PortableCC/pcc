@@ -63,6 +63,11 @@
 #endif
 #include "cpp.h"
 
+#include "macdefs.h"
+#include "ccconfig.h"
+#define CC_DRIVER
+#include "softfloat.h"	/* for CPP floating point macros */
+
 #ifdef pdp11
 #define	VERSSTR "Portable C Compiler 1.2.0.DEVEL 20190327"
 #endif
@@ -169,6 +174,7 @@ static void fstrstr(struct iobuf *ib, struct iobuf *ob);
 static usch *chkfile(const char *n1, const char *n2);
 static usch *addname(const usch *str);
 static void *addblock(int sz);
+static void setup_predef(FILE *);
 
 int
 main(int argc, char **argv)
@@ -312,6 +318,9 @@ main(int argc, char **argv)
 	pragloc = lookup((const usch *)"_Pragma", ENTER);
 	defloc = lookup((const usch *)"defined", ENTER);
 	ctrloc = lookup((const usch *)"__COUNTER__", ENTER);
+
+	/* Print all predefines to tfp for reading */
+	setup_predef(tfp);
 
 #ifdef pdp11
 	/* set predefined symbols here (not from cc) */
@@ -2453,7 +2462,7 @@ getsymtab(const usch *str)
 }
 
 /*
- * Do symbol lookup in a patricia tree.
+ * Do symbol lookup in hash table.
  * Only do full string matching, no pointer optimisations.
  */
 struct symtab *
@@ -2556,3 +2565,84 @@ addblock(register int sz)
 	return str;
 }
 
+#define MKS(x) _MKS(x)
+#define _MKS(x) #x
+
+/*
+ * Tiny subset of define().
+ */
+static void
+pdef(char *name, char *rep)
+{
+	struct symtab *sp;
+
+	sp = lookup((usch *)name, ENTER);
+	sp->namep = (usch *)name;
+	sp->type = OBJCT;
+	sp->narg = 0;
+	sp->macoff = ftell(mfp);
+	fprintf(mfp, "%s%c", rep, 0);
+	if (dMflag)
+		printf("#define %s %s\n", name, rep);
+}
+
+/*
+ * Setup all predefined macros.
+ * This was earlier given as arguments to cpp by cc, but that caused
+ * too much confusion.
+ */
+static void
+setup_predef(FILE *fp)
+{
+	fseek(mfp, 0, SEEK_END);
+
+	/* Use floating point definitions form softfloat.h */
+#ifdef TARGET_FLT_EVAL_METHOD
+	pdef("__FLT_EVAL_METHOD__", MKS(TARGET_FLT_EVAL_METHOD));
+#endif
+#ifdef mach_i386
+	pdef("__STDC_IEC_559__", "1");
+#endif
+#ifdef FLT_PREFIX
+	pdef("__FLT_RADIX_", MKS(C(FLT_PREFIX,_RADIX)));
+	pdef("__FLT_DIG__", MKS(C(FLT_PREFIX,_DIG)));
+	pdef("__FLT_EPSILON__", MKS(C(FLT_PREFIX,_EPSILON)));
+	pdef("__FLT_MANT_DIG__", MKS(C(FLT_PREFIX,_MANT_DIG)));
+	pdef("__FLT_MAX_10_EXP__", MKS(C(FLT_PREFIX,_MAX_10_EXP)));
+	pdef("__FLT_MAX_EXP__", MKS(C(FLT_PREFIX,_MAX_EXP)));
+	pdef("__FLT_MAX__", MKS(C(FLT_PREFIX,_MAX)));
+	pdef("__FLT_MIN_10_EXP__", MKS(C(FLT_PREFIX,_MIN_10_EXP)));
+	pdef("__FLT_MIN_EXP__", MKS(C(FLT_PREFIX,_MIN_EXP)));
+	pdef("__FLT_MIN__", MKS(C(FLT_PREFIX,_MIN)));
+	pdef("__FLT_HAS_SUBNORM__", MKS(C(FLT_PREFIX,_HAS_SUBNORM)));
+	pdef("__FLT_TRUE_MIN__", MKS(C(FLT_PREFIX,_TRUE_MIN)));
+#endif
+#ifdef DBL_PREFIX
+	pdef("__DBL_RADIX_", MKS(C(DBL_PREFIX,_RADIX)));
+	pdef("__DBL_DIG__", MKS(C(DBL_PREFIX,_DIG)));
+	pdef("__DBL_EPSILON__", MKS(C(DBL_PREFIX,_EPSILON)));
+	pdef("__DBL_MANT_DIG__", MKS(C(DBL_PREFIX,_MANT_DIG)));
+	pdef("__DBL_MAX_10_EXP__", MKS(C(DBL_PREFIX,_MAX_10_EXP)));
+	pdef("__DBL_MAX_EXP__", MKS(C(DBL_PREFIX,_MAX_EXP)));
+	pdef("__DBL_MAX__", MKS(C(DBL_PREFIX,_MAX)));
+	pdef("__DBL_MIN_10_EXP__", MKS(C(DBL_PREFIX,_MIN_10_EXP)));
+	pdef("__DBL_MIN_EXP__", MKS(C(DBL_PREFIX,_MIN_EXP)));
+	pdef("__DBL_MIN__", MKS(C(DBL_PREFIX,_MIN)));
+	pdef("__DBL_HAS_SUBNORM__", MKS(C(DBL_PREFIX,_HAS_SUBNORM)));
+	pdef("__DBL_TRUE_MIN__", MKS(C(DBL_PREFIX,_TRUE_MIN)));
+#endif
+#ifdef LDBL_PREFIX
+	pdef("__LDBL_RADIX_", MKS(C(LDBL_PREFIX,_RADIX)));
+	pdef("__LDBL_DIG__", MKS(C(LDBL_PREFIX,_DIG)));
+	pdef("__LDBL_EPSILON__", MKS(C(LDBL_PREFIX,_EPSILON)));
+	pdef("__LDBL_MANT_DIG__", MKS(C(LDBL_PREFIX,_MANT_DIG)));
+	pdef("__LDBL_MAX_10_EXP__", MKS(C(LDBL_PREFIX,_MAX_10_EXP)));
+	pdef("__LDBL_MAX_EXP__", MKS(C(LDBL_PREFIX,_MAX_EXP)));
+	pdef("__LDBL_MAX__", MKS(C(LDBL_PREFIX,_MAX)));
+	pdef("__LDBL_MIN_10_EXP__", MKS(C(LDBL_PREFIX,_MIN_10_EXP)));
+	pdef("__LDBL_MIN_EXP__", MKS(C(LDBL_PREFIX,_MIN_EXP)));
+	pdef("__LDBL_MIN__", MKS(C(LDBL_PREFIX,_MIN)));
+	pdef("__LDBL_HAS_SUBNORM__", MKS(C(LDBL_PREFIX,_HAS_SUBNORM)));
+	pdef("__LDBL_TRUE_MIN__", MKS(C(LDBL_PREFIX,_TRUE_MIN)));
+#endif
+}

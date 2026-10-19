@@ -18,6 +18,7 @@ EXEEXT = @EXEEXT@
 CFLAGS = @CFLAGS@ @ADD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@ @ADD_CPPFLAGS@ \
 	-I$(srcdir) -I$(top_builddir) -I$(builddir) -I$(MIPDIR) -I$(MDIR) \
+	-I$(top_srcdir)/os/$(TARGOS) \
 	-I$(COMMONDIR) -DNVMPGS=4 -Dos_$(TARGOS) -Dmach_$(TARGMACH)
 LIBS = @LIBS@
 LDFLAGS = @LDFLAGS@
