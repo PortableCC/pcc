@@ -214,10 +214,6 @@ char	*sysroot = SYSROOT, *isysroot;
 #endif
 #define	STDINCS		{ STDINC, 0 }
 
-
-char *cppadd[] = CPPADD;
-char *cppmdadd[] = CPPMDADD;
-
 /* Default libraries and search paths */
 #ifndef PCCLIBDIR	/* set by autoconf */
 #define PCCLIBDIR	NULL
@@ -871,11 +867,11 @@ main(int argc, char *argv[])
 				Mflag++;
 				strlist_append(&depflags, argp);
 			} else if (match(argp, "-MP")) {
-				strlist_append(&depflags, "-xMP");
+				strlist_append(&depflags, "-MP");
 			} else if (match(argp, "-MF")) {
 				MFfile = nxtopt("-MF");
 			} else if (match(argp, "-MT") || match(argp, "-MQ")) {
-				t = cat("-xMT,", nxtopt("-MT"));
+				t = cat("-MT,", nxtopt("-MT"));
 				t[3] = argp[2];
 				strlist_append(&depflags, t);
 			} else if (match(argp, "-MD")) {
@@ -886,7 +882,7 @@ main(int argc, char *argv[])
 				MMDflag++;
 				needM = 0;
 				strlist_append(&depflags, "-M");
-				strlist_append(&depflags, "-xMMD");
+				strlist_append(&depflags, "-MMD");
 			} else
 				oerror(argp);
 			break;
@@ -1766,7 +1762,6 @@ struct flgcheck {
 	{ &vflag, 1, "-v" },
 	{ &c99defs, 1, "-D__STDC_VERSION__=199901L" },
 	{ &c11defs, 1, "-D__STDC_VERSION__=201112L" },
-	{ &c89defs, 1, "-D__STDC__=1" },
 	{ &freestanding, 1, "-D__STDC_HOSTED__=0" },
 	{ &freestanding, 0, "-D__STDC_HOSTED__=1" },
 	{ &cxxflag, 1, "-D__cplusplus" },
@@ -1801,9 +1796,6 @@ cksetflags(struct flgcheck *fs, struct strlist *sl, int which)
 #endif
 
 static char *defflags[] = {
-	"-D__PCC__=" MKS(PCC_MAJOR),
-	"-D__PCC_MINOR__=" MKS(PCC_MINOR),
-	"-D__PCC_MINORMINOR__=" MKS(PCC_MINORMINOR),
 	"-D__VERSION__=" MKS(VERSSTR),
 	"-D__SCHAR_MAX__=" MKS(MAX_CHAR),
 	"-D__SHRT_MAX__=" MKS(MAX_SHORT),
@@ -1902,11 +1894,6 @@ setup_cpp_flags(void)
 		snprintf(buf, sizeof buf, "-D__DATE__=\"%s%s\"", n+4, n+20);
 		strlist_prepend(&preprocessor_flags, xstrdup(buf));
 	}
-
-	for (i = 0; cppadd[i]; i++)
-		strlist_prepend(&preprocessor_flags, cppadd[i]);
-	for (i = 0; cppmdadd[i]; i++)
-		strlist_prepend(&preprocessor_flags, cppmdadd[i]);
 
 	/* Include dirs */
 	strlist_append(&sysincdirs, "=" INCLUDEDIR "pcc/");

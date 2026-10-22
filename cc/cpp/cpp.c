@@ -181,8 +181,17 @@ main(int argc, char **argv)
 {
 	register int ch;
 	register const usch *fn2;
+	int i;
 	FILE *ifp;
 	char *a;
+
+	/* trick to make use of getopt() */
+	for (i = 0; i < argc; i++) {
+		if (argv[i][0] == '-' && argv[i][1] == 'y')
+			usage();
+		if (strcmp(argv[i], "-M") == 0)
+			argv[i] = "-yM";
+	}
 
 #ifdef TIMING
 	struct timeval t1, t2;
@@ -201,7 +210,7 @@ main(int argc, char **argv)
 	if ((tfp = tmpfile()) == NULL)
 		error("temp file");
 
-	while ((ch = getopt(argc, argv, "ACD:d:EI:i:MPS:tTU:Vvx:")) != -1) {
+	while ((ch = getopt(argc, argv, "ACD:d:EI:i:M:PS:tTU:Vvx:y:")) != -1) {
 		switch (ch) {
 		case 'A': /* assembler input */
 			Aflag++;
@@ -250,6 +259,34 @@ main(int argc, char **argv)
 			break;
 
 		case 'M': /* Generate dependencies for make */
+			if (strcmp(optarg, "MD") == 0) {
+				MMDflag++;
+			} else if (strcmp(optarg, "P") == 0) {
+				MPflag++;
+			} else if (strncmp(optarg, "T,", 3) == 0 ||
+			    strncmp(optarg, "Q,", 3) == 0) {
+				int l = (int)strlen(optarg+3) + 2;
+				char *cp, *up;
+
+				if (optarg[1] == 'Q')
+					for (cp = optarg+3; *cp; cp++)
+						if (*cp == '$')
+							l++;
+				Mxlen += l;
+				Mxfile = cp = realloc(Mxfile, Mxlen);
+				for (up = Mxfile; *up; up++)
+					;
+				if (up != Mxfile)
+					*up++ = ' ';
+				for (cp = optarg+3; *cp; cp++) {
+					*up++ = *cp;
+					if (optarg[1] == 'Q' && *cp == '$')
+						*up++ = *cp;
+				}
+				*up = 0;
+			} else
+				usage();
+			break;
 			Mflag++;
 			break;
 
@@ -274,34 +311,8 @@ main(int argc, char **argv)
 			fprintf(stderr, "PCC preprocessor version "VERSSTR"\n");
 			break;
 
-		case 'x':
-			if (strcmp(optarg, "MMD") == 0) {
-				MMDflag++;
-			} else if (strcmp(optarg, "MP") == 0) {
-				MPflag++;
-			} else if (strncmp(optarg, "MT,", 3) == 0 ||
-			    strncmp(optarg, "MQ,", 3) == 0) {
-				int l = (int)strlen(optarg+3) + 2;
-				char *cp, *up;
-
-				if (optarg[1] == 'Q')
-					for (cp = optarg+3; *cp; cp++)
-						if (*cp == '$')
-							l++;
-				Mxlen += l;
-				Mxfile = cp = realloc(Mxfile, Mxlen);
-				for (up = Mxfile; *up; up++)
-					;
-				if (up != Mxfile)
-					*up++ = ' ';
-				for (cp = optarg+3; *cp; cp++) {
-					*up++ = *cp;
-					if (optarg[1] == 'Q' && *cp == '$')
-						*up++ = *cp;
-				}
-				*up = 0;
-			} else
-				usage();
+		case 'y': /* Generate dependencies for make */
+			Mflag++;
 			break;
 
 		case '?':
@@ -330,8 +341,6 @@ main(int argc, char **argv)
 	fprintf(tfp, "#define pdp11 1\n");
 	fprintf(tfp, "#define unix 1\n"); /* XXX go away */
 	addidir("/usr/include", &incdir[SYSINC]);
-	if (tflag == 0)
-		fprintf(tfp, "#define __STDC__ 1\n");
 #endif
 
 #if defined(mach_z8001) && defined(os_coherent)
@@ -2594,6 +2603,11 @@ pdef(char *name, char *rep)
 static void
 setup_predef(FILE *fp)
 {
+	static char *cppadd[] = CPPADD;
+	static char *cppmdadd[] = CPPMDADD;
+	int i;
+	char *s;
+
 	fseek(mfp, 0, SEEK_END);
 
 	/* Use floating point definitions form softfloat.h */
@@ -2645,4 +2659,20 @@ setup_predef(FILE *fp)
 	pdef("__LDBL_HAS_SUBNORM__", MKS(C(LDBL_PREFIX,_HAS_SUBNORM)));
 	pdef("__LDBL_TRUE_MIN__", MKS(C(LDBL_PREFIX,_TRUE_MIN)));
 #endif
+
+	if (tflag == 0)
+		pdef("__STDC__", "1");
+	for (i = 0; cppadd[i]; i++) {
+		if ((s = strchr(cppadd[i], '=')) != NULL)
+			*s++ = 0;
+		pdef(&cppadd[i][2], s ? s : "1");
+	}
+	for (i = 0; cppmdadd[i]; i++) {
+		if ((s = strchr(cppmdadd[i], '=')) != NULL)
+			*s++ = 0;
+		pdef(&cppmdadd[i][2], s ? s : "1");
+	}
+	pdef("__PCC__", MKS(PCC_MAJOR));
+	pdef("__PCC_MINOR__", MKS(PCC_MINOR));
+	pdef("__PCC_MINORMINOR__", MKS(PCC_MINORMINOR));
 }
