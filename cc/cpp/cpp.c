@@ -333,29 +333,6 @@ main(int argc, char **argv)
 	/* Print all predefines to tfp for reading */
 	setup_predef(tfp);
 
-#ifdef pdp11
-	/* set predefined symbols here (not from cc) */
-	fprintf(tfp, "#define __BSD2_11__ 1\n");
-	fprintf(tfp, "#define BSD2_11 1\n");
-	fprintf(tfp, "#define __pdp11__ 1\n");
-	fprintf(tfp, "#define pdp11 1\n");
-	fprintf(tfp, "#define unix 1\n"); /* XXX go away */
-	addidir("/usr/include", &incdir[SYSINC]);
-#endif
-
-#if defined(mach_z8001) && defined(os_coherent)
-	/* The native Coherent Z8001 cpp predefined COHERENT and Z8001 itself
-	 * (decompiled cpp, setup()); predefine them HERE rather than only in
-	 * the cc driver's CPPMDADD so that direct cpp invocations -- the .s
-	 * preprocessing pipeline -- see the same world as cc-driven compiles.
-	 * <l.out.h>'s "#ifdef Z8001" silently selecting its PDP-11 branch in
-	 * a driverless run is exactly the failure this prevents. */
-	fprintf(tfp, "#define COHERENT 1\n");
-	fprintf(tfp, "#define Z8001 1\n");
-	fprintf(tfp, "#define coherent 1\n");
-	fprintf(tfp, "#define unix 1\n");
-#endif
-
 	fprintf(mfp, "%cdefined%c", 0, 0);
 	filloc->macoff = linloc->macoff = pragloc->macoff =
 	    ctrloc->macoff = defloc->macoff = 1;

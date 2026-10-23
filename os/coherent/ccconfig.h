@@ -29,8 +29,8 @@
  */
 
 /* cpp predefines: Coherent identifies itself with these macros */
-#define CPPADD		{ NULL }
-#define CPPMDADD	{ "-DZ8001", "-Dcoherent", "-Dunix", NULL }
+#define CPPADD		{ "-DCOHERENT", -Dcoherent", "-Dunix", NULL }
+#define CPPMDADD	{ "-DZ8001", NULL }
 
 /* Startup object: segmented Z8001 C run-time start-off (csu/crts0.s),
  * entry point "start" which calls main_.  No ELF-style crti/crtn.

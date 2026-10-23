@@ -33,7 +33,7 @@
 #if defined(mach_vax)
 #define CPPADD	{ "-D__BSD43__", "-DBSD=43", "-DBSD4_3=1", NULL }
 #else
-#define	CPPADD	{ "-D__BSD2_11__", "-DBSD2_11", NULL }
+#define	CPPADD	{ "-D__BSD2_11__", "-DBSD2_11", "-Dunix", NULL }
 #endif
 
 /* host-dependent */
