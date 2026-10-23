@@ -48,6 +48,7 @@ int sspflag;
 int xscp, xssa, xtailcall, xtemps, xdeljumps, xdce, xinline, xccp, xgnu89, xgnu99;
 int xuchar;
 int freestanding;
+int traditional;
 char *prgname, *ftitle;
 
 static void prtstats(void);
@@ -121,6 +122,8 @@ fflags(char *str)
 		pragma_allpacked = (strlen(str) > 12 ? atoi(str+12) : 1);
 	else if (strcmp(str, "freestanding") == 0)
 		freestanding = flagval;
+	else if (strcmp(str, "traditional") == 0)
+		traditional = flagval;
 	else {
 		fprintf(stderr, "unknown -f option '%s'\n", str);
 		usage();
