@@ -56,6 +56,7 @@ extern struct FPI fpi_ffloat;
 extern struct FPI fpi_dfloat;
 extern struct FPI fpi_binary32;
 extern struct FPI fpi_binary64;
+extern struct FPI fpi_binary128;
 extern struct FPI fpi_binaryx80;
 
 /* MP package */
@@ -97,6 +98,19 @@ typedef struct mint {
 #define IEEEFP_64_MANT_DIG 53
 #define IEEEFP_64_HAS_SUBNORM 1
 #define IEEEFP_64_TRUE_MIN 0x1.0p-1074
+#endif
+#ifdef USE_IEEEFP_128
+#define IEEEFP_128_DIG          33
+#define IEEEFP_128_EPSILON      0x1.0p-112L
+#define IEEEFP_128_MAX_10_EXP   4932
+#define IEEEFP_128_MAX_EXP      16384
+#define IEEEFP_128_MAX          0x1.ffffffffffffffffffffffffffffp+16383L
+#define IEEEFP_128_MIN_10_EXP   (-4931)
+#define IEEEFP_128_MIN_EXP      (-16381)
+#define IEEEFP_128_MIN          0x1.0p-16382L
+#define IEEEFP_128_MANT_DIG     113
+#define IEEEFP_128_HAS_SUBNORM  1
+#define IEEEFP_128_TRUE_MIN     0x1.0p-16494L
 #endif
 #ifdef USE_IEEEFP_X80
 #define IEEEFP_X80_DIG 18
