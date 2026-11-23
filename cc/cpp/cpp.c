@@ -2047,6 +2047,7 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 	register struct iobuf *ob, *cb, *nb, *vb;
 	int narg, snuff, c2;
 	const usch *sp, *bp, *ap, *vp;
+	int gotcnt = 0, pcnt;
 
 	DPRINT(("%d:subarg '%s'\n", lvl, nl->namep));
 	ob = getobuf(BNORMAL);
@@ -2114,7 +2115,11 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 					cb->cptr = 0;
 					didexpand = 0;
 					nb = getobuf(BNORMAL);
+					pcnt = counter;
 					nb = exparg(lvl+1, cb, nb, lw);
+					if (counter != pcnt)
+						gotcnt = 1;
+					counter = pcnt;
 					bufree(cb);
 				} while (didexpand);
 				DPRINT(("%d:subarg: return exparg\n", lvl));
@@ -2140,6 +2145,8 @@ subarg(struct symtab *nl, const usch **args, int lvl, int l)
 	ob->cptr = 0;
 	DPRINT(("%d:subarg retline %s\n", lvl, ob->buf));
 	bufree(vb);
+	if (gotcnt)
+		counter++;
 	return ob;
 }
 
