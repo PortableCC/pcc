@@ -293,6 +293,7 @@ char *win32commandline(struct strlist *l);
 #endif
 int	sspflag;
 int	freestanding;
+int	traditional;
 int	Sflag;
 int	cflag;
 int	gflag;
@@ -621,6 +622,8 @@ main(int argc, char *argv[])
 				kflag = j ? 0 : *u == 'P' ? F_PIC : F_pic;
 			} else if (match(u, "freestanding")) {
 				freestanding = j ? 0 : 1;
+			} else if (match(u, "traditional")) {
+				traditional = j ? 0 : 1;
 			} else if (match(u, "signed-char")) {
 				xuchar = j ? 1 : 0;
 			} else if (match(u, "unsigned-char")) {
@@ -1913,6 +1916,7 @@ struct flgcheck ccomflgcheck[] = {
 	{ &Oflag, 1, "-xdce" },
 	{ &Oflag, 1, "-xssa" },
 	{ &freestanding, 1, "-ffreestanding" },
+	{ &traditional, 1, "-ftraditional" },
 	{ &pgflag, 1, "-p" },
 	{ &gflag, 1, "-g" },
 	{ &xgnu89, 1, "-xgnu89" },

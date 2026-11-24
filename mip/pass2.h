@@ -221,6 +221,7 @@ void prologue(struct interpass_prolog *);
 void e2print(NODE *p, int down, int *a, int *b);
 void myoptim(struct interpass *);
 void cbgen(int op, int label);
+int cbfuse(NODE *p);	/* optional TARGET_CBRANCH_FUSE hook (backend) */
 int match(NODE *p, int cookie);
 int acceptable(struct optab *);
 int special(NODE *, int);

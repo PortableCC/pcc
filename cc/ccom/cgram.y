@@ -288,7 +288,7 @@ struct savbc {
 %type <g>	gen_ass_list gen_assoc
 %type <strp>	string svstr moe
 %type <rp>	str_head
-%type <symp>	xnfdeclarator enum_head
+%type <symp>	xnfdeclarator enum_head notype_xnfdcl
 %type <ctx>	begbr clbrace
 
 %%
@@ -302,6 +302,7 @@ external_def:	   noinitdcl funtype kr_args compoundstmt { fend(); }
 		|  declaration_specifiers declarator { fundef($1,$2); }
 			kr_args compoundstmt { fend(); }
 		|  declaration  { blevel = 0; symclear(0); }
+		|  notype_init_dcl_list ';' { blevel = 0; symclear(0); }
 		|  asmstatement ';'
 		|  ';'
 		|  error { blevel = 0; }
