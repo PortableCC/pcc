@@ -73,8 +73,8 @@ setseg(int seg, char *name)
 	case RDATA: name = ".section .rodata"; break;
 	case TLSDATA: name = ".section .tdata,\"awT\",@progbits"; break;
 	case TLSUDATA: name = ".section .tbss,\"awT\",@nobits"; break;
-	case CTORS: name = ".section\t.ctors,\"aw\",@progbits"; break;
-	case DTORS: name = ".section\t.dtors,\"aw\",@progbits"; break;
+	case CTORS: name = ".section\t.ctors,\"aw\""; break;
+	case DTORS: name = ".section\t.dtors,\"aw\""; break;
 	case NMSEG: 
 		printf("\t.section %s,\"a%c\",@progbits\n", name,
 		    cftnsp ? 'x' : 'w');
